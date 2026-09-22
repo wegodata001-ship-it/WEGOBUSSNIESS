@@ -16,11 +16,16 @@ export type Locale = (typeof LOCALES)[number];
 export const FALLBACK_LOCALE: Locale = "he";
 
 export function resolveLocale(value: unknown): Locale {
+  if (value === "ar" || value === "he") {
+    return value;
+  }
+
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
-    if (LOCALES.includes(normalized as Locale)) {
-      return normalized as Locale;
+    if (normalized === "ar" || normalized === "he") {
+      return normalized;
     }
   }
+
   return FALLBACK_LOCALE;
 }

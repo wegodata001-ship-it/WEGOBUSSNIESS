@@ -1,4 +1,4 @@
-import { FALLBACK_LOCALE, resolveLocale, type Locale } from "@/types/roles";
+import { resolveLocale, type Locale } from "@/types/roles";
 
 export const PUBLIC_FIREBASE_ENV_KEYS = [
   "NEXT_PUBLIC_FIREBASE_API_KEY",
@@ -21,7 +21,7 @@ export const DEFAULT_TIMEZONE =
   process.env.NEXT_PUBLIC_DEFAULT_TIMEZONE ?? "Asia/Jerusalem";
 
 export const DEFAULT_LOCALE: Locale = resolveLocale(
-  process.env.NEXT_PUBLIC_DEFAULT_LOCALE || FALLBACK_LOCALE,
+  process.env.NEXT_PUBLIC_DEFAULT_LOCALE,
 );
 
 export const SUPPORTED_LOCALES = (

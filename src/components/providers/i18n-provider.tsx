@@ -37,5 +37,5 @@ export function I18nProvider({
 }
 
 export function useI18n() {
-  return useContext(I18nContext);
+  return useContext(I18nContext) ?? createI18nValue(FALLBACK_LOCALE);
 }

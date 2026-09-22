@@ -16,7 +16,9 @@ function LocaleBridge({ children }: { children: ReactNode }) {
   );
 
   const dir = locale === "ar" || locale === "he" ? "rtl" : "ltr";
-  const [documentLocale, setDocumentLocale] = useState(DEFAULT_LOCALE);
+  const [documentLocale, setDocumentLocale] = useState(() =>
+    resolveLocale(DEFAULT_LOCALE),
+  );
 
   useEffect(() => {
     document.documentElement.lang = locale;
