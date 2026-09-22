@@ -1,3 +1,5 @@
+import { FALLBACK_LOCALE, resolveLocale, type Locale } from "@/types/roles";
+
 export const PUBLIC_FIREBASE_ENV_KEYS = [
   "NEXT_PUBLIC_FIREBASE_API_KEY",
   "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
@@ -18,7 +20,9 @@ export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "WEGO Business";
 export const DEFAULT_TIMEZONE =
   process.env.NEXT_PUBLIC_DEFAULT_TIMEZONE ?? "Asia/Jerusalem";
 
-export const DEFAULT_LOCALE = process.env.NEXT_PUBLIC_DEFAULT_LOCALE ?? "he";
+export const DEFAULT_LOCALE: Locale = resolveLocale(
+  process.env.NEXT_PUBLIC_DEFAULT_LOCALE || FALLBACK_LOCALE,
+);
 
 export const SUPPORTED_LOCALES = (
   process.env.NEXT_PUBLIC_SUPPORTED_LOCALES ?? "he,ar"

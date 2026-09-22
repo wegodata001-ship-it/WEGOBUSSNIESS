@@ -13,7 +13,7 @@ import type { Membership } from "@/types/membership";
 import type { Permission } from "@/types/permissions";
 import { PERMISSIONS } from "@/types/permissions";
 import type { BusinessRole, Locale, PlatformRole } from "@/types/roles";
-import { BUSINESS_ROLES, LOCALES } from "@/types/roles";
+import { BUSINESS_ROLES, resolveLocale } from "@/types/roles";
 import { asCalendarColor, asTaskKind } from "@/lib/admin/palette";
 import { normalizeTaskTeam } from "@/lib/admin/task-team";
 import type { Task, TaskComment, TaskPriority, TaskStatus } from "@/types/task";
@@ -59,7 +59,7 @@ function asStringArray(value: unknown): string[] {
 }
 
 function asLocale(value: unknown): Locale {
-  return LOCALES.includes(value as Locale) ? (value as Locale) : "he";
+  return resolveLocale(value);
 }
 
 function asRole(value: unknown): BusinessRole {
