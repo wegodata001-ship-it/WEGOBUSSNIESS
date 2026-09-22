@@ -1,0 +1,178 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn()
+        && exists(userPath())
+        && get(userPath()).data.platformRole == "SUPER_ADMIN";
+    }
+
+    function memberPath(businessId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid);
+    }
+
+    function isActiveMember(businessId) {
+      return isSignedIn()
+        && exists(memberPath(businessId))
+        && get(memberPath(businessId)).data.isActive == true
+        && get(memberPath(businessId)).data.userId == request.auth.uid;
+    }
+
+    function memberRole(businessId) {
+      return get(memberPath(businessId)).data.role;
+    }
+
+    function memberEmployeeId(businessId) {
+      return get(memberPath(businessId)).data.employeeId;
+    }
+
+    function isOwnerOrManager(businessId) {
+      return isActiveMember(businessId)
+        && memberRole(businessId) in ["BUSINESS_OWNER", "MANAGER"];
+    }
+
+    function canAccessBusiness(businessId) {
+      return isSuperAdmin() || isActiveMember(businessId);
+    }
+
+    function unchanged(field) {
+      return request.resource.data[field] == resource.data[field];
+    }
+
+    match /users/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isSuperAdmin());
+
+      allow create, delete: if false;
+
+      allow update: if isSignedIn()
+        && request.auth.uid == uid
+        && unchanged("platformRole")
+        && unchanged("isActive")
+        && unchanged("email")
+        && unchanged("defaultBusinessId");
+
+      match /memberships/{businessId} {
+        allow read: if isSignedIn() && (request.auth.uid == uid || isSuperAdmin());
+        allow write: if false;
+      }
+    }
+
+    match /businesses/{businessId} {
+      allow read: if canAccessBusiness(businessId);
+      allow create, update, delete: if false;
+
+      match /members/{uid} {
+        allow read: if canAccessBusiness(businessId);
+        allow create, delete: if false;
+        allow update: if false;
+      }
+
+      match /employees/{employeeId} {
+        allow read: if canAccessBusiness(businessId);
+        allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
+      }
+
+      match /departments/{departmentId} {
+        allow read: if canAccessBusiness(businessId);
+        allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
+      }
+
+      match /projects/{projectId} {
+        allow read: if canAccessBusiness(businessId);
+        allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
+      }
+
+      function isTaskParticipant(businessId) {
+        let emp = memberEmployeeId(businessId);
+        return resource.data.assigneeEmployeeId == emp
+          || resource.data.assigneeId == emp
+          || (
+            resource.data.keys().has("collaboratorIds")
+            && emp in resource.data.collaboratorIds
+          );
+      }
+
+      match /tasks/{taskId} {
+        allow read: if isSuperAdmin()
+          || isOwnerOrManager(businessId)
+          || (isActiveMember(businessId) && isTaskParticipant(businessId));
+
+        allow create, delete: if isSuperAdmin() || isOwnerOrManager(businessId);
+
+        allow update: if isSuperAdmin()
+          || isOwnerOrManager(businessId)
+          || (
+            isActiveMember(businessId)
+            && isTaskParticipant(businessId)
+            && request.resource.data.assigneeEmployeeId == resource.data.assigneeEmployeeId
+            && request.resource.data.assigneeId == resource.data.assigneeId
+            && request.resource.data.collaboratorIds == resource.data.collaboratorIds
+            && unchanged("businessId")
+            && unchanged("createdByUserId")
+          );
+
+        match /comments/{commentId} {
+          allow read: if canAccessBusiness(businessId);
+          allow create: if canAccessBusiness(businessId);
+          allow update, delete: if false;
+        }
+      }
+
+      match /meetings/{meetingId} {
+        allow read: if isSuperAdmin() || isOwnerOrManager(businessId);
+        allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
+      }
+
+      match /workSessions/{sessionId} {
+        allow read: if isSuperAdmin()
+          || isOwnerOrManager(businessId)
+          || (
+            isActiveMember(businessId)
+            && resource.data.employeeId == memberEmployeeId(businessId)
+          );
+        allow write: if false;
+      }
+
+      match /logisticsRequests/{requestId} {
+        allow read: if isSuperAdmin()
+          || isOwnerOrManager(businessId)
+          || (
+            isActiveMember(businessId)
+            && resource.data.requestedByUserId == request.auth.uid
+          );
+        allow create: if isActiveMember(businessId);
+        allow update, delete: if isSuperAdmin() || isOwnerOrManager(businessId);
+      }
+
+      match /notifications/{notificationId} {
+        allow read: if canAccessBusiness(businessId)
+          && (isSuperAdmin() || resource.data.userId == request.auth.uid);
+        allow write: if false;
+      }
+
+      match /activityLogs/{logId} {
+        allow read: if isSuperAdmin() || isOwnerOrManager(businessId);
+        allow write: if false;
+      }
+
+      match /documents/{documentId} {
+        allow read: if isSuperAdmin() || isOwnerOrManager(businessId);
+        allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
+      }
+
+      match /settings/{docId} {
+        allow read: if isSuperAdmin() || isOwnerOrManager(businessId);
+        allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
+      }
+    }
+  }
+}

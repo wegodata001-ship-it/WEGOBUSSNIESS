@@ -1,0 +1,35 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userPath() {
+      return /databases/(default)/documents/users/$(request.auth.uid);
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn()
+        && firestore.exists(userPath())
+        && firestore.get(userPath()).data.platformRole == "SUPER_ADMIN";
+    }
+
+    function isActiveMember(businessId) {
+      let memberPath = /databases/(default)/documents/businesses/$(businessId)/members/$(request.auth.uid);
+      return isSignedIn()
+        && firestore.exists(memberPath)
+        && firestore.get(memberPath).data.isActive == true;
+    }
+
+    match /businesses/{businessId}/{allPaths=**} {
+      allow read: if isSuperAdmin() || isActiveMember(businessId);
+      allow write: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

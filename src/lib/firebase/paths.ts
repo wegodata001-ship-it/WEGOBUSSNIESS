@@ -1,0 +1,140 @@
+export const collections = {
+  users: "users",
+  businesses: "businesses",
+} as const;
+
+export const businessCollections = {
+  members: "members",
+  employees: "employees",
+  departments: "departments",
+  projects: "projects",
+  tasks: "tasks",
+  comments: "comments",
+  meetings: "meetings",
+  workSessions: "workSessions",
+  logisticsRequests: "logisticsRequests",
+  notifications: "notifications",
+  activityLogs: "activityLogs",
+  settings: "settings",
+  documents: "documents",
+} as const;
+
+export function userDocPath(userId: string) {
+  return `${collections.users}/${userId}`;
+}
+
+export function userMembershipsPath(userId: string) {
+  return `${userDocPath(userId)}/memberships`;
+}
+
+export function userMembershipDocPath(userId: string, businessId: string) {
+  return `${userMembershipsPath(userId)}/${businessId}`;
+}
+
+export function businessDocPath(businessId: string) {
+  return `${collections.businesses}/${businessId}`;
+}
+
+export function businessScopedPath(businessId: string, collectionName: string) {
+  return `${businessDocPath(businessId)}/${collectionName}`;
+}
+
+export function businessMembersPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.members);
+}
+
+export function memberDocPath(businessId: string, userId: string) {
+  return `${businessMembersPath(businessId)}/${userId}`;
+}
+
+export function employeesPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.employees);
+}
+
+export function employeeDocPath(businessId: string, employeeId: string) {
+  return `${employeesPath(businessId)}/${employeeId}`;
+}
+
+export function departmentsPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.departments);
+}
+
+export function departmentDocPath(businessId: string, departmentId: string) {
+  return `${departmentsPath(businessId)}/${departmentId}`;
+}
+
+export function projectsPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.projects);
+}
+
+export function projectDocPath(businessId: string, projectId: string) {
+  return `${projectsPath(businessId)}/${projectId}`;
+}
+
+export function tasksPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.tasks);
+}
+
+export function taskDocPath(businessId: string, taskId: string) {
+  return `${tasksPath(businessId)}/${taskId}`;
+}
+
+export function taskCommentsPath(businessId: string, taskId: string) {
+  return `${taskDocPath(businessId, taskId)}/${businessCollections.comments}`;
+}
+
+export function meetingsPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.meetings);
+}
+
+export function meetingDocPath(businessId: string, meetingId: string) {
+  return `${meetingsPath(businessId)}/${meetingId}`;
+}
+
+export function workSessionsPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.workSessions);
+}
+
+export function workSessionDocPath(businessId: string, sessionId: string) {
+  return `${workSessionsPath(businessId)}/${sessionId}`;
+}
+
+export function logisticsRequestsPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.logisticsRequests);
+}
+
+export function logisticsRequestDocPath(businessId: string, requestId: string) {
+  return `${logisticsRequestsPath(businessId)}/${requestId}`;
+}
+
+export function notificationsPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.notifications);
+}
+
+export function notificationDocPath(businessId: string, notificationId: string) {
+  return `${notificationsPath(businessId)}/${notificationId}`;
+}
+
+export function activityLogsPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.activityLogs);
+}
+
+export function activityLogDocPath(businessId: string, logId: string) {
+  return `${activityLogsPath(businessId)}/${logId}`;
+}
+
+export function businessSettingsPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.settings);
+}
+
+export function businessSettingsDocPath(businessId: string, docId = "general") {
+  return `${businessSettingsPath(businessId)}/${docId}`;
+}
+
+export function documentsPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.documents);
+}
+
+export function documentDocPath(businessId: string, documentId: string) {
+  return `${documentsPath(businessId)}/${documentId}`;
+}

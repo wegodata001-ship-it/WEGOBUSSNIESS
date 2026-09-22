@@ -1,0 +1,33 @@
+export const PROJECT_STATUSES = ["ACTIVE", "ON_HOLD", "COMPLETED"] as const;
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+
+export type Department = {
+  id: string;
+  businessId: string;
+  name: string;
+  slug: string;
+  description: string;
+  color: string;
+  managerEmployeeId: string | null;
+  isActive: boolean;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+};
+
+export type Project = {
+  id: string;
+  businessId: string;
+  seedKey: string | null;
+  name: string;
+  clientName: string;
+  description: string;
+  status: ProjectStatus;
+  departmentId: string | null;
+  managerEmployeeId: string | null;
+  startDate: string | null;
+  dueDate: string | null;
+  isActive: boolean;
+  color: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+};
