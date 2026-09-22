@@ -43,10 +43,7 @@ export async function loginWithPassword(email: string, password: string): Promis
   if (result.status === "ready") {
     return result;
   }
-  if (result.reason === "invalid_credentials") {
-    return { status: "blocked", reason: "invalid_credentials" };
-  }
-  if (result.status === "blocked") {
+  if (result.status === "blocked" && result.reason) {
     return result;
   }
 

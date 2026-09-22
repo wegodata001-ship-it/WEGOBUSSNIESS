@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, EyeOff } from "lucide-react";
+import { CircleAlert, Eye, EyeOff, LoaderCircle, Lock, LogIn, Mail } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -13,11 +13,13 @@ function blockMessageKey(reason: SessionBlockReason) {
   if (reason === "inactive_membership") return "auth.inactiveMembership" as const;
   if (reason === "no_membership") return "auth.noMembership" as const;
   if (reason === "no_business") return "auth.noBusiness" as const;
+  if (reason === "too_many_requests") return "auth.tooManyRequests" as const;
+  if (reason === "unconfigured") return "auth.unconfigured" as const;
   return "auth.genericError" as const;
 }
 
 const fieldClass =
-  "h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-transparent focus:bg-white focus:ring-2 focus:ring-[var(--brand-primary)]";
+  "h-14 w-full rounded-xl border border-[#D9E1EC] bg-white ps-12 pe-4 text-sm text-[#0F172A] outline-none transition placeholder:text-slate-400 focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15";
 
 export function LoginForm() {
   const { t } = useI18n();
@@ -54,34 +56,40 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-5">
       {error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+        <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700">
+          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>{error}</p>
         </div>
       ) : null}
 
       <label className="block">
-        <span className="mb-1.5 block text-sm font-medium text-slate-700">
+        <span className="mb-2 block text-sm font-medium text-[#0F172A]">
           {t("auth.email")}
         </span>
-        <input
-          type="email"
-          name="email"
-          autoComplete="email"
-          required
-          dir="ltr"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className={fieldClass}
-        />
+        <div className="relative">
+          <Mail className="pointer-events-none absolute start-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="email"
+            name="email"
+            autoComplete="email"
+            required
+            dir="ltr"
+            placeholder={t("auth.emailPlaceholder")}
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className={`${fieldClass} text-left`}
+          />
+        </div>
       </label>
 
       <label className="block">
-        <span className="mb-1.5 block text-sm font-medium text-slate-700">
+        <span className="mb-2 block text-sm font-medium text-[#0F172A]">
           {t("auth.password")}
         </span>
         <div className="relative">
+          <Lock className="pointer-events-none absolute start-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type={showPassword ? "text" : "password"}
             name="password"
@@ -90,7 +98,7 @@ export function LoginForm() {
             dir="ltr"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className={`${fieldClass} pe-12`}
+            className={`${fieldClass} pe-12 text-left`}
           />
           <button
             type="button"
@@ -106,9 +114,19 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={loading}
-        className="mt-2 h-12 w-full rounded-2xl bg-[var(--brand-primary)] text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-1 inline-flex h-[54px] w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] text-sm font-semibold text-white transition hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {loading ? t("common.loading") : t("auth.signIn")}
+        {loading ? (
+          <>
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+            {t("auth.signingIn")}
+          </>
+        ) : (
+          <>
+            {t("auth.signIn")}
+            <LogIn className="h-4 w-4" />
+          </>
+        )}
       </button>
     </form>
   );

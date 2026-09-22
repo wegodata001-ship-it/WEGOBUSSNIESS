@@ -9,7 +9,8 @@ export type SessionBlockReason =
   | "no_membership"
   | "no_business"
   | "unconfigured"
-  | "invalid_credentials";
+  | "invalid_credentials"
+  | "too_many_requests";
 
 export type ReadySession = {
   status: "ready";

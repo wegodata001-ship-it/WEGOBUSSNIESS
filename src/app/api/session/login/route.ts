@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { writeSessionCookies } from "@/lib/auth/session-cookies";
+import { isFirebaseAdminConfigured } from "@/lib/firebase/admin";
 import { resolveSessionByUid } from "@/lib/session/resolve-admin";
-import type { ResolveResult } from "@/types/session";
+import type { ResolveResult, SessionBlockReason } from "@/types/session";
 
 type PasswordSignIn = {
   idToken?: string;
@@ -10,14 +11,27 @@ type PasswordSignIn = {
   error?: { message?: string };
 };
 
-function isInvalidLogin(message: string) {
-  return (
-    message === "INVALID_PASSWORD"
-    || message === "EMAIL_NOT_FOUND"
-    || message === "INVALID_LOGIN_CREDENTIALS"
-    || message === "INVALID_EMAIL"
-    || message === "USER_DISABLED"
-  );
+function identityReason(message: string): SessionBlockReason | null {
+  const code = message.split(":")[0]?.trim() ?? "";
+  if (
+    code === "INVALID_PASSWORD"
+    || code === "EMAIL_NOT_FOUND"
+    || code === "INVALID_LOGIN_CREDENTIALS"
+    || code === "INVALID_EMAIL"
+  ) {
+    return "invalid_credentials";
+  }
+  if (code === "USER_DISABLED") {
+    return "inactive_user";
+  }
+  if (code === "TOO_MANY_ATTEMPTS_TRY_LATER") {
+    return "too_many_requests";
+  }
+  return null;
+}
+
+function blocked(reason: SessionBlockReason, status: number) {
+  return NextResponse.json({ status: "blocked", reason } satisfies ResolveResult, { status });
 }
 
 export async function POST(request: Request) {
@@ -25,12 +39,18 @@ export async function POST(request: Request) {
   const email = body?.email?.trim() ?? "";
   const password = body?.password ?? "";
   if (!email || !password) {
-    return NextResponse.json({ status: "blocked", reason: "invalid_credentials" } satisfies ResolveResult, { status: 401 });
+    return blocked("invalid_credentials", 401);
   }
 
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim();
   if (!apiKey) {
-    return NextResponse.json({ status: "blocked", reason: "unconfigured" } satisfies ResolveResult, { status: 500 });
+    console.error("SESSION_LOGIN_STAGE", "missing_api_key");
+    return blocked("unconfigured", 500);
+  }
+
+  if (!isFirebaseAdminConfigured()) {
+    console.error("SESSION_LOGIN_STAGE", "admin_unconfigured");
+    return blocked("unconfigured", 500);
   }
 
   const tokenResponse = await fetch(
@@ -45,10 +65,12 @@ export async function POST(request: Request) {
   const errorMessage = tokens.error?.message ?? "";
 
   if (!tokens.idToken || !tokens.localId) {
-    if (isInvalidLogin(errorMessage)) {
-      return NextResponse.json({ status: "blocked", reason: "invalid_credentials" } satisfies ResolveResult, { status: 401 });
+    const reason = identityReason(errorMessage);
+    if (reason) {
+      return blocked(reason, 401);
     }
-    return NextResponse.json({ status: "blocked", reason: "unconfigured" } satisfies ResolveResult, { status: 401 });
+    console.error("SESSION_LOGIN_STAGE", "identity_toolkit", errorMessage.split(":")[0] || "unknown");
+    return blocked("unconfigured", 401);
   }
 
   try {
@@ -61,7 +83,7 @@ export async function POST(request: Request) {
     return NextResponse.json(resolved);
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
-    console.error("SESSION_LOGIN_FAILED", message);
-    return NextResponse.json({ status: "blocked", reason: "unconfigured" } satisfies ResolveResult, { status: 500 });
+    console.error("SESSION_LOGIN_STAGE", "session_finalize", message);
+    return blocked("unconfigured", 500);
   }
 }

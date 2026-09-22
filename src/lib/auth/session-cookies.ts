@@ -8,7 +8,7 @@ function cookieOptions(maxAge: number) {
     path: "/",
     sameSite: "lax" as const,
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.NODE_ENV === "production" || process.env.VERCEL === "1",
     maxAge,
   };
 }
