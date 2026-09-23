@@ -1,10 +1,15 @@
 import { blockedSession, logAuthStage, readySession } from "@/lib/auth/session-response";
-import { getFirebaseWebApiKey } from "@/lib/env";
-import { isFirebaseAdminConfigured } from "@/lib/firebase/admin";
+import { getFirebaseWebApiKey, missingAdminFirebaseEnv } from "@/lib/env";
 import { resolveSessionByUid } from "@/lib/session/resolve-admin";
 import type { SessionBlockReason } from "@/types/session";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+void process.env.FIREBASE_WEB_API_KEY;
+void process.env.FIREBASE_ADMIN_PROJECT_ID;
+void process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+void process.env.FIREBASE_ADMIN_PRIVATE_KEY;
 
 type PasswordSignIn = {
   idToken?: string;
@@ -47,11 +52,6 @@ export async function POST(request: Request) {
       return blockedSession("unconfigured");
     }
 
-    if (!isFirebaseAdminConfigured()) {
-      logAuthStage("AUTH_LOGIN", "admin_unconfigured", "AUTH_CONFIGURATION_ERROR");
-      return blockedSession("unconfigured");
-    }
-
     const tokenResponse = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`,
       {
@@ -87,7 +87,12 @@ export async function POST(request: Request) {
     return readySession(resolved, { idToken: tokens.idToken, refreshToken: tokens.refreshToken });
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
-    logAuthStage("AUTH_LOGIN", "session_finalize", message);
-    return blockedSession("internal");
+    const missing = missingAdminFirebaseEnv();
+    logAuthStage(
+      "AUTH_LOGIN",
+      "session_finalize",
+      missing.length ? `missing:${missing.join(",")}` : message.split(":")[0],
+    );
+    return blockedSession(missing.length ? "unconfigured" : "internal");
   }
 }
