@@ -62,17 +62,14 @@ export function getFirebaseAdminStatus() {
 }
 
 export function readEnv(name: string) {
-  for (const [key, value] of Object.entries(process.env)) {
-    if (key === name && typeof value === "string") {
-      return value.trim();
-    }
-  }
-  return "";
+  return (process.env[name] ?? "").trim();
 }
 
 export function getFirebaseWebApiKey() {
-  // Server-only name first: Vercel does not inject NEXT_PUBLIC_* secrets into lambdas.
-  return readEnv("FIREBASE_WEB_API_KEY") || readEnv("NEXT_PUBLIC_FIREBASE_API_KEY");
+  // Static FIREBASE_WEB_API_KEY access is required so Next.js injects it into the lambda.
+  const serverOnly = (process.env.FIREBASE_WEB_API_KEY ?? "").trim();
+  if (serverOnly) return serverOnly;
+  return (process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "").trim();
 }
 
 export function getClientFirebaseConfig() {
