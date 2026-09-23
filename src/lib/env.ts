@@ -45,7 +45,8 @@ export function missingAdminFirebaseEnv(): string[] {
   const present = {
     FIREBASE_ADMIN_PROJECT_ID: process.env.FIREBASE_ADMIN_PROJECT_ID,
     FIREBASE_ADMIN_CLIENT_EMAIL: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-    FIREBASE_ADMIN_PRIVATE_KEY: process.env.FIREBASE_ADMIN_PRIVATE_KEY,
+    FIREBASE_ADMIN_PRIVATE_KEY:
+      process.env.FIREBASE_ADMIN_PRIVATE_KEY || process.env.FIREBASE_ADMIN_PRIVATE_KEY_BASE64,
   };
 
   return ADMIN_FIREBASE_ENV_KEYS.filter((key) => !present[key]?.trim());

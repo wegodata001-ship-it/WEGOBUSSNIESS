@@ -55,12 +55,8 @@ export function unauthenticatedSession() {
 }
 
 export function logAuthStage(scope: "AUTH_LOGIN" | "AUTH_RESOLVE", stage: string, extra?: string) {
-  if (process.env.NODE_ENV === "production" && extra) {
-    console.error(`[${scope}_FAILED]`, stage, extra.split(":")[0]);
-    return;
-  }
   if (extra) {
-    console.error(`[${scope}_FAILED]`, stage);
+    console.error(`[${scope}_FAILED]`, stage, extra);
     return;
   }
   if (process.env.NODE_ENV !== "production") {

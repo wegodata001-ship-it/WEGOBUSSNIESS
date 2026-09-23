@@ -10,6 +10,7 @@ void process.env.FIREBASE_WEB_API_KEY;
 void process.env.FIREBASE_ADMIN_PROJECT_ID;
 void process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
 void process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+void process.env.FIREBASE_ADMIN_PRIVATE_KEY_BASE64;
 
 type PasswordSignIn = {
   idToken?: string;
