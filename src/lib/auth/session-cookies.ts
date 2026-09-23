@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { AUTH_COOKIE, REFRESH_COOKIE, SESSION_COOKIE } from "@/lib/auth/request-token";
 
 const WEEK = 60 * 60 * 24 * 7;
@@ -13,12 +14,23 @@ function cookieOptions(maxAge: number) {
   };
 }
 
+export function applySessionCookies(response: NextResponse, idToken: string, refreshToken?: string) {
+  const options = cookieOptions(WEEK);
+  response.cookies.set(AUTH_COOKIE, "1", options);
+  response.cookies.set(SESSION_COOKIE, idToken, options);
+  if (refreshToken) {
+    response.cookies.set(REFRESH_COOKIE, refreshToken, options);
+  }
+  return response;
+}
+
 export async function writeSessionCookies(idToken: string, refreshToken?: string) {
   const store = await cookies();
-  store.set(AUTH_COOKIE, "1", cookieOptions(WEEK));
-  store.set(SESSION_COOKIE, idToken, cookieOptions(WEEK));
+  const options = cookieOptions(WEEK);
+  store.set(AUTH_COOKIE, "1", options);
+  store.set(SESSION_COOKIE, idToken, options);
   if (refreshToken) {
-    store.set(REFRESH_COOKIE, refreshToken, cookieOptions(WEEK));
+    store.set(REFRESH_COOKIE, refreshToken, options);
   }
 }
 

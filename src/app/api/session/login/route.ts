@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
-import { writeSessionCookies } from "@/lib/auth/session-cookies";
+import { blockedSession, logAuthStage, readySession } from "@/lib/auth/session-response";
 import { isFirebaseAdminConfigured } from "@/lib/firebase/admin";
 import { resolveSessionByUid } from "@/lib/session/resolve-admin";
-import type { ResolveResult, SessionBlockReason } from "@/types/session";
+import type { SessionBlockReason } from "@/types/session";
+
+export const dynamic = "force-dynamic";
 
 type PasswordSignIn = {
   idToken?: string;
@@ -30,60 +31,62 @@ function identityReason(message: string): SessionBlockReason | null {
   return null;
 }
 
-function blocked(reason: SessionBlockReason, status: number) {
-  return NextResponse.json({ status: "blocked", reason } satisfies ResolveResult, { status });
-}
-
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as { email?: string; password?: string } | null;
-  const email = body?.email?.trim() ?? "";
-  const password = body?.password ?? "";
-  if (!email || !password) {
-    return blocked("invalid_credentials", 401);
-  }
-
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim();
-  if (!apiKey) {
-    console.error("SESSION_LOGIN_STAGE", "missing_api_key");
-    return blocked("unconfigured", 500);
-  }
-
-  if (!isFirebaseAdminConfigured()) {
-    console.error("SESSION_LOGIN_STAGE", "admin_unconfigured");
-    return blocked("unconfigured", 500);
-  }
-
-  const tokenResponse = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, returnSecureToken: true }),
-    },
-  );
-  const tokens = (await tokenResponse.json()) as PasswordSignIn;
-  const errorMessage = tokens.error?.message ?? "";
-
-  if (!tokens.idToken || !tokens.localId) {
-    const reason = identityReason(errorMessage);
-    if (reason) {
-      return blocked(reason, 401);
-    }
-    console.error("SESSION_LOGIN_STAGE", "identity_toolkit", errorMessage.split(":")[0] || "unknown");
-    return blocked("unconfigured", 401);
-  }
-
   try {
+    const body = (await request.json().catch(() => null)) as { email?: string; password?: string } | null;
+    const email = body?.email?.trim() ?? "";
+    const password = body?.password ?? "";
+    if (!email || !password) {
+      return blockedSession("invalid_credentials");
+    }
+
+    const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim();
+    if (!apiKey) {
+      logAuthStage("AUTH_LOGIN", "missing_api_key", "AUTH_CONFIGURATION_ERROR");
+      return blockedSession("unconfigured");
+    }
+
+    if (!isFirebaseAdminConfigured()) {
+      logAuthStage("AUTH_LOGIN", "admin_unconfigured", "AUTH_CONFIGURATION_ERROR");
+      return blockedSession("unconfigured");
+    }
+
+    const tokenResponse = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, returnSecureToken: true }),
+      },
+    );
+    const tokens = (await tokenResponse.json()) as PasswordSignIn;
+    const errorMessage = tokens.error?.message ?? "";
+
+    if (!tokens.idToken || !tokens.localId) {
+      const reason = identityReason(errorMessage);
+      if (reason) {
+        logAuthStage("AUTH_LOGIN", "identity_rejected");
+        return blockedSession(reason);
+      }
+      logAuthStage("AUTH_LOGIN", "identity_toolkit", errorMessage.split(":")[0] || "unknown");
+      return blockedSession("internal");
+    }
+
+    logAuthStage("AUTH_LOGIN", "firebase token verified");
+
     const resolved = await resolveSessionByUid(tokens.localId);
     if (resolved.status === "blocked") {
-      return NextResponse.json(resolved);
+      logAuthStage("AUTH_LOGIN", "membership blocked", resolved.reason);
+      return blockedSession(resolved.reason);
     }
 
-    await writeSessionCookies(tokens.idToken, tokens.refreshToken);
-    return NextResponse.json(resolved);
+    logAuthStage("AUTH_LOGIN", "user resolved");
+    logAuthStage("AUTH_LOGIN", "membership resolved");
+    logAuthStage("AUTH_LOGIN", "session cookie created");
+    return readySession(resolved, { idToken: tokens.idToken, refreshToken: tokens.refreshToken });
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
-    console.error("SESSION_LOGIN_STAGE", "session_finalize", message);
-    return blocked("unconfigured", 500);
+    logAuthStage("AUTH_LOGIN", "session_finalize", message);
+    return blockedSession("internal");
   }
 }

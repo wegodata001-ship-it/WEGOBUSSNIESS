@@ -1,29 +1,34 @@
 import { NextResponse } from "next/server";
 import { readRefreshToken, readRequestToken } from "@/lib/auth/request-token";
-import { writeSessionCookies } from "@/lib/auth/session-cookies";
+import { blockedSession, logAuthStage, readySession, unauthenticatedSession } from "@/lib/auth/session-response";
 import { resolveSessionByUid, verifyOrRefreshUid } from "@/lib/session/resolve-admin";
-import type { ResolveResult } from "@/types/session";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const token = readRequestToken(request);
   if (!token) {
-    return NextResponse.json({ status: "unauthenticated" }, { status: 401 });
+    return unauthenticatedSession();
   }
 
   try {
     const verified = await verifyOrRefreshUid(token, readRefreshToken(request));
     if (!verified) {
-      return NextResponse.json({ status: "unauthenticated" }, { status: 401 });
+      return unauthenticatedSession();
+    }
+
+    const resolved = await resolveSessionByUid(verified.uid);
+    if (resolved.status === "blocked") {
+      return blockedSession(resolved.reason);
     }
 
     if (verified.idToken) {
-      await writeSessionCookies(verified.idToken, verified.refreshToken);
+      return readySession(resolved, { idToken: verified.idToken, refreshToken: verified.refreshToken });
     }
-
-    return NextResponse.json(await resolveSessionByUid(verified.uid));
+    return NextResponse.json({ ok: true, ...resolved });
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
-    console.error("SESSION_RESOLVE_FAILED", message);
-    return NextResponse.json({ status: "blocked", reason: "unconfigured" } satisfies ResolveResult, { status: 401 });
+    logAuthStage("AUTH_RESOLVE", "session_resolve", message);
+    return unauthenticatedSession();
   }
 }

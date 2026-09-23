@@ -9,6 +9,7 @@ export type SessionBlockReason =
   | "no_membership"
   | "no_business"
   | "unconfigured"
+  | "internal"
   | "invalid_credentials"
   | "too_many_requests";
 

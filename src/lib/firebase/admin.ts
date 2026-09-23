@@ -1,5 +1,5 @@
 import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
-import { getAuth, type Auth } from "firebase-admin/auth";
+import type { Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { getStorage, type Storage } from "firebase-admin/storage";
 import {
@@ -51,18 +51,25 @@ export function getAdminApp(): App {
     });
   }
 
-  return initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-      privateKey: getNormalizedAdminPrivateKey(),
-    }),
-    projectId,
-    storageBucket,
-  });
+  try {
+    return initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+        privateKey: getNormalizedAdminPrivateKey(),
+      }),
+      projectId,
+      storageBucket,
+    });
+  } catch {
+    throw new Error(WAITING_FOR_FIREBASE_CONFIG);
+  }
 }
 
 export function getAdminAuth(): Auth {
+  // Lazy-load Auth so session resolve without a cookie never imports jwks-rsa/jose.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { getAuth } = require("firebase-admin/auth") as typeof import("firebase-admin/auth");
   return getAuth(getAdminApp());
 }
 

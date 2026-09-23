@@ -15,6 +15,7 @@ function blockMessageKey(reason: SessionBlockReason) {
   if (reason === "no_business") return "auth.noBusiness" as const;
   if (reason === "too_many_requests") return "auth.tooManyRequests" as const;
   if (reason === "unconfigured") return "auth.unconfigured" as const;
+  if (reason === "internal") return "auth.genericError" as const;
   return "auth.genericError" as const;
 }
 
