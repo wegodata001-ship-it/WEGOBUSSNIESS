@@ -1,4 +1,5 @@
 import { blockedSession, logAuthStage, readySession } from "@/lib/auth/session-response";
+import { getFirebaseWebApiKey } from "@/lib/env";
 import { isFirebaseAdminConfigured } from "@/lib/firebase/admin";
 import { resolveSessionByUid } from "@/lib/session/resolve-admin";
 import type { SessionBlockReason } from "@/types/session";
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
       return blockedSession("invalid_credentials");
     }
 
-    const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim();
+    const apiKey = getFirebaseWebApiKey();
     if (!apiKey) {
       logAuthStage("AUTH_LOGIN", "missing_api_key", "AUTH_CONFIGURATION_ERROR");
       return blockedSession("unconfigured");

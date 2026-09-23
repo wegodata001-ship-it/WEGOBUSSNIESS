@@ -1,3 +1,4 @@
+import { getFirebaseWebApiKey } from "@/lib/env";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { toAppUser, toBusiness, toMembership } from "@/lib/firebase/converters";
 import { businessDocPath, memberDocPath, userDocPath } from "@/lib/firebase/paths";
@@ -65,7 +66,7 @@ export async function verifyOrRefreshUid(idToken: string, refreshToken?: string)
     return { uid: decoded.uid };
   } catch {
     if (!refreshToken) return null;
-    const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim();
+    const apiKey = getFirebaseWebApiKey();
     if (!apiKey) return null;
 
     const response = await fetch(
