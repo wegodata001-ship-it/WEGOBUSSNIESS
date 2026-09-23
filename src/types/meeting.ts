@@ -40,6 +40,7 @@ export type Meeting = {
   participantEmployeeIds: string[];
   createdBy: string;
   createdByUserId: string;
+  createdByEmployeeId: string | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 };

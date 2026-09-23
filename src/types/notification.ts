@@ -2,9 +2,12 @@ export type AppNotification = {
   id: string;
   businessId: string;
   userId: string;
+  type: string;
   title: string;
   body: string;
   href: string | null;
+  entityType: string | null;
+  entityId: string | null;
   isRead: boolean;
   createdAt: Date | null;
 };

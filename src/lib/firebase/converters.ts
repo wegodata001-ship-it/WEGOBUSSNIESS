@@ -16,11 +16,11 @@ import type { BusinessRole, Locale, PlatformRole } from "@/types/roles";
 import { BUSINESS_ROLES, resolveLocale } from "@/types/roles";
 import { asCalendarColor, asTaskKind } from "@/lib/admin/palette";
 import { normalizeTaskTeam } from "@/lib/admin/task-team";
-import type { Task, TaskComment, TaskPriority, TaskStatus } from "@/types/task";
+import type { Task, TaskActivity, TaskComment, TaskPriority, TaskStatus } from "@/types/task";
 import { TASK_PRIORITIES, TASK_STATUSES } from "@/types/task";
 import type { AppUser } from "@/types/user";
-import type { WorkSession, WorkSessionStatus } from "@/types/work-hours";
-import { WORK_SESSION_STATUSES } from "@/types/work-hours";
+import type { WorkSession, WorkSessionKind, WorkSessionStatus } from "@/types/work-hours";
+import { WORK_SESSION_KINDS, WORK_SESSION_STATUSES } from "@/types/work-hours";
 import { REQUEST_STATUSES } from "@/types/logistics";
 import { MEETING_STATUSES, MEETING_TYPES } from "@/types/meeting";
 import { dateTimeInZone, toSafeDate, zonedDateTime } from "@/lib/admin/meeting-time";
@@ -211,18 +211,51 @@ export function toTask(id: string, data: DocumentData): Task {
     startAt: toSafeDate(data.startAt),
     endAt: toSafeDate(data.endAt),
     createdByUserId: asString(data.createdByUserId),
+    createdByEmployeeId: asNullableString(data.createdByEmployeeId),
+    approvedByUserId: asNullableString(data.approvedByUserId),
+    approvedAt: toDate(data.approvedAt),
+    rejectedByUserId: asNullableString(data.rejectedByUserId),
+    rejectedAt: toDate(data.rejectedAt),
+    rejectionReason: asNullableString(data.rejectionReason),
+    commentCount: asNumber(data.commentCount, 0) ?? 0,
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };
 }
 
 export function toTaskComment(id: string, data: DocumentData): TaskComment {
+  const attachments = Array.isArray(data.attachments)
+    ? data.attachments
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+      .map((item) => ({
+        name: typeof item.name === "string" ? item.name : "",
+        url: typeof item.url === "string" ? item.url : null,
+      }))
+      .filter((item) => item.name)
+    : [];
   return {
     id,
     businessId: asString(data.businessId),
     taskId: asString(data.taskId),
     authorUserId: asString(data.authorUserId),
+    authorEmployeeId: asNullableString(data.authorEmployeeId),
     body: asString(data.body),
+    mentions: asStringArray(data.mentions),
+    attachments,
+    createdAt: toDate(data.createdAt),
+    updatedAt: toDate(data.updatedAt),
+  };
+}
+
+export function toTaskActivity(id: string, data: DocumentData): TaskActivity {
+  return {
+    id,
+    businessId: asString(data.businessId),
+    taskId: asString(data.taskId),
+    actorUserId: asString(data.actorUserId),
+    actorEmployeeId: asNullableString(data.actorEmployeeId),
+    type: asString(data.type) || asString(data.action) || "update",
+    message: asString(data.message),
     createdAt: toDate(data.createdAt),
   };
 }
@@ -270,6 +303,7 @@ export function toMeeting(id: string, data: DocumentData): Meeting {
     participantEmployeeIds: participants,
     createdBy,
     createdByUserId: createdBy,
+    createdByEmployeeId: asNullableString(data.createdByEmployeeId),
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };
@@ -280,12 +314,14 @@ function uniqueStrings(values: string[]) {
 }
 
 export function toWorkSession(id: string, data: DocumentData): WorkSession {
+  const taskId = asNullableString(data.taskId);
   return {
     id,
     businessId: asString(data.businessId),
     employeeId: asString(data.employeeId),
     userId: asString(data.userId),
-    taskId: asNullableString(data.taskId),
+    taskId,
+    kind: asOneOf<WorkSessionKind>(data.kind, WORK_SESSION_KINDS, taskId ? "TASK" : "ATTENDANCE"),
     date: asString(data.date),
     startTime: asString(data.startTime),
     endTime: asNullableString(data.endTime),
@@ -293,6 +329,7 @@ export function toWorkSession(id: string, data: DocumentData): WorkSession {
     endedAt: toDate(data.endedAt),
     durationMinutes: asNumber(data.durationMinutes),
     status: asOneOf<WorkSessionStatus>(data.status, WORK_SESSION_STATUSES, "OPEN"),
+    note: asNullableString(data.note),
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };
@@ -345,10 +382,13 @@ export function toNotification(id: string, data: DocumentData): AppNotification 
     id,
     businessId: asString(data.businessId),
     userId: asString(data.userId),
+    type: asString(data.type) || "general",
     title: asString(data.title),
     body: asString(data.body),
     href: asNullableString(data.href),
-    isRead: asBoolean(data.isRead),
+    entityType: asNullableString(data.entityType),
+    entityId: asNullableString(data.entityId),
+    isRead: asBoolean(data.isRead ?? data.read),
     createdAt: toDate(data.createdAt),
   };
 }

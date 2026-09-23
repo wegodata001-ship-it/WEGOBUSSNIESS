@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { writeActivity } from "@/lib/admin/activity";
+import { deleteMeetingDoc, upsertMeeting } from "@/lib/admin/meeting-write";
+import { upsertTask } from "@/lib/admin/task-write";
 import { notifyEmployees } from "@/lib/admin/notify";
 import { normalizeTaskTeam } from "@/lib/admin/task-team";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
@@ -13,7 +15,6 @@ import {
   employeesPath,
   logisticsRequestDocPath,
   logisticsRequestsPath,
-  meetingDocPath,
   meetingsPath,
   memberDocPath,
   documentsPath,
@@ -24,9 +25,7 @@ import {
   userDocPath,
 } from "@/lib/firebase/paths";
 import { EMPLOYEE_PERMISSIONS } from "@/lib/permissions/defaults";
-import { dateTimeInZone, formatDateDisplay, toSafeDate, zonedDateTime } from "@/lib/admin/meeting-time";
-import { DEFAULT_TIMEZONE } from "@/lib/env";
-import { isDateOnly, isTimeOnly } from "@/lib/dates/format";
+import { isDateOnly } from "@/lib/dates/format";
 import type { Permission } from "@/types/permissions";
 
 type Body = {
@@ -54,21 +53,10 @@ function numberOrNull(value: unknown) {
   return null;
 }
 
-function stringArray(value: unknown) {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim());
-}
-
 function dateOrNull(value: unknown) {
   const next = nullable(value);
   if (!next) return null;
   return isDateOnly(next) ? next : null;
-}
-
-function timeOrNull(value: unknown) {
-  const next = nullable(value);
-  if (!next) return null;
-  return isTimeOnly(next) ? next : null;
 }
 
 function slugify(value: string) {
@@ -105,73 +93,14 @@ export async function POST(request: Request) {
 
   try {
     if (action === "createTask" || action === "updateTask") {
-      const denied = need(action === "createTask" ? "tasks.create" : "tasks.edit");
-      if (denied) return denied;
-      const canAssignTeam = actorCan(actor, "tasks.edit") || actor.isOwnerOrManager || actor.isSuperAdmin;
-      const existingSnap = action === "updateTask" && id ? await db.doc(taskDocPath(businessId, id)).get() : null;
-      const existingTeam = existingSnap?.exists ? normalizeTaskTeam(existingSnap.data() ?? {}) : { assigneeId: null, collaboratorIds: [] };
-      const incomingTeam = normalizeTaskTeam({
-        assigneeId: data.assigneeId,
-        collaboratorIds: data.collaboratorIds,
-        assigneeEmployeeId: data.assigneeEmployeeId,
-        assigneeEmployeeIds: data.assigneeEmployeeIds,
-      });
-      const team = canAssignTeam || action === "createTask" ? incomingTeam : existingTeam;
-      const payload = {
+      const result = await upsertTask({
+        actor,
         businessId,
-        title: text(data.title),
-        description: text(data.description),
-        status: text(data.status) || "TODO",
-        priority: text(data.priority) || "NORMAL",
-        assigneeId: team.assigneeId,
-        collaboratorIds: team.collaboratorIds,
-        assigneeEmployeeId: team.assigneeId,
-        assigneeEmployeeIds: team.assigneeId ? [team.assigneeId, ...team.collaboratorIds] : team.collaboratorIds,
-        departmentId: nullable(data.departmentId),
-        projectId: nullable(data.projectId),
-        estimatedHours: numberOrNull(data.estimatedHours),
-        startDate: dateOrNull(data.startDate),
-        dueDate: dateOrNull(data.dueDate),
-        scheduledDate: dateOrNull(data.scheduledDate) ?? dateOrNull(data.startDate),
-        startTime: timeOrNull(data.startTime),
-        endTime: timeOrNull(data.endTime),
-        color: text(data.color) || "BLUE",
-        taskType: text(data.taskType) || text(data.type) || "GENERAL",
-        updatedAt: now,
-      };
-      if (!payload.title) return NextResponse.json({ error: "TITLE_REQUIRED" }, { status: 400 });
-      const ref = action === "createTask"
-        ? db.collection(tasksPath(businessId)).doc()
-        : db.doc(taskDocPath(businessId, id));
-      if (action === "updateTask" && !id) return NextResponse.json({ error: "MISSING_ID" }, { status: 400 });
-      await ref.set(action === "createTask"
-        ? { ...payload, seedKey: null, actualHours: null, createdByUserId: actor.uid, createdAt: now }
-        : payload, { merge: true });
-
-      const previousIds = new Set([existingTeam.assigneeId, ...existingTeam.collaboratorIds].filter(Boolean) as string[]);
-      const nextIds = [team.assigneeId, ...team.collaboratorIds].filter(Boolean) as string[];
-      const notifyIds = action === "createTask"
-        ? nextIds
-        : nextIds.filter((employeeId) => !previousIds.has(employeeId));
-      if (notifyIds.length) {
-        await notifyEmployees({
-          businessId,
-          employeeIds: notifyIds,
-          title: `שויכת למשימה חדשה: ${payload.title}`,
-          body: `שויכת למשימה חדשה: ${payload.title}`,
-          href: "/tasks",
-        });
-      }
-
-      await writeActivity({
-        businessId,
-        actorUserId: actor.uid,
-        action,
-        entityType: "task",
-        entityId: ref.id,
-        message: action === "createTask" ? `נוצרה משימה: ${payload.title}` : `עודכנה משימה: ${payload.title}`,
+        taskId: action === "updateTask" ? id : undefined,
+        data,
       });
-      return NextResponse.json({ ok: true, id: ref.id });
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+      return NextResponse.json({ ok: true, id: result.id });
     }
 
     if (action === "changeTaskStatus" || action === "assignTask" || action === "archiveTask" || action === "deleteTask") {
@@ -302,121 +231,20 @@ export async function POST(request: Request) {
     }
 
     if (action === "createMeeting" || action === "updateMeeting") {
-      const denied = need("meetings.manage");
-      if (denied) return denied;
-      const businessSnap = await db.doc(businessDocPath(businessId)).get();
-      const timezone = typeof businessSnap.data()?.timezone === "string" && businessSnap.data()!.timezone
-        ? businessSnap.data()!.timezone
-        : DEFAULT_TIMEZONE;
-      const existingSnap = action === "updateMeeting" && id ? await db.doc(meetingDocPath(businessId, id)).get() : null;
-      const existing = existingSnap?.data() ?? {};
-      const date = dateOrNull(data.date) || (isDateOnly(text(existing.date)) ? text(existing.date) : null);
-      const startTime = timeOrNull(data.startTime) || (isTimeOnly(text(existing.startTime)) ? text(existing.startTime) : null);
-      const endTime = timeOrNull(data.endTime) || (isTimeOnly(text(existing.endTime)) ? text(existing.endTime) : null);
-      const startAt = toSafeDate(data.startAt)
-        ?? (date && startTime ? zonedDateTime(date, startTime, timezone) : toSafeDate(existing.startAt));
-      const endAt = toSafeDate(data.endAt)
-        ?? (date && endTime ? zonedDateTime(date, endTime, timezone) : toSafeDate(existing.endAt))
-        ?? (startAt ? new Date(startAt.getTime() + 60 * 60 * 1000) : null);
-      const resolvedEndAt = startAt && endAt && endAt <= startAt
-        ? new Date(startAt.getTime() + 30 * 60 * 1000)
-        : endAt;
-      const startParts = startAt ? dateTimeInZone(startAt, timezone) : null;
-      const endParts = resolvedEndAt ? dateTimeInZone(resolvedEndAt, timezone) : null;
-      const resolvedDate = startParts?.date || date;
-      const resolvedStart = startParts?.time || startTime;
-      if (!text(data.title) || !resolvedDate || !resolvedStart || !startAt) {
-        return NextResponse.json({ error: "MEETING_FIELDS" }, { status: 400 });
-      }
-      const participants = Array.isArray(data.participantIds)
-        ? stringArray(data.participantIds)
-        : stringArray(data.participantEmployeeIds);
-      const statusRaw = text(data.status) || text(existing.status) || "SCHEDULED";
-      const status = statusRaw === "DONE" ? "COMPLETED" : statusRaw;
-      const payload = {
+      const result = await upsertMeeting({
+        actor,
         businessId,
-        title: text(data.title),
-        description: text(data.description) || text(data.notes),
-        notes: text(data.notes) || text(data.description),
-        status,
-        startAt,
-        endAt: resolvedEndAt,
-        date: resolvedDate,
-        startTime: resolvedStart,
-        endTime: endParts?.time || endTime,
-        location: nullable(data.location) ?? existing.location ?? null,
-        meetingType: text(data.meetingType) || existing.meetingType || "OTHER",
-        color: text(data.color) || existing.color || "BLUE",
-        projectId: nullable(data.projectId) ?? existing.projectId ?? null,
-        participantIds: participants,
-        participantEmployeeIds: participants,
-        createdBy: action === "createMeeting" ? actor.uid : existing.createdBy || existing.createdByUserId || actor.uid,
-        updatedAt: now,
-      };
-      const ref = action === "createMeeting"
-        ? db.collection(meetingsPath(businessId)).doc()
-        : db.doc(meetingDocPath(businessId, id));
-      if (action === "updateMeeting" && !id) return NextResponse.json({ error: "MISSING_ID" }, { status: 400 });
-      await ref.set(action === "createMeeting" ? { ...payload, createdByUserId: actor.uid, createdAt: now } : payload, { merge: true });
-
-      const previousIds = stringArray(
-        Array.isArray(existing.participantIds) && existing.participantIds.length
-          ? existing.participantIds
-          : existing.participantEmployeeIds,
-      );
-      const when = `${formatDateDisplay(resolvedDate)} · ${resolvedStart}${payload.endTime ? `–${payload.endTime}` : ""}`;
-      const timeChanged = resolvedDate !== text(existing.date)
-        || resolvedStart !== text(existing.startTime)
-        || (payload.endTime ?? "") !== text(existing.endTime);
-      if (action === "createMeeting") {
-        await notifyEmployees({
-          businessId,
-          employeeIds: participants,
-          title: `נוספת לפגישה חדשה: ${payload.title}`,
-          body: `${payload.title}\n${when}`,
-          href: "/meetings",
-        });
-      } else if (status === "CANCELLED" && text(existing.status) !== "CANCELLED") {
-        await notifyEmployees({
-          businessId,
-          employeeIds: participants,
-          title: `הפגישה בוטלה: ${payload.title}`,
-          body: `${payload.title}\n${when}`,
-          href: "/meetings",
-        });
-      } else {
-        const added = participants.filter((employeeId) => !previousIds.includes(employeeId));
-        if (added.length) {
-          await notifyEmployees({
-            businessId,
-            employeeIds: added,
-            title: `נוספת לפגישה חדשה: ${payload.title}`,
-            body: `${payload.title}\n${when}`,
-            href: "/meetings",
-          });
-        }
-        if (timeChanged) {
-          await notifyEmployees({
-            businessId,
-            employeeIds: participants,
-            title: `עודכן זמן הפגישה: ${payload.title}`,
-            body: `${payload.title}\n${when}`,
-            href: "/meetings",
-          });
-        }
-      }
-
-      await writeActivity({ businessId, actorUserId: actor.uid, action, entityType: "meeting", entityId: ref.id, message: `פגישה: ${payload.title}` });
-      return NextResponse.json({ ok: true, id: ref.id });
+        meetingId: action === "updateMeeting" ? id : undefined,
+        data,
+      });
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+      return NextResponse.json({ ok: true, id: result.id });
     }
 
     if (action === "deleteMeeting") {
-      const denied = need("meetings.manage");
-      if (denied) return denied;
-      if (!id) return NextResponse.json({ error: "MISSING_ID" }, { status: 400 });
-      await db.doc(meetingDocPath(businessId, id)).delete();
-      await writeActivity({ businessId, actorUserId: actor.uid, action, entityType: "meeting", entityId: id, message: "פגישה נמחקה" });
-      return NextResponse.json({ ok: true, id });
+      const result = await deleteMeetingDoc({ actor, businessId, meetingId: id });
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+      return NextResponse.json({ ok: true, id: result.id });
     }
 
     if (action === "createRequest") {

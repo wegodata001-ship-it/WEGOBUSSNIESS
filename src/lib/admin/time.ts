@@ -1,4 +1,4 @@
-import { isActiveTaskStatus, isArchivedTaskStatus, isDoneTaskStatus, type Task } from "@/types/task";
+import { isActiveTaskStatus, isArchivedTaskStatus, isDoneTaskStatus, isHiddenFromWorkMetrics, type Task } from "@/types/task";
 
 export { isArchivedTaskStatus, isDoneTaskStatus, isActiveTaskStatus };
 import type { WorkSession } from "@/types/work-hours";
@@ -22,7 +22,8 @@ export function isOverdue(task: Task, today: string) {
   return Boolean(task.dueDate)
     && task.dueDate! < today
     && !isDoneTaskStatus(task.status)
-    && !isArchivedTaskStatus(task.status);
+    && !isArchivedTaskStatus(task.status)
+    && !isHiddenFromWorkMetrics(task.status);
 }
 
 export function isUrgentTask(task: Task, today: string) {

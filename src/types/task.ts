@@ -1,4 +1,5 @@
 export const TASK_STATUSES = [
+  "PENDING_APPROVAL",
   "TODO",
   "OPEN",
   "PENDING",
@@ -6,6 +7,7 @@ export const TASK_STATUSES = [
   "WAITING",
   "DONE",
   "COMPLETED",
+  "REJECTED",
   "OVERDUE",
   "CANCELLED",
   "ARCHIVED",
@@ -21,6 +23,7 @@ export type TaskWriteStatus = (typeof TASK_WRITE_STATUSES)[number];
 export const ACTIVE_TASK_STATUSES: TaskStatus[] = ["TODO", "OPEN", "PENDING", "IN_PROGRESS", "WAITING"];
 export const DONE_TASK_STATUSES: TaskStatus[] = ["DONE", "COMPLETED"];
 export const ARCHIVED_TASK_STATUSES: TaskStatus[] = ["ARCHIVED", "CANCELLED"];
+export const HIDDEN_WORK_STATUSES: TaskStatus[] = ["PENDING_APPROVAL", "REJECTED"];
 
 export function isActiveTaskStatus(status: TaskStatus) {
   return ACTIVE_TASK_STATUSES.includes(status);
@@ -32,6 +35,18 @@ export function isDoneTaskStatus(status: TaskStatus) {
 
 export function isArchivedTaskStatus(status: TaskStatus) {
   return ARCHIVED_TASK_STATUSES.includes(status);
+}
+
+export function isPendingApproval(status: TaskStatus) {
+  return status === "PENDING_APPROVAL";
+}
+
+export function isRejectedTaskStatus(status: TaskStatus) {
+  return status === "REJECTED";
+}
+
+export function isHiddenFromWorkMetrics(status: TaskStatus) {
+  return HIDDEN_WORK_STATUSES.includes(status);
 }
 
 export function displayTaskStatus(status: TaskStatus): TaskWriteStatus {
@@ -68,6 +83,13 @@ export type Task = {
   startAt: Date | null;
   endAt: Date | null;
   createdByUserId: string;
+  createdByEmployeeId: string | null;
+  approvedByUserId: string | null;
+  approvedAt: Date | null;
+  rejectedByUserId: string | null;
+  rejectedAt: Date | null;
+  rejectionReason: string | null;
+  commentCount: number;
   createdAt: Date | null;
   updatedAt: Date | null;
 };
@@ -77,6 +99,21 @@ export type TaskComment = {
   businessId: string;
   taskId: string;
   authorUserId: string;
+  authorEmployeeId: string | null;
   body: string;
+  mentions: string[];
+  attachments: Array<{ name: string; url?: string | null }>;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+};
+
+export type TaskActivity = {
+  id: string;
+  businessId: string;
+  taskId: string;
+  actorUserId: string;
+  actorEmployeeId: string | null;
+  type: string;
+  message: string;
   createdAt: Date | null;
 };

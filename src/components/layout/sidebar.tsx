@@ -6,7 +6,7 @@ import { LogOut } from "lucide-react";
 import { useAppSession } from "@/components/providers/auth-provider";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { APP_NAME } from "@/lib/env";
-import { MAIN_NAV, PLATFORM_NAV, type NavItem } from "@/lib/navigation";
+import { NAV_GROUPS, PLATFORM_NAV, type NavItem } from "@/lib/navigation";
 import { hasPermission, isSuperAdmin } from "@/lib/permissions/engine";
 import type { MessageKey } from "@/lib/i18n/types";
 import type { Permission } from "@/types/permissions";
@@ -27,9 +27,9 @@ function NavLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void 
     <Link
       href={item.href}
       onClick={onNavigate}
-      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
+      className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
         active
-          ? "bg-white/10 text-white shadow-[inset_3px_0_0_#f5c518]"
+          ? "bg-white/12 text-white shadow-[inset_3px_0_0_#2563EB]"
           : "text-slate-300 hover:bg-white/5 hover:text-white"
       }`}
     >
@@ -63,7 +63,10 @@ export function Sidebar({
   const { t } = useI18n();
   const superAdmin = isSuperAdmin(user);
   const initial = (business?.name || user.displayName || APP_NAME).slice(0, 1);
-  const main = MAIN_NAV.filter((item) => canSee(item, permissions, superAdmin));
+  const groups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => canSee(item, permissions, superAdmin)),
+  })).filter((group) => group.items.length > 0);
   const platform = PLATFORM_NAV.filter((item) => canSee(item, permissions, superAdmin));
 
   return (
@@ -78,15 +81,29 @@ export function Sidebar({
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {main.map((item) => (
-          <NavLink key={item.href} item={item} onNavigate={onNavigate} />
+      <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+        {groups.map((group) => (
+          <div key={group.id}>
+            <p className="mb-2 px-3 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+              {t(group.labelKey)}
+            </p>
+            <div className="space-y-1">
+              {group.items.map((item) => (
+                <NavLink key={item.href} item={item} onNavigate={onNavigate} />
+              ))}
+            </div>
+          </div>
         ))}
         {platform.length > 0 ? (
-          <div className="pt-4">
-            {platform.map((item) => (
-              <NavLink key={item.href} item={item} onNavigate={onNavigate} />
-            ))}
+          <div>
+            <p className="mb-2 px-3 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+              {t("nav.admin")}
+            </p>
+            <div className="space-y-1">
+              {platform.map((item) => (
+                <NavLink key={item.href} item={item} onNavigate={onNavigate} />
+              ))}
+            </div>
           </div>
         ) : null}
       </nav>

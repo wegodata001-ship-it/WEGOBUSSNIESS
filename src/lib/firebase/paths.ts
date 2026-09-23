@@ -83,6 +83,10 @@ export function taskCommentsPath(businessId: string, taskId: string) {
   return `${taskDocPath(businessId, taskId)}/${businessCollections.comments}`;
 }
 
+export function taskActivityPath(businessId: string, taskId: string) {
+  return `${taskDocPath(businessId, taskId)}/activity`;
+}
+
 export function meetingsPath(businessId: string) {
   return businessScopedPath(businessId, businessCollections.meetings);
 }

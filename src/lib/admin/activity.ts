@@ -8,6 +8,7 @@ export async function writeActivity(input: {
   entityType: string;
   entityId?: string | null;
   message: string;
+  meta?: Record<string, unknown>;
 }) {
   const db = getAdminDb();
   await db.collection(activityLogsPath(input.businessId)).add({
@@ -18,5 +19,6 @@ export async function writeActivity(input: {
     entityId: input.entityId ?? null,
     message: input.message,
     createdAt: new Date(),
+    ...(input.meta ?? {}),
   });
 }

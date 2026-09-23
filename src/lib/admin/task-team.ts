@@ -15,16 +15,20 @@ export function normalizeTaskTeam(input: {
   collaboratorIds?: unknown;
   assigneeEmployeeId?: unknown;
   assigneeEmployeeIds?: unknown;
+  participantIds?: unknown;
 }) {
+  const fromParticipants = Array.isArray(input.participantIds)
+    ? uniqueIds(input.participantIds.map((item) => (typeof item === "string" ? item : "")))
+    : [];
   const assigneeId = typeof input.assigneeId === "string" && input.assigneeId.trim()
     ? input.assigneeId.trim()
     : typeof input.assigneeEmployeeId === "string" && input.assigneeEmployeeId.trim()
       ? input.assigneeEmployeeId.trim()
-      : null;
+      : fromParticipants[0] ?? null;
 
   const fromCollaborators = Array.isArray(input.collaboratorIds) ? input.collaboratorIds : [];
   const fromLegacy = Array.isArray(input.assigneeEmployeeIds) ? input.assigneeEmployeeIds : [];
-  const collaboratorIds = uniqueIds([...fromCollaborators, ...fromLegacy].map((item) => (
+  const collaboratorIds = uniqueIds([...fromCollaborators, ...fromLegacy, ...fromParticipants].map((item) => (
     typeof item === "string" ? item : ""
   ))).filter((id) => id !== assigneeId);
 
@@ -37,6 +41,7 @@ export function isEmployeeOnTask(
     assigneeEmployeeId?: string | null;
     collaboratorIds?: string[];
     assigneeEmployeeIds?: string[];
+    participantIds?: string[];
   },
   employeeId: string | null | undefined,
 ) {
@@ -46,7 +51,22 @@ export function isEmployeeOnTask(
     || task.assigneeEmployeeId === employeeId
     || (task.collaboratorIds ?? []).includes(employeeId)
     || (task.assigneeEmployeeIds ?? []).includes(employeeId)
+    || (task.participantIds ?? []).includes(employeeId)
   );
+}
+
+export function taskParticipantIds(task: {
+  assigneeId?: string | null;
+  collaboratorIds?: string[];
+  assigneeEmployeeIds?: string[];
+  participantIds?: string[];
+}) {
+  return uniqueIds([
+    task.assigneeId,
+    ...(task.collaboratorIds ?? []),
+    ...(task.assigneeEmployeeIds ?? []),
+    ...(task.participantIds ?? []),
+  ]);
 }
 
 export function employeeInitials(name: string) {

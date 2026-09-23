@@ -3,9 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
+import { MobileNav } from "@/components/layout/mobile-nav";
 import { RouteGuard } from "@/components/layout/route-guard";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
+import { NotificationProvider } from "@/components/providers/notification-provider";
 import { useI18n } from "@/components/providers/i18n-provider";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -21,6 +23,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <RouteGuard>
+      <NotificationProvider>
       <div className="min-h-screen bg-[var(--app-bg)] lg:flex">
         <div className="hidden lg:block">
           <div className="sticky top-0 h-screen">
@@ -43,10 +46,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         ) : null}
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar onOpenMenu={() => setMenuOpen(true)} />
-          <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-6 md:px-6 lg:px-8">{children}</main>
+          <Topbar onOpenMenu={() => setMenuOpen(true)} onLogout={() => void handleLogout()} />
+          <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-6 pb-24 md:px-6 lg:px-8 lg:pb-6">{children}</main>
+          <MobileNav onMore={() => setMenuOpen(true)} />
         </div>
       </div>
+      </NotificationProvider>
     </RouteGuard>
   );
 }

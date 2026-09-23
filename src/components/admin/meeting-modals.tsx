@@ -31,14 +31,14 @@ export type MeetingDraft = {
   status: Meeting["status"];
 };
 
-export function emptyMeetingDraft(date: string, startTime = "10:00", endTime = "11:00"): MeetingDraft {
+export function emptyMeetingDraft(date: string, startTime = "10:00", endTime = "11:00", participantIds: string[] = []): MeetingDraft {
   return {
     title: "",
     description: "",
     date,
     startTime,
     endTime,
-    participantIds: [],
+    participantIds,
     location: "משרד",
     projectId: "",
     meetingType: "TEAM",
@@ -73,6 +73,7 @@ export function MeetingFormModal({
   onChange,
   onClose,
   onSave,
+  error,
 }: {
   draft: MeetingDraft;
   employees: Employee[];
@@ -82,6 +83,7 @@ export function MeetingFormModal({
   onChange: (next: MeetingDraft) => void;
   onClose: () => void;
   onSave: () => void;
+  error?: string | null;
 }) {
   const locationOptions = MEETING_LOCATIONS.includes(draft.location as (typeof MEETING_LOCATIONS)[number])
     ? MEETING_LOCATIONS
@@ -147,6 +149,7 @@ export function MeetingFormModal({
           </Field>
         </div>
       </div>
+      {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
       <div className="mt-5 flex justify-end gap-2">
         <GhostButton onClick={onClose}>ביטול</GhostButton>
         <PrimaryButton disabled={busy || !draft.title.trim()} onClick={onSave}>{busy ? "שומר…" : "שמירת פגישה"}</PrimaryButton>
@@ -160,6 +163,7 @@ export function MeetingQuickView({
   employees,
   projects,
   canManage,
+  canEdit = canManage,
   busy,
   onClose,
   onEdit,
@@ -171,6 +175,7 @@ export function MeetingQuickView({
   employees: Employee[];
   projects: Project[];
   canManage: boolean;
+  canEdit?: boolean;
   busy: boolean;
   onClose: () => void;
   onEdit: () => void;
@@ -199,14 +204,14 @@ export function MeetingQuickView({
         {meeting.description ? <p className="leading-6 text-slate-600">{meeting.description}</p> : null}
       </div>
       <div className="mt-5 flex flex-wrap justify-end gap-2">
-        <GhostButton onClick={onEdit}>עריכה</GhostButton>
-        {canManage ? (
+        {canEdit ? <GhostButton onClick={onEdit}>עריכה</GhostButton> : null}
+        {canEdit ? (
           <>
             <GhostButton disabled={busy} onClick={onComplete}>סיום פגישה</GhostButton>
             <GhostButton disabled={busy} onClick={onCancel}>ביטול פגישה</GhostButton>
-            <GhostButton disabled={busy} onClick={onDelete}>מחיקה</GhostButton>
           </>
         ) : null}
+        {canManage ? <GhostButton disabled={busy} onClick={onDelete}>מחיקה</GhostButton> : null}
       </div>
     </Modal>
   );

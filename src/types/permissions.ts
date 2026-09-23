@@ -17,6 +17,7 @@ export const PERMISSIONS = [
   "documents.manage",
   "bi.view",
   "meetings.view",
+  "meetings.create",
   "meetings.manage",
   "workHours.viewOwn",
   "workHours.viewAll",

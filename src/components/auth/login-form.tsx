@@ -1,8 +1,8 @@
 "use client";
 
-import { CircleAlert, Eye, EyeOff, LoaderCircle, Lock, LogIn, Mail } from "lucide-react";
+import { AlertCircle, ArrowLeft, Eye, EyeOff, LoaderCircle, Lock, Mail, ShieldCheck } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { useI18n } from "@/components/providers/i18n-provider";
 import type { SessionBlockReason } from "@/types/session";
@@ -18,8 +18,10 @@ function blockMessageKey(reason: SessionBlockReason) {
   return "auth.genericError" as const;
 }
 
+const EMAIL_MEMORY_KEY = "wego_login_email";
+
 const fieldClass =
-  "h-14 w-full rounded-xl border border-[#D9E1EC] bg-white ps-12 pe-4 text-sm text-[#0F172A] outline-none transition placeholder:text-slate-400 focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15";
+  "h-[54px] w-full rounded-xl border border-[#DCE3ED] bg-white ps-12 pe-4 text-sm text-[#0F172A] outline-none transition duration-200 placeholder:text-slate-400 focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15";
 
 export function LoginForm() {
   const { t } = useI18n();
@@ -28,9 +30,18 @@ export function LoginForm() {
   const auth = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(EMAIL_MEMORY_KEY);
+    if (stored) {
+      setEmail(stored);
+      setRemember(true);
+    }
+  }, []);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -46,6 +57,12 @@ export function LoginForm() {
         return;
       }
 
+      if (remember) {
+        window.localStorage.setItem(EMAIL_MEMORY_KEY, email.trim());
+      } else {
+        window.localStorage.removeItem(EMAIL_MEMORY_KEY);
+      }
+
       const next = searchParams.get("next") || "/dashboard";
       router.replace(next.startsWith("/") ? next : "/dashboard");
     } catch {
@@ -58,9 +75,9 @@ export function LoginForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-5">
       {error ? (
-        <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700">
-          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>{error}</p>
+        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm leading-5 text-red-700">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p className="whitespace-pre-line">{error}</p>
         </div>
       ) : null}
 
@@ -111,10 +128,25 @@ export function LoginForm() {
         </div>
       </label>
 
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <label className="inline-flex items-center gap-2 text-[#0F172A]">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(event) => setRemember(event.target.checked)}
+            className="h-4 w-4 rounded border-[#DCE3ED] text-[#2563EB] focus:ring-[#2563EB]/30"
+          />
+          {t("auth.rememberMe")}
+        </label>
+        <span className="cursor-default text-[#64748B]" title={t("auth.forgotPassword")}>
+          {t("auth.forgotPassword")}
+        </span>
+      </div>
+
       <button
         type="submit"
         disabled={loading}
-        className="mt-1 inline-flex h-[54px] w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] text-sm font-semibold text-white transition hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex h-[54px] w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] text-sm font-semibold text-white transition duration-200 hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {loading ? (
           <>
@@ -124,10 +156,15 @@ export function LoginForm() {
         ) : (
           <>
             {t("auth.signIn")}
-            <LogIn className="h-4 w-4" />
+            <ArrowLeft className="h-4 w-4" />
           </>
         )}
       </button>
+
+      <p className="flex items-center justify-center gap-1.5 pt-1 text-xs text-[#64748B]">
+        <ShieldCheck className="h-3.5 w-3.5" />
+        {t("auth.secureAccess")}
+      </p>
     </form>
   );
 }

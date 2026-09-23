@@ -6,6 +6,7 @@ export const ALL_BUSINESS_PERMISSIONS: Permission[] = [...PERMISSIONS];
 
 export const EMPLOYEE_PERMISSIONS: Permission[] = [
   "tasks.view",
+  "tasks.create",
   "tasks.start",
   "tasks.complete",
   "tasks.comment",
@@ -13,6 +14,7 @@ export const EMPLOYEE_PERMISSIONS: Permission[] = [
   "logistics.create",
   "logistics.viewOwn",
   "meetings.view",
+  "meetings.create",
   "notifications.view",
 ];
 
@@ -32,6 +34,7 @@ const MANAGER_PERMISSIONS: Permission[] = [
   "documents.manage",
   "bi.view",
   "meetings.view",
+  "meetings.create",
   "meetings.manage",
   "workHours.viewAll",
   "workHours.manage",

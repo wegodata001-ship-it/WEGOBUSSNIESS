@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isEmployeeOnTask } from "@/lib/admin/task-team";
+import { canSeeTaskDoc } from "@/lib/admin/task-access";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
 import {
   toActivityLog,
@@ -48,9 +48,8 @@ export async function GET(request: Request) {
   if (kind === "tasks") {
     const snap = await db.collection(tasksPath(businessId)).get();
     const tasks = snap.docs.map((docSnap) => toTask(docSnap.id, docSnap.data()));
-    const viewAll = actorCan(actor, "tasks.viewAll") || actor.isSuperAdmin;
     return NextResponse.json({
-      data: viewAll ? tasks : tasks.filter((task) => isEmployeeOnTask(task, actor.employeeId)),
+      data: tasks.filter((task) => canSeeTaskDoc(actor, task)),
     });
   }
 
@@ -139,7 +138,7 @@ export async function GET(request: Request) {
     const items = snap.docs.map((docSnap) => toNotification(docSnap.id, docSnap.data()));
     return NextResponse.json({
       data: items
-        .filter((item) => actor.isSuperAdmin || actor.isOwnerOrManager || item.userId === actor.uid)
+        .filter((item) => item.userId === actor.uid)
         .sort((left, right) => (right.createdAt?.getTime() ?? 0) - (left.createdAt?.getTime() ?? 0)),
     });
   }

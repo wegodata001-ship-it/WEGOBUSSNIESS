@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { MeetingFormModal, MeetingQuickView, draftFromMeeting, emptyMeetingDraft, type MeetingDraft } from "@/components/admin/meeting-modals";
 import { MeetingTimeGrid } from "@/components/admin/meeting-time-grid";
-import { TaskFormModal, emptyTaskDraft, draftFromTask, type TaskDraft } from "@/components/admin/task-form-modal";
+import { TaskFormModal, emptyTaskDraft, draftFromTask, taskDraftPayload, type TaskDraft } from "@/components/admin/task-form-modal";
 import { GhostButton, Modal, PrimaryButton } from "@/components/admin/ui";
 import { useBusinessContext } from "@/components/providers/business-context";
+import { useI18n } from "@/components/providers/i18n-provider";
 import { Spinner } from "@/components/ui/spinner";
-import { mutateBusiness } from "@/lib/admin/api";
+import { deleteBusinessMeeting, meetingMutationMessage, mutateBusiness, saveBusinessMeeting, saveBusinessTask, taskMutationMessage } from "@/lib/admin/api";
 import { meetingToEvent, taskToEvent, type CalendarEvent } from "@/lib/admin/calendar-events";
 import { employeeName, projectName, useBusinessCatalog } from "@/lib/admin/catalog";
 import { CALENDAR_COLOR_META, asCalendarColor, colorByIndex } from "@/lib/admin/palette";
@@ -34,11 +36,13 @@ import type { Task } from "@/types/task";
 type CalendarView = "month" | "week" | "day" | "three" | "agenda";
 
 export function MeetingsView() {
-  const { business, membership, permissions } = useBusinessContext();
+  const { t } = useI18n();
+  const { user, business, membership, permissions } = useBusinessContext();
   const { data, loading, reload } = useBusinessCatalog(business?.id ?? null);
   const today = todayInTimeZone(business?.timezone);
   const timeZone = business?.timezone || "Asia/Jerusalem";
   const currentEmployeeId = membership?.employeeId ?? null;
+  const canCreate = permissions.includes("meetings.create") || permissions.includes("meetings.manage") || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER";
   const canManage = permissions.includes("meetings.manage") || membership?.role === "BUSINESS_OWNER";
   const canCreateTask = permissions.includes("tasks.create") || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER";
   const canEditTask = permissions.includes("tasks.edit") || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER";
@@ -61,6 +65,11 @@ export function MeetingsView() {
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const [filtersReady, setFiltersReady] = useState(false);
+  const searchParams = useSearchParams();
+  const [openedFromQuery, setOpenedFromQuery] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [taskFormError, setTaskFormError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 767px)");
@@ -106,12 +115,27 @@ export function MeetingsView() {
 
   const days = view === "day" ? [anchor] : view === "three" ? threeDayDates(anchor) : weekDates(anchor);
 
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 2800);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  useEffect(() => {
+    if (openedFromQuery || loading || !canCreate) return;
+    if (searchParams.get("new") === "1") {
+      setDraft(emptyMeetingDraft(today, "10:00", addMinutesToTime("10:00", 60), currentEmployeeId ? [currentEmployeeId] : []));
+      setOpenedFromQuery(true);
+    }
+  }, [canCreate, currentEmployeeId, loading, openedFromQuery, searchParams, today]);
+
   if (loading || !ready) return <Spinner label="טוען יומן פגישות…" />;
 
   function openCreate(date = anchor, startTime = "10:00") {
     setQuick(null);
     setQuickTask(null);
-    setDraft(emptyMeetingDraft(date, startTime, addMinutesToTime(startTime, 60)));
+    setFormError(null);
+    setDraft(emptyMeetingDraft(date, startTime, addMinutesToTime(startTime, 60), currentEmployeeId ? [currentEmployeeId] : []));
   }
 
   function openTaskCreate(date = anchor, startTime = "09:00") {
@@ -140,122 +164,122 @@ export function MeetingsView() {
     const task = data.tasks.find((item) => item.id === event.id);
     if (!task || !business?.id || !canEditTask) return;
     setBusy(true);
-    try {
-      await mutateBusiness({
-        businessId: business.id,
-        action: "updateTask",
-        id: task.id,
-        data: {
-          ...task,
-          startDate: date,
-          scheduledDate: date,
-          startTime,
-          endTime,
-          assigneeId: task.assigneeId,
-          collaboratorIds: task.collaboratorIds,
-        },
-      });
-      await reload({ silent: true });
-    } finally {
-      setBusy(false);
+    const result = await saveBusinessTask({
+      businessId: business.id,
+      id: task.id,
+      data: {
+        ...task,
+        startDate: date,
+        scheduledDate: date,
+        startTime,
+        endTime,
+        assigneeId: task.assigneeId,
+        collaboratorIds: task.collaboratorIds,
+        participantIds: [task.assigneeId, ...task.collaboratorIds].filter(Boolean),
+      },
+    });
+    setBusy(false);
+    if (!result.ok) {
+      setToast(taskMutationMessage(result.error, t));
+      return;
     }
+    await reload({ silent: true });
   }
 
   async function saveTaskDraft() {
     if (!business?.id || !taskDraft?.title.trim()) return;
     setBusy(true);
-    try {
-      await mutateBusiness({
-        businessId: business.id,
-        action: taskDraft.id ? "updateTask" : "createTask",
-        id: taskDraft.id,
-        data: {
-          ...taskDraft,
-          assigneeId: taskDraft.assigneeId || null,
-          collaboratorIds: taskDraft.collaboratorIds.filter((id) => id !== taskDraft.assigneeId),
-          estimatedHours: taskDraft.estimatedHours ? Number(taskDraft.estimatedHours) : null,
-          color: taskDraft.color || "BLUE",
-          taskType: taskDraft.taskType || "GENERAL",
-        },
-      });
-      setTaskDraft(null);
-      await reload({ silent: true });
-    } finally {
-      setBusy(false);
+    setTaskFormError(null);
+    const result = await saveBusinessTask({
+      businessId: business.id,
+      id: taskDraft.id,
+      data: taskDraftPayload(taskDraft),
+    });
+    setBusy(false);
+    if (!result.ok) {
+      setTaskFormError(taskMutationMessage(result.error, t));
+      return;
     }
+    setTaskDraft(null);
+    setToast(t("tasks.saved"));
+    await reload({ silent: true });
   }
 
   async function saveDraft() {
     if (!business?.id || !draft || !draft.title.trim() || !isDateOnly(draft.date) || !isTimeOnly(draft.startTime)) return;
     setBusy(true);
-    try {
-      await mutateBusiness({
-        businessId: business.id,
-        action: draft.id ? "updateMeeting" : "createMeeting",
-        id: draft.id,
-        data: {
-          title: draft.title,
-          description: draft.description,
-          notes: draft.description,
-          date: draft.date,
-          startTime: draft.startTime,
-          endTime: isTimeOnly(draft.endTime) ? draft.endTime : null,
-          location: draft.location,
-          projectId: draft.projectId || null,
-          meetingType: draft.meetingType,
-          color: draft.color || "BLUE",
-          participantIds: draft.participantIds,
-          status: draft.status,
-        },
-      });
-      setDraft(null);
-      await reload();
-    } finally {
-      setBusy(false);
+    setFormError(null);
+    const result = await saveBusinessMeeting({
+      businessId: business.id,
+      id: draft.id,
+      data: {
+        title: draft.title,
+        description: draft.description,
+        notes: draft.description,
+        date: draft.date,
+        startTime: draft.startTime,
+        endTime: isTimeOnly(draft.endTime) ? draft.endTime : null,
+        location: draft.location,
+        projectId: draft.projectId || null,
+        meetingType: draft.meetingType,
+        color: draft.color || "BLUE",
+        participantIds: draft.participantIds,
+        status: draft.status,
+      },
+    });
+    setBusy(false);
+    if (!result.ok) {
+      setFormError(meetingMutationMessage(result.error, t));
+      return;
     }
+    setDraft(null);
+    setToast(t("meetings.saved"));
+    await reload({ silent: true });
   }
 
   async function persistMeeting(meeting: Meeting, patch: Record<string, unknown>) {
     if (!business?.id) return;
     setBusy(true);
-    try {
-      await mutateBusiness({
-        businessId: business.id,
-        action: "updateMeeting",
-        id: meeting.id,
-        data: {
-          title: meeting.title,
-          description: meeting.description,
-          notes: meeting.notes,
-          date: meeting.date,
-          startTime: meeting.startTime,
-          endTime: meeting.endTime,
-          location: meeting.location,
-          projectId: meeting.projectId,
-          meetingType: meeting.meetingType,
-          color: meeting.color || "BLUE",
-          participantIds: meetingParticipants(meeting),
-          status: meeting.status,
-          ...patch,
-        },
-      });
-      setQuick(null);
-      await reload();
-    } finally {
-      setBusy(false);
+    const result = await saveBusinessMeeting({
+      businessId: business.id,
+      id: meeting.id,
+      data: {
+        title: meeting.title,
+        description: meeting.description,
+        notes: meeting.notes,
+        date: meeting.date,
+        startTime: meeting.startTime,
+        endTime: meeting.endTime,
+        location: meeting.location,
+        projectId: meeting.projectId,
+        meetingType: meeting.meetingType,
+        color: meeting.color || "BLUE",
+        participantIds: meetingParticipants(meeting),
+        status: meeting.status,
+        ...patch,
+      },
+    });
+    setBusy(false);
+    if (!result.ok) {
+      setFormError(meetingMutationMessage(result.error, t));
+      return;
     }
+    setQuick(null);
+    setToast(t("meetings.saved"));
+    await reload({ silent: true });
   }
 
   async function removeMeeting(meeting: Meeting) {
     if (!business?.id) return;
     setBusy(true);
-    try {
-      await mutateBusiness({ businessId: business.id, action: "deleteMeeting", id: meeting.id });
-      setQuick(null);
-      await reload();
-    } finally {
-      setBusy(false);
+    const result = await deleteBusinessMeeting(business.id, meeting.id);
+    setBusy(false);
+    if (!result.ok) {
+      setFormError(meetingMutationMessage(result.error, t));
+      return;
     }
+    setQuick(null);
+    await reload({ silent: true });
   }
 
   function toggleId(list: string[], id: string, setter: (next: string[]) => void) {
@@ -283,7 +307,7 @@ export function MeetingsView() {
         </div>
         <div className="flex flex-wrap gap-2">
           {canCreateTask ? <GhostButton onClick={() => openTaskCreate()}>+ משימה חדשה</GhostButton> : null}
-          {canManage ? <PrimaryButton onClick={() => openCreate()}>+ פגישה חדשה</PrimaryButton> : null}
+          {canCreate ? <PrimaryButton onClick={() => openCreate()}>+ פגישה חדשה</PrimaryButton> : null}
         </div>
       </div>
 
@@ -419,7 +443,7 @@ export function MeetingsView() {
               today={today}
               timeZone={timeZone}
               canDrag={canDrag}
-              onSlot={canCreateTask ? openTaskCreate : openCreate}
+              onSlot={canCreate ? openCreate : canCreateTask ? openTaskCreate : () => undefined}
               onSelect={openEvent}
               onMove={(event, date, startTime, endTime) => void persistEvent(event, date, startTime, endTime)}
             />
@@ -430,12 +454,18 @@ export function MeetingsView() {
       {isMobile ? (
         <button
           type="button"
-          onClick={() => canCreateTask ? openTaskCreate() : openCreate()}
+          onClick={() => canCreate ? openCreate() : canCreateTask ? openTaskCreate() : undefined}
           className="fixed bottom-5 end-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--brand-primary)] text-white shadow-lg lg:hidden"
           aria-label="משימה חדשה"
         >
           <Plus className="h-6 w-6" />
         </button>
+      ) : null}
+
+      {toast ? (
+        <div className="fixed bottom-24 start-1/2 z-50 -translate-x-1/2 rounded-xl bg-[#0F172A] px-4 py-2.5 text-sm text-white shadow-lg lg:bottom-8">
+          {toast}
+        </div>
       ) : null}
 
       {draft ? (
@@ -448,6 +478,7 @@ export function MeetingsView() {
           onChange={setDraft}
           onClose={() => setDraft(null)}
           onSave={() => void saveDraft()}
+          error={formError}
         />
       ) : null}
 
@@ -455,7 +486,7 @@ export function MeetingsView() {
         <TaskFormModal
           draft={taskDraft}
           onChange={setTaskDraft}
-          onClose={() => setTaskDraft(null)}
+          onClose={() => { setTaskDraft(null); setTaskFormError(null); }}
           onSave={() => void saveTaskDraft()}
           busy={busy}
           businessId={business.id}
@@ -466,6 +497,7 @@ export function MeetingsView() {
           canCreateProject={canCreateProject}
           canCreateDepartment={canCreateDepartment}
           onCatalogRefresh={() => reload({ silent: true })}
+          error={taskFormError}
         />
       ) : null}
 
@@ -483,7 +515,15 @@ export function MeetingsView() {
           }}
           onComplete={() => {
             if (!business?.id) return;
-            void mutateBusiness({ businessId: business.id, action: "updateTask", id: quickTask.id, data: { ...quickTask, status: "DONE" } }).then(() => {
+            void saveBusinessTask({
+              businessId: business.id,
+              id: quickTask.id,
+              data: { ...quickTask, status: "DONE", participantIds: [quickTask.assigneeId, ...quickTask.collaboratorIds].filter(Boolean) },
+            }).then((result) => {
+              if (!result.ok) {
+                setToast(taskMutationMessage(result.error, t));
+                return;
+              }
               setQuickTask(null);
               return reload({ silent: true });
             });
@@ -493,6 +533,9 @@ export function MeetingsView() {
             void mutateBusiness({ businessId: business.id, action: "deleteTask", id: quickTask.id }).then(() => {
               setQuickTask(null);
               return reload({ silent: true });
+            }).catch((error: unknown) => {
+              const code = error instanceof Error ? error.message : "NETWORK";
+              setToast(code === "FORBIDDEN" ? t("tasks.forbidden") : t("tasks.network"));
             });
           }}
         />
@@ -504,6 +547,7 @@ export function MeetingsView() {
           employees={data.employees}
           projects={data.projects}
           canManage={canManage}
+          canEdit={canManage || quick.createdByUserId === user.id || quick.createdBy === user.id}
           busy={busy}
           onClose={() => setQuick(null)}
           onEdit={() => {

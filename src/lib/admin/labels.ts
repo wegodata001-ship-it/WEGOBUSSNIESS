@@ -2,16 +2,17 @@ export const STATUS_LABELS: Record<string, string> = {
   TODO: "לביצוע",
   OPEN: "לביצוע",
   PENDING: "ממתין",
+  PENDING_APPROVAL: "ממתינה לאישור",
   IN_PROGRESS: "בביצוע",
-  WAITING: "ממתין",
-  DONE: "הושלם",
-  COMPLETED: "הושלם",
+  WAITING: "בהמתנה",
+  DONE: "הושלמה",
+  COMPLETED: "הושלמה",
+  REJECTED: "נדחתה",
   OVERDUE: "באיחור",
   CANCELLED: "בוטל",
   ARCHIVED: "ארכיון",
   SCHEDULED: "מתוכנן",
   APPROVED: "אושר",
-  REJECTED: "נדחה",
   NEED_INFO: "חסר מידע",
   FULFILLED: "הושלם",
   ACTIVE: "פעיל",
@@ -46,7 +47,7 @@ export function statusTone(value: string | null | undefined) {
   if (!value) return "gray";
   if (["DONE", "COMPLETED", "APPROVED", "FULFILLED", "ACTIVE"].includes(value)) return "green";
   if (["IN_PROGRESS", "SCHEDULED", "TODO", "OPEN"].includes(value)) return "blue";
-  if (["WAITING", "PENDING", "NEED_INFO", "ON_HOLD"].includes(value)) return "orange";
+  if (["WAITING", "PENDING", "PENDING_APPROVAL", "NEED_INFO", "ON_HOLD"].includes(value)) return "orange";
   if (["URGENT", "OVERDUE", "REJECTED", "CANCELLED"].includes(value)) return "red";
   return "gray";
 }

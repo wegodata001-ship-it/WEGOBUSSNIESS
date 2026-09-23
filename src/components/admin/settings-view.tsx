@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Field, GhostButton, Modal, PageHeader, PrimaryButton, StatusBadge, inputClass } from "@/components/admin/ui";
 import { useAuth } from "@/components/providers/auth-provider";
 import { useBusinessContext } from "@/components/providers/business-context";
@@ -33,6 +34,14 @@ export function SettingsControlView() {
   const [bizName, setBizName] = useState(business?.name ?? "");
   const [timezone, setTimezone] = useState(business?.timezone ?? "Asia/Jerusalem");
   const [language, setLanguage] = useState<string>(business?.language ?? "he");
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get("new") === "employee") {
+      setTab("צוות");
+      setOpenEmp(true);
+    }
+  }, [searchParams]);
 
   if (loading) return <Spinner label="טוען הגדרות…" />;
 

@@ -7,7 +7,7 @@
   --brand-primary-rgb: 37 99 235;
   --sidebar: #0b1220;
   --sidebar-muted: #94a3b8;
-  --app-bg: #f4f6f9;
+  --app-bg: #F5F7FB;
   --surface: #ffffff;
   --line: #e6ebf2;
   --radius: 18px;
@@ -35,4 +35,19 @@ a {
 
 ::selection {
   background: rgb(var(--brand-primary-rgb) / 0.16);
+}
+
+@keyframes login-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-card-in {
+  animation: login-card-in 420ms ease-out;
 }

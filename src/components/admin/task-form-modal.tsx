@@ -72,6 +72,29 @@ export function draftFromTask(task: Task, today: string): TaskDraft {
   };
 }
 
+export function taskDraftPayload(draft: TaskDraft) {
+  const participantIds = [draft.assigneeId, ...draft.collaboratorIds].filter(Boolean);
+  return {
+    title: draft.title,
+    description: draft.description,
+    projectId: draft.projectId || null,
+    departmentId: draft.departmentId || null,
+    assigneeId: draft.assigneeId || null,
+    collaboratorIds: draft.collaboratorIds.filter((id) => id && id !== draft.assigneeId),
+    participantIds,
+    estimatedHours: draft.estimatedHours ? Number(draft.estimatedHours) : null,
+    startDate: draft.startDate,
+    dueDate: draft.dueDate,
+    scheduledDate: draft.startDate,
+    startTime: draft.startTime,
+    endTime: draft.endTime,
+    color: draft.color || "BLUE",
+    taskType: draft.taskType || "GENERAL",
+    priority: draft.priority,
+    status: draft.status,
+  };
+}
+
 export function TaskFormModal({
   draft,
   onChange,
@@ -86,6 +109,7 @@ export function TaskFormModal({
   canCreateProject,
   canCreateDepartment,
   onCatalogRefresh,
+  error,
 }: {
   draft: TaskDraft;
   onChange: (next: TaskDraft) => void;
@@ -100,6 +124,7 @@ export function TaskFormModal({
   canCreateProject: boolean;
   canCreateDepartment: boolean;
   onCatalogRefresh: () => Promise<void>;
+  error?: string | null;
 }) {
   const [quick, setQuick] = useState<"project" | "department" | null>(null);
   const [quickName, setQuickName] = useState("");
@@ -190,7 +215,7 @@ export function TaskFormModal({
               employees={employees}
               departments={departments}
               value={participants}
-              disabled={!canEditTeam}
+              disabled={Boolean(draft.id) && !canEditTeam}
               placeholder="חפש והוסף עובד..."
               onChange={setParticipants}
             />
@@ -232,6 +257,7 @@ export function TaskFormModal({
             <textarea className={`${inputClass} h-24 py-2`} value={draft.description} onChange={(event) => onChange({ ...draft, description: event.target.value })} />
           </Field>
         </div>
+        {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
         <div className="mt-5 flex justify-end gap-2">
           <GhostButton onClick={onClose}>ביטול</GhostButton>
           <PrimaryButton disabled={busy || !draft.title.trim()} onClick={onSave}>{busy ? "שומר…" : "שמירת משימה"}</PrimaryButton>

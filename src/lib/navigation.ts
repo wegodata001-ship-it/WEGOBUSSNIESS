@@ -24,18 +24,58 @@ export type NavItem = {
   superAdminOnly?: boolean;
 };
 
-export const MAIN_NAV: NavItem[] = [
-  { href: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
-  { href: "/today", labelKey: "nav.today", icon: CalendarDays, permission: "tasks.view" },
-  { href: "/tasks", labelKey: "nav.tasks", icon: ClipboardList, permission: "tasks.view" },
-  { href: "/bi", labelKey: "nav.bi", icon: BarChart3, permission: "bi.view" },
-  { href: "/projects", labelKey: "nav.projects", icon: FolderKanban, permission: "projects.view" },
-  { href: "/documents", labelKey: "nav.documents", icon: FileArchive, permission: "documents.view" },
-  { href: "/work-hours", labelKey: "nav.hours", icon: Clock3, permission: "workHours.viewOwn" },
-  { href: "/meetings", labelKey: "nav.meetings", icon: CalendarRange, permission: "meetings.view" },
-  { href: "/requests", labelKey: "nav.requests", icon: Truck, permission: "logistics.create" },
-  { href: "/settings", labelKey: "nav.settings", icon: Settings, permission: "settings.manage" },
+export type NavGroup = {
+  id: string;
+  labelKey: MessageKey;
+  items: NavItem[];
+};
+
+export const NAV_GROUPS: NavGroup[] = [
+  {
+    id: "main",
+    labelKey: "nav.main",
+    items: [
+      { href: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
+      { href: "/today", labelKey: "nav.today", icon: CalendarDays, permission: "tasks.view" },
+    ],
+  },
+  {
+    id: "work",
+    labelKey: "nav.work",
+    items: [
+      { href: "/tasks", labelKey: "nav.tasks", icon: ClipboardList, permission: "tasks.view" },
+      { href: "/projects", labelKey: "nav.projects", icon: FolderKanban, permission: "projects.view" },
+      { href: "/meetings", labelKey: "nav.meetings", icon: CalendarRange, permission: "meetings.view" },
+    ],
+  },
+  {
+    id: "management",
+    labelKey: "nav.management",
+    items: [
+      { href: "/employees", labelKey: "nav.employees", icon: Users, permission: "employees.view" },
+      { href: "/attendance", labelKey: "nav.attendance", icon: Clock3, permission: "workHours.viewOwn" },
+      { href: "/work-hours", labelKey: "nav.hours", icon: Clock3, permission: "workHours.viewOwn" },
+      { href: "/requests", labelKey: "nav.requests", icon: Truck, permission: "logistics.create" },
+    ],
+  },
+  {
+    id: "info",
+    labelKey: "nav.info",
+    items: [
+      { href: "/documents", labelKey: "nav.documents", icon: FileArchive, permission: "documents.view" },
+      { href: "/bi", labelKey: "nav.bi", icon: BarChart3, permission: "bi.view" },
+    ],
+  },
+  {
+    id: "system",
+    labelKey: "nav.system",
+    items: [
+      { href: "/settings", labelKey: "nav.settings", icon: Settings, permission: "settings.manage" },
+    ],
+  },
 ];
+
+export const MAIN_NAV: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
 
 export const MANAGEMENT_NAV: NavItem[] = [];
 
@@ -56,6 +96,7 @@ export const APP_ROUTES = [
   "/projects",
   "/documents",
   "/employees",
+  "/attendance",
   "/work-hours",
   "/meetings",
   "/requests",

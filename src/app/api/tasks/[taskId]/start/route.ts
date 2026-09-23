@@ -62,6 +62,7 @@ export async function POST(
     employeeId: actor.employeeId ?? task.assigneeEmployeeId,
     userId: actor.uid,
     taskId,
+    kind: "TASK",
     date: todayInTimeZone("Asia/Jerusalem"),
     startTime: time,
     endTime: null,

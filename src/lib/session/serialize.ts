@@ -5,6 +5,8 @@ const DATE_KEYS = new Set([
   "endedAt",
   "startAt",
   "endAt",
+  "approvedAt",
+  "rejectedAt",
 ]);
 
 export function reviveSessionDates<T>(value: T): T {
