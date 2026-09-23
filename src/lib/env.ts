@@ -42,7 +42,13 @@ export function missingAdminFirebaseEnv(): string[] {
     return [];
   }
 
-  return ADMIN_FIREBASE_ENV_KEYS.filter((key) => !process.env[key]?.trim());
+  const present = {
+    FIREBASE_ADMIN_PROJECT_ID: process.env.FIREBASE_ADMIN_PROJECT_ID,
+    FIREBASE_ADMIN_CLIENT_EMAIL: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+    FIREBASE_ADMIN_PRIVATE_KEY: process.env.FIREBASE_ADMIN_PRIVATE_KEY,
+  };
+
+  return ADMIN_FIREBASE_ENV_KEYS.filter((key) => !present[key]?.trim());
 }
 
 export function isFirebaseClientConfigured(): boolean {
