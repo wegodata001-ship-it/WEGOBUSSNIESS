@@ -6,7 +6,7 @@ import { EmployeeAvatar } from "@/components/admin/employee-multi-select";
 import { GhostButton, PrimaryButton, StatusBadge } from "@/components/admin/ui";
 import { departmentName, employeeName, projectName } from "@/lib/admin/catalog";
 import { labelOf } from "@/lib/admin/labels";
-import { clockLabel, relativeTimeLabel } from "@/lib/admin/relative-time";
+import { dateTimeLabel, relativeTimeLabel } from "@/lib/admin/relative-time";
 import { taskParticipantIds } from "@/lib/admin/task-team";
 import { PaymentModal } from "@/components/tasks/payment-modal";
 import { PaymentStatusBadge } from "@/components/tasks/payment-status-badge";
@@ -175,7 +175,9 @@ export function TaskDetailDrawer({
       id: `c-${item.id}`,
       kind: "comment" as const,
       at: item.createdAt,
-      name: employeeName(employees, item.authorEmployeeId),
+      name: employeeName(employees, item.authorEmployeeId) !== "לא משויך"
+        ? employeeName(employees, item.authorEmployeeId)
+        : item.legacyAuthorEmail || "לא משויך",
       text: item.body,
     })),
   ].sort((left, right) => toTimestamp(left.at) - toTimestamp(right.at));
@@ -187,7 +189,7 @@ export function TaskDetailDrawer({
         <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold text-[#0F172A]">{task.title}</h2>
+              <h2 className="whitespace-pre-wrap text-lg font-semibold text-[#0F172A]">{task.title}</h2>
               <StatusBadge value={task.status} label={labelOf(task.status)} />
             </div>
             <p className="mt-2 text-sm text-slate-500">
@@ -203,6 +205,19 @@ export function TaskDetailDrawer({
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
+          <section className="space-y-1 text-sm text-slate-600">
+            {task.legacyCategory ? <p className="flex justify-between gap-3"><span>קטגוריה</span><span>{task.legacyCategory}</span></p> : null}
+            <p className="flex justify-between gap-3"><span>סטטוס אישור</span><span>{task.legacyApprovalStatus === "PENDING" ? "ממתין לאישור" : task.legacyApprovalStatus === "APPROVED" ? "מאושר" : isPendingApproval(task.status) ? "ממתין לאישור" : "—"}</span></p>
+            {task.createdAt ? <p className="flex justify-between gap-3"><span>נוצר</span><span>{dateTimeLabel(task.createdAt)}</span></p> : null}
+            {task.startDate ? <p className="flex justify-between gap-3"><span>התחלה</span><span>{task.startDate}{task.startTime ? ` ${task.startTime}` : ""}</span></p> : null}
+            {task.dueDate ? <p className="flex justify-between gap-3"><span>יעד</span><span>{task.dueDate}</span></p> : null}
+            {task.completedDate ? <p className="flex justify-between gap-3"><span>הושלם</span><span>{task.completedDate}</span></p> : null}
+            {task.estimatedHours != null ? <p className="flex justify-between gap-3"><span>שעות מתוכננות</span><span>{task.estimatedHours}</span></p> : null}
+            {task.legacyCreatorEmail ? <p className="flex justify-between gap-3"><span>יוצר</span><span dir="ltr">{task.legacyCreatorEmail}</span></p> : null}
+            {task.updatedAt ? <p className="flex justify-between gap-3"><span>עדכון אחרון</span><span>{dateTimeLabel(task.updatedAt)}</span></p> : null}
+            {task.recurrence ? <p className="flex justify-between gap-3"><span>חזרתיות</span><span>{task.recurrence}</span></p> : null}
+          </section>
+
           <section>
             <p className="text-xs font-medium text-slate-500">משתתפים</p>
             <div className="mt-2 space-y-2">
@@ -213,6 +228,7 @@ export function TaskDetailDrawer({
                   {id === currentEmployeeId ? <span className="text-xs text-slate-400">את/ה</span> : null}
                 </div>
               ))}
+              {task.legacyAssignee ? <p className="text-xs text-slate-400" dir="ltr">{task.legacyAssignee}</p> : null}
             </div>
           </section>
 
@@ -308,7 +324,7 @@ export function TaskDetailDrawer({
           {task.description ? (
             <section>
               <p className="text-xs font-medium text-slate-500">תיאור המשימה</p>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{task.description}</p>
+              <p className="mt-2 max-w-full whitespace-pre-wrap break-words text-sm leading-6 text-slate-700" dir="auto">{task.description}</p>
             </section>
           ) : null}
 
@@ -337,15 +353,18 @@ export function TaskDetailDrawer({
           ) : null}
 
           <section ref={chatRef}>
-            <p className="text-xs font-medium text-slate-500">פעילות ושיחה</p>
+            <p className="text-xs font-medium text-slate-500">שיחה / עדכונים</p>
             <div className="mt-3 space-y-3">
               {timeline.length ? timeline.map((item) => (
                 <div key={item.id} className={item.kind === "activity" ? "text-xs text-slate-500" : "rounded-2xl bg-slate-50 px-3 py-2"}>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-slate-700">{item.name}</span>
-                    <span className="text-[11px] text-slate-400">{clockLabel(item.at)} · {relativeTimeLabel(item.at)}</span>
+                    <div className="flex items-center gap-2">
+                      {item.kind === "comment" ? <EmployeeAvatar name={item.name} /> : null}
+                      <span className="font-medium text-slate-700">{item.name}</span>
+                    </div>
+                    <span className="text-[11px] text-slate-400">{dateTimeLabel(item.at) || relativeTimeLabel(item.at)}</span>
                   </div>
-                  <p className={item.kind === "comment" ? "mt-1 text-sm text-slate-800" : "mt-0.5"}>{item.text}</p>
+                  <p className={item.kind === "comment" ? "mt-1 whitespace-pre-wrap break-words text-sm text-slate-800" : "mt-0.5"} dir="auto">{item.text}</p>
                 </div>
               )) : (
                 <p className="text-sm text-slate-400">אין פעילות עדיין</p>

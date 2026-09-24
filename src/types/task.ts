@@ -100,6 +100,17 @@ export type Task = {
   balanceDue: number | null;
   paymentStatus: TaskPaymentStatus | null;
   paymentIds: string[];
+  legacyId: string | null;
+  legacyProjectId: string | null;
+  legacyAssignee: string | null;
+  legacyCreatorEmail: string | null;
+  legacyApprovalStatus: "APPROVED" | "PENDING" | null;
+  legacyStatus: string | null;
+  legacyPriority: string | null;
+  legacyCategory: string | null;
+  completedDate: string | null;
+  recurrence: string | null;
+  isSent: boolean | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 };
@@ -113,6 +124,8 @@ export type TaskComment = {
   body: string;
   mentions: string[];
   attachments: Array<{ name: string; url?: string | null }>;
+  legacyId: string | null;
+  legacyAuthorEmail: string | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 };

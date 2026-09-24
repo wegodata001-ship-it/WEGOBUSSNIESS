@@ -171,10 +171,14 @@ export function toProject(id: string, data: DocumentData): Project {
     id,
     businessId: asString(data.businessId),
     seedKey: asNullableString(data.seedKey),
+    legacyId: asNullableString(data.legacyId),
     name: asString(data.name),
     clientName: asString(data.clientName),
     description: asString(data.description),
     status: asOneOf<ProjectStatus>(data.status, PROJECT_STATUSES, "ACTIVE"),
+    category: asNullableString(data.category),
+    location: asNullableString(data.location),
+    projectNumber: asNullableString(data.projectNumber),
     departmentId: asNullableString(data.departmentId),
     managerEmployeeId: asNullableString(data.managerEmployeeId),
     startDate: asNullableString(data.startDate),
@@ -231,6 +235,19 @@ export function toTask(id: string, data: DocumentData): Task {
       ? data.paymentStatus as TaskPaymentStatus
       : null,
     paymentIds: asStringArray(data.paymentIds),
+    legacyId: asNullableString(data.legacyId),
+    legacyProjectId: asNullableString(data.legacyProjectId),
+    legacyAssignee: asNullableString(data.legacyAssignee),
+    legacyCreatorEmail: asNullableString(data.legacyCreatorEmail),
+    legacyApprovalStatus: data.legacyApprovalStatus === "PENDING" || data.legacyApprovalStatus === "APPROVED"
+      ? data.legacyApprovalStatus
+      : null,
+    legacyStatus: asNullableString(data.legacyStatus),
+    legacyPriority: asNullableString(data.legacyPriority),
+    legacyCategory: asNullableString(data.legacyCategory),
+    completedDate: asNullableString(data.completedDate),
+    recurrence: asNullableString(data.recurrence),
+    isSent: data.isSent == null ? null : data.isSent === true,
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };
@@ -255,6 +272,8 @@ export function toTaskComment(id: string, data: DocumentData): TaskComment {
     body: asString(data.body),
     mentions: asStringArray(data.mentions),
     attachments,
+    legacyId: asNullableString(data.legacyId),
+    legacyAuthorEmail: asNullableString(data.legacyAuthorEmail),
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };

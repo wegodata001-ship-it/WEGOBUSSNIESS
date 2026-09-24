@@ -123,7 +123,10 @@ export function ProjectsView() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="font-semibold">{project.name}</p>
-                      <p className="text-sm text-slate-500">{project.clientName || "ללא לקוח"}</p>
+                      <p className="text-sm text-slate-500">{project.category || project.clientName || "ללא לקוח"}</p>
+                      {project.location || project.projectNumber ? (
+                        <p className="text-xs text-slate-400">{[project.location, project.projectNumber].filter(Boolean).join(" · ")}</p>
+                      ) : null}
                     </div>
                     <StatusBadge value={project.isActive ? project.status : "ARCHIVED"} label={project.isActive ? labelOf(project.status) : "ארכיון"} />
                   </div>

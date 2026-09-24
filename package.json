@@ -14,7 +14,10 @@
     "seed": "npx tsx scripts/seed.ts",
     "verify:firebase": "npx tsx scripts/verify-firebase.ts",
     "test:payments": "npx tsx src/lib/finance/payments.test.ts",
-    "test:timestamps": "npx tsx src/lib/dates/timestamp.test.ts"
+    "test:timestamps": "npx tsx src/lib/dates/timestamp.test.ts",
+    "test:legacy-dates": "npx tsx src/lib/dates/legacy.test.ts",
+    "import:legacy": "npx tsx scripts/import-legacy-wego-data.ts",
+    "import:legacy:dry": "npx tsx scripts/import-legacy-wego-data.ts --dry-run"
   },
   "dependencies": {
     "firebase": "^12.19.0",

@@ -16,5 +16,18 @@ export function relativeTimeLabel(value: unknown) {
 export function clockLabel(value: unknown) {
   const date = toSafeDate(value);
   if (!date) return "";
-  return date.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" });
+}
+
+export function dateTimeLabel(value: unknown) {
+  const date = toSafeDate(value);
+  if (!date) return "";
+  return date.toLocaleString("he-IL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jerusalem",
+  });
 }

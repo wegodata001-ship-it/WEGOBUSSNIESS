@@ -42,6 +42,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 
+# local import backups may contain operational task text
+/scripts/legacy-data/backups/
+
 # firebase
 .firebase/
 firebase-debug.log

@@ -18,10 +18,14 @@ export type Project = {
   id: string;
   businessId: string;
   seedKey: string | null;
+  legacyId: string | null;
   name: string;
   clientName: string;
   description: string;
   status: ProjectStatus;
+  category: string | null;
+  location: string | null;
+  projectNumber: string | null;
   departmentId: string | null;
   managerEmployeeId: string | null;
   startDate: string | null;

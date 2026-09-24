@@ -39,7 +39,7 @@ export function ProjectWorkspace() {
     <div className="space-y-5">
       <PageHeader
         title={project.name}
-        subtitle={`${project.clientName || "ללא לקוח"} · ${project.startDate ?? "—"} עד ${project.dueDate ?? "—"}`}
+        subtitle={[project.category, project.location, project.projectNumber, project.startDate].filter(Boolean).join(" · ") || project.clientName || "פרויקט"}
         actions={
           <Link href={`/projects/${project.id}/print`} className="inline-flex h-10 items-center rounded-xl bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white">
             הפק כרטסת פרויקט
@@ -48,6 +48,10 @@ export function ProjectWorkspace() {
       />
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <StatusBadge value={project.status} label={labelOf(project.status)} />
+        {project.category ? <span className="text-slate-500">{project.category}</span> : null}
+        {project.location ? <span className="text-slate-500">{project.location}</span> : null}
+        {project.projectNumber ? <span className="text-slate-500">מס׳ {project.projectNumber}</span> : null}
+        {project.startDate ? <span className="text-slate-500">התחלה {project.startDate}</span> : null}
         <span className="text-slate-500">מנהל: {employeeName(data.employees, project.managerEmployeeId)}</span>
       </div>
       <div className="flex flex-wrap gap-2">
