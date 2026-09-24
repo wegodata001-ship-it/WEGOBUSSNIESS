@@ -30,6 +30,7 @@ import { MEETING_STATUSES, MEETING_TYPES } from "@/types/meeting";
 import { dateTimeInZone, toSafeDate, zonedDateTime } from "@/lib/admin/meeting-time";
 import { DEFAULT_TIMEZONE } from "@/lib/env";
 import { DEFAULT_BUSINESS_VAT_RATE } from "@/lib/finance/vat";
+import { normalizeProjectProgress } from "@/lib/admin/project-progress";
 import { isDateOnly, isTimeOnly } from "@/lib/dates/format";
 import { EMPLOYEE_STATUSES } from "@/types/employee";
 
@@ -185,6 +186,7 @@ export function toProject(id: string, data: DocumentData): Project {
     managerEmployeeId: asNullableString(data.managerEmployeeId),
     startDate: asNullableString(data.startDate),
     dueDate: asNullableString(data.dueDate),
+    progress: normalizeProjectProgress(data.progress),
     isActive: data.isActive !== false,
     color: asCalendarColor(data.color),
     createdAt: toDate(data.createdAt),

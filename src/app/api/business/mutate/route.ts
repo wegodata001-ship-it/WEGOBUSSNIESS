@@ -26,6 +26,7 @@ import {
   userDocPath,
 } from "@/lib/firebase/paths";
 import { DEFAULT_BUSINESS_VAT_RATE, normalizeVatRate } from "@/lib/finance/vat";
+import { normalizeProjectProgress } from "@/lib/admin/project-progress";
 import { EMPLOYEE_PERMISSIONS } from "@/lib/permissions/defaults";
 import { isDateOnly } from "@/lib/dates/format";
 import type { Permission } from "@/types/permissions";
@@ -179,6 +180,7 @@ export async function POST(request: Request) {
         ...(data.category !== undefined ? { category: nullable(data.category) } : {}),
         ...(data.location !== undefined ? { location: nullable(data.location) } : {}),
         ...(data.projectNumber !== undefined ? { projectNumber: nullable(data.projectNumber) } : {}),
+        ...(data.progress !== undefined ? { progress: normalizeProjectProgress(data.progress) } : {}),
         isActive: data.isActive === false ? false : true,
         color: text(data.color) || "BLUE",
         updatedAt: now,
@@ -188,7 +190,7 @@ export async function POST(request: Request) {
         : db.doc(projectDocPath(businessId, id));
       if (action === "updateProject" && !id) return NextResponse.json({ error: "MISSING_ID" }, { status: 400 });
       await ref.set(action === "createProject"
-        ? { ...payload, seedKey: null, createdBy: actor.uid, createdByUserId: actor.uid, createdAt: now }
+        ? { ...payload, seedKey: null, createdBy: actor.uid, createdByUserId: actor.uid, createdAt: now, progress: normalizeProjectProgress(data.progress) }
         : payload, { merge: true });
       await writeActivity({
         businessId,

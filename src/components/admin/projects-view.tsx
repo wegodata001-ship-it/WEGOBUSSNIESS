@@ -10,6 +10,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { mutateBusiness } from "@/lib/admin/api";
 import { buildCategoryMap, categoryStyles } from "@/lib/admin/category-color";
 import { employeeName, useBusinessCatalog } from "@/lib/admin/catalog";
+import { normalizeProjectProgress } from "@/lib/admin/project-progress";
 import { labelOf } from "@/lib/admin/labels";
 import { isOverdue, taskIsActive } from "@/lib/admin/time";
 import { toTimestamp } from "@/lib/dates/timestamp";
@@ -30,6 +31,7 @@ type ProjectDraft = {
   startDate: string;
   dueDate: string;
   status: string;
+  progress: number;
 };
 
 export function ProjectsView() {
@@ -72,7 +74,7 @@ export function ProjectsView() {
         done,
         open,
         late,
-        progress: tasks.length ? Math.round((done / tasks.length) * 100) : 0,
+        progress: normalizeProjectProgress(project.progress),
       });
     }
     return map;
@@ -164,6 +166,7 @@ export function ProjectsView() {
           startDate: draft.startDate,
           dueDate: draft.dueDate,
           status: draft.status,
+          progress: normalizeProjectProgress(draft.progress),
           isActive: true,
         },
       });
@@ -205,6 +208,7 @@ export function ProjectsView() {
       startDate: project?.startDate ?? today,
       dueDate: project?.dueDate ?? today,
       status: project?.status ?? "ACTIVE",
+      progress: normalizeProjectProgress(project?.progress),
     });
   }
 
@@ -386,6 +390,7 @@ export function ProjectsView() {
                         startDate: project.startDate,
                         dueDate: project.dueDate,
                         status: event.target.value,
+                        progress: project.progress,
                         isActive: project.isActive,
                       })}
                     >
@@ -452,9 +457,43 @@ export function ProjectsView() {
                 {PROJECT_STATUSES.map((item) => <option key={item} value={item}>{labelOf(item)}</option>)}
               </select>
             </Field>
-            {draft.id ? (
-              <p className="text-sm text-slate-500">אחוז התקדמות: {statsById.get(draft.id)?.progress ?? 0}%</p>
-            ) : null}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-slate-700">אחוז התקדמות</p>
+                <p className="text-sm font-semibold text-slate-900">{draft.progress}%</p>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={draft.progress}
+                onChange={(event) => setDraft({ ...draft, progress: normalizeProjectProgress(event.target.value) })}
+                className="mt-3 h-11 w-full accent-[var(--brand-primary)]"
+                dir="ltr"
+                aria-label="אחוז התקדמות"
+              />
+              <div className="mt-2 flex items-center justify-center gap-2">
+                <input
+                  className={`${inputClass} w-24 text-center`}
+                  inputMode="numeric"
+                  value={String(draft.progress)}
+                  onChange={(event) => setDraft({ ...draft, progress: normalizeProjectProgress(event.target.value) })}
+                />
+                <span className="text-sm text-slate-500">%</span>
+              </div>
+              <div className="mt-3 flex flex-wrap justify-center gap-1">
+                {[0, 25, 50, 75, 100].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`min-h-11 rounded-xl border px-3 text-xs font-medium ${draft.progress === value ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700"}`}
+                    onClick={() => setDraft({ ...draft, progress: value })}
+                  >
+                    {value}%
+                  </button>
+                ))}
+              </div>
+            </div>
             <Field label="מיקום"><input className={inputClass} value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} /></Field>
             <Field label="מספר פרויקט"><input className={inputClass} value={draft.projectNumber} onChange={(event) => setDraft({ ...draft, projectNumber: event.target.value })} /></Field>
             <div className="grid gap-3 md:grid-cols-2">

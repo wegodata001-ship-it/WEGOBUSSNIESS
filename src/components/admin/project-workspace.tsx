@@ -8,7 +8,9 @@ import { useBusinessContext } from "@/components/providers/business-context";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@/components/ui/section-card";
 import { Spinner } from "@/components/ui/spinner";
+import { categoryStyles } from "@/lib/admin/category-color";
 import { employeeName, sessionHours, useBusinessCatalog } from "@/lib/admin/catalog";
+import { normalizeProjectProgress } from "@/lib/admin/project-progress";
 import { labelOf } from "@/lib/admin/labels";
 import { actualHoursForTask, isOverdue, taskIsActive } from "@/lib/admin/time";
 import { todayInTimeZone } from "@/lib/dates/format";
@@ -32,8 +34,8 @@ export function ProjectWorkspace() {
   if (loading) return <Spinner label="טוען פרויקט…" />;
   if (!project) return <EmptyState icon={ClipboardList} title="הפרויקט לא נמצא" />;
 
-  const done = tasks.filter((task) => task.status === "DONE" || task.status === "COMPLETED").length;
-  const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+  const progress = normalizeProjectProgress(project.progress);
+  const styles = categoryStyles(data.catalog.find((item) => item.type === "PROJ_CATEGORY" && item.value === project.category)?.color);
 
   return (
     <div className="space-y-5">
@@ -69,7 +71,7 @@ export function ProjectWorkspace() {
           </SectionCard>
           <SectionCard title="התקדמות">
             <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-              <div className="h-full bg-[var(--brand-primary)]" style={{ width: `${progress}%` }} />
+              <div className="h-full rounded-full" style={{ width: `${progress}%`, background: styles.progress }} />
             </div>
             <p className="mt-3 text-sm text-slate-500">{progress}% · {hours} שעות · {tasks.filter(taskIsActive).length} משימות פתוחות · {tasks.filter((task) => isOverdue(task, today)).length} באיחור</p>
           </SectionCard>

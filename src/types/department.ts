@@ -30,6 +30,7 @@ export type Project = {
   managerEmployeeId: string | null;
   startDate: string | null;
   dueDate: string | null;
+  progress: number;
   isActive: boolean;
   color: string;
   createdAt: Date | null;
