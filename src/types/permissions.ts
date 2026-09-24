@@ -31,6 +31,10 @@ export const PERMISSIONS = [
   "settings.manage",
   "notifications.view",
   "activityLogs.view",
+  "finance.view",
+  "finance.setPrice",
+  "finance.receivePayment",
+  "finance.voidPayment",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

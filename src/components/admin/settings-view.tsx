@@ -13,6 +13,7 @@ import { mutateBusiness } from "@/lib/admin/api";
 import { departmentName, employeeName, useBusinessCatalog } from "@/lib/admin/catalog";
 import { labelOf } from "@/lib/admin/labels";
 import { Users, Building2 } from "lucide-react";
+import { DEFAULT_BUSINESS_VAT_RATE } from "@/lib/finance/vat";
 import { BUSINESS_ROLES } from "@/types/roles";
 
 const TABS = ["צוות", "מחלקות", "הרשאות", "פרויקטים", "קטגוריות", "הגדרות העסק"] as const;
@@ -34,7 +35,12 @@ export function SettingsControlView() {
   const [bizName, setBizName] = useState(business?.name ?? "");
   const [timezone, setTimezone] = useState(business?.timezone ?? "Asia/Jerusalem");
   const [language, setLanguage] = useState<string>(business?.language ?? "he");
+  const [vatPercent, setVatPercent] = useState(String((data.settings.vatRate ?? DEFAULT_BUSINESS_VAT_RATE) * 100));
   const searchParams = useSearchParams();
+
+  useEffect(() => {
+    setVatPercent(String(Math.round((data.settings.vatRate || DEFAULT_BUSINESS_VAT_RATE) * 10000) / 100));
+  }, [data.settings.vatRate]);
 
   useEffect(() => {
     if (searchParams.get("new") === "employee") {
@@ -222,10 +228,17 @@ export function SettingsControlView() {
             <Field label="שם העסק"><input className={inputClass} value={bizName} onChange={(event) => setBizName(event.target.value)} /></Field>
             <Field label="אזור זמן"><input className={inputClass} value={timezone} onChange={(event) => setTimezone(event.target.value)} /></Field>
             <Field label="שפה"><input className={inputClass} value={language} onChange={(event) => setLanguage(event.target.value)} /></Field>
+            <Field label="מע״מ (%)">
+              <input className={inputClass} inputMode="decimal" value={vatPercent} onChange={(event) => setVatPercent(event.target.value)} />
+            </Field>
             <PrimaryButton disabled={busy} onClick={() => {
               if (!business?.id) return;
               setBusy(true);
-              void mutateBusiness({ businessId: business.id, action: "updateBusiness", data: { name: bizName, timezone, language } }).then(() => refresh()).finally(() => setBusy(false));
+              void mutateBusiness({
+                businessId: business.id,
+                action: "updateBusiness",
+                data: { name: bizName, timezone, language, vatRate: Number(vatPercent) / 100 },
+              }).then(() => refresh()).finally(() => setBusy(false));
             }}>שמירת הגדרות</PrimaryButton>
           </div>
         </SectionCard>

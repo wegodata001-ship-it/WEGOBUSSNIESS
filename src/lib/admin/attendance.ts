@@ -1,4 +1,5 @@
 import { dateTimeInZone } from "@/lib/admin/meeting-time";
+import { toSafeDate, toTimestamp } from "@/lib/dates/timestamp";
 import { DEFAULT_TIMEZONE } from "@/lib/env";
 import type { Employee } from "@/types/employee";
 import type { WorkSession } from "@/types/work-hours";
@@ -21,13 +22,15 @@ export function attendanceSessions(sessions: WorkSession[]) {
 }
 
 export function clockTimeInZone(value: Date | null, timeZone = DEFAULT_TIMEZONE) {
-  if (!value) return null;
-  return dateTimeInZone(value, timeZone)?.time ?? null;
+  const date = toSafeDate(value);
+  if (!date) return null;
+  return dateTimeInZone(date, timeZone)?.time ?? null;
 }
 
-export function formatLiveDuration(startedAt: Date | null, now = Date.now()) {
-  if (!startedAt) return "00:00:00";
-  const total = Math.max(0, Math.floor((now - startedAt.getTime()) / 1000));
+export function formatLiveDuration(startedAt: unknown, now = Date.now()) {
+  const started = toTimestamp(startedAt);
+  if (!started) return "00:00:00";
+  const total = Math.max(0, Math.floor((now - started) / 1000));
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const seconds = total % 60;
@@ -53,7 +56,8 @@ export function formatDurationWords(minutes: number, locale: "he" | "ar" = "he")
 
 export function sessionMinutes(session: WorkSession, now = Date.now()) {
   if (session.status === "OPEN" && session.startedAt) {
-    return Math.max(0, Math.round((now - session.startedAt.getTime()) / 60000));
+    const started = toTimestamp(session.startedAt);
+    return started ? Math.max(0, Math.round((now - started) / 60000)) : 0;
   }
   return session.durationMinutes ?? 0;
 }

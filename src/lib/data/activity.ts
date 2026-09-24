@@ -1,11 +1,12 @@
 import { fetchBusinessRecords } from "@/lib/data/authorized";
+import { toTimestamp } from "@/lib/dates/timestamp";
 import type { ActivityLog } from "@/types/notification";
 
 export async function listAllActivity(businessId: string | null) {
   const result = await fetchBusinessRecords<ActivityLog[]>(businessId, "activity", []);
   return {
     ...result,
-    data: [...result.data].sort((left, right) => (right.createdAt?.getTime() ?? 0) - (left.createdAt?.getTime() ?? 0)),
+    data: [...result.data].sort((left, right) => toTimestamp(right.createdAt) - toTimestamp(left.createdAt)),
   };
 }
 

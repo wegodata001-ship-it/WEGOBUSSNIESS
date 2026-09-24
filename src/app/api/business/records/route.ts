@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { canSeeTaskDoc } from "@/lib/admin/task-access";
+import { canViewTaskFinance } from "@/lib/finance/access";
+import { hideTaskFinance } from "@/lib/finance/public-task";
+import { toTimestamp } from "@/lib/dates/timestamp";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
 import {
   toActivityLog,
@@ -13,6 +16,8 @@ import {
   toMembership,
   toNotification,
   toProject,
+  toBusinessSettings,
+  toPaymentRecord,
   toTask,
   toWorkSession,
 } from "@/lib/firebase/converters";
@@ -25,8 +30,10 @@ import {
   documentsPath,
   employeesPath,
   logisticsRequestsPath,
+  businessSettingsDocPath,
   meetingsPath,
   notificationsPath,
+  paymentsPath,
   projectsPath,
   tasksPath,
   workSessionsPath,
@@ -48,8 +55,25 @@ export async function GET(request: Request) {
   if (kind === "tasks") {
     const snap = await db.collection(tasksPath(businessId)).get();
     const tasks = snap.docs.map((docSnap) => toTask(docSnap.id, docSnap.data()));
+    const visible = tasks.filter((task) => canSeeTaskDoc(actor, task));
+    const canSeeMoney = canViewTaskFinance(actor);
     return NextResponse.json({
-      data: tasks.filter((task) => canSeeTaskDoc(actor, task)),
+      data: canSeeMoney ? visible : visible.map(hideTaskFinance),
+    });
+  }
+
+  if (kind === "settings") {
+    const snap = await db.doc(businessSettingsDocPath(businessId)).get();
+    return NextResponse.json({
+      data: toBusinessSettings(snap.exists ? snap.id : "general", snap.data() ?? { businessId }),
+    });
+  }
+
+  if (kind === "payments") {
+    if (!canViewTaskFinance(actor)) return NextResponse.json({ data: [] });
+    const snap = await db.collection(paymentsPath(businessId)).get();
+    return NextResponse.json({
+      data: snap.docs.map((docSnap) => toPaymentRecord(docSnap.id, docSnap.data())),
     });
   }
 
@@ -139,7 +163,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       data: items
         .filter((item) => item.userId === actor.uid)
-        .sort((left, right) => (right.createdAt?.getTime() ?? 0) - (left.createdAt?.getTime() ?? 0)),
+        .sort((left, right) => toTimestamp(right.createdAt) - toTimestamp(left.createdAt)),
     });
   }
 

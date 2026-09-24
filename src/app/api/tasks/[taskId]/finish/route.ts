@@ -1,6 +1,8 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
+import { notifyUnpaidOnComplete } from "@/lib/admin/notify";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
+import { remainingBalance } from "@/lib/finance/vat";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { taskDocPath, workSessionsPath } from "@/lib/firebase/paths";
 
@@ -66,10 +68,23 @@ export async function POST(
     }, { merge: true });
   }
 
+  const wasDone = task.status === "DONE" || task.status === "COMPLETED";
   await taskRef.set({
     status: "DONE",
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
+
+  if (wasDone) return NextResponse.json({ ok: true });
+
+  const priceIncludingVat = typeof task.priceIncludingVat === "number" ? task.priceIncludingVat : null;
+  const paidAmount = typeof task.paidAmount === "number" ? task.paidAmount : 0;
+  await notifyUnpaidOnComplete({
+    businessId,
+    taskId,
+    title: typeof task.title === "string" ? task.title : "",
+    balanceDue: remainingBalance(priceIncludingVat, paidAmount),
+    skipUserId: actor.uid,
+  });
 
   return NextResponse.json({ ok: true });
 }

@@ -8,8 +8,12 @@ import { TaskFormModal, draftFromTask, emptyTaskDraft, taskDraftPayload, type Ta
 import { GhostButton, PageHeader, PrimaryButton, StatusBadge, inputClass } from "@/components/admin/ui";
 import { useBusinessContext } from "@/components/providers/business-context";
 import { useI18n } from "@/components/providers/i18n-provider";
+import { FinanceCell } from "@/components/tasks/finance-cell";
+import { PaymentModal } from "@/components/tasks/payment-modal";
+import { PriceModal } from "@/components/tasks/price-modal";
 import { TaskDetailDrawer } from "@/components/tasks/task-detail-drawer";
 import { TaskWorkCard } from "@/components/tasks/task-work-card";
+import { formatIls, money } from "@/lib/finance/money";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { mutateBusiness, saveBusinessTask, taskMutationMessage } from "@/lib/admin/api";
@@ -45,6 +49,17 @@ export function TasksManageView() {
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [priceOpen, setPriceOpen] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState("");
+  const [moreFilters, setMoreFilters] = useState(false);
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const canViewFinance = canManage || permissions.includes("finance.view") || permissions.includes("finance.receivePayment") || permissions.includes("finance.setPrice");
+  const canReceivePayment = permissions.includes("finance.receivePayment") || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER";
+  const canSetPrice = permissions.includes("finance.setPrice") || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER";
+  const canSelectFinance = canSetPrice || canReceivePayment;
 
   useEffect(() => {
     if (!toast) return;
@@ -82,9 +97,26 @@ export function TasksManageView() {
       if (projectId && task.projectId !== projectId) return false;
       if (dueFilter === "overdue" && !isOverdue(task, today)) return false;
       if (dueFilter === "dueToday" && task.dueDate !== today) return false;
+      if (paymentStatus && task.paymentStatus !== paymentStatus) return false;
+      if (minPrice && (task.priceBeforeVat ?? -1) < Number(minPrice)) return false;
+      if (maxPrice && (task.priceBeforeVat ?? Number.POSITIVE_INFINITY) > Number(maxPrice)) return false;
       return true;
     });
-  }, [canManage, data.tasks, departmentId, dueFilter, employeeId, membershipEmployeeId, priority, projectId, query, status, tab, today, user.id]);
+  }, [canManage, data.tasks, departmentId, dueFilter, employeeId, maxPrice, membershipEmployeeId, minPrice, paymentStatus, priority, projectId, query, status, tab, today, user.id]);
+
+  const selectedTasks = rows.filter((task) => selected.includes(task.id));
+  const selectedUnpriced = selectedTasks.filter((task) => task.priceIncludingVat === null);
+  const selectedPayable = selectedTasks.filter((task) => task.priceIncludingVat !== null && (task.balanceDue ?? 0) > 0);
+  const selectedDue = money(selectedPayable.reduce((sum, task) => sum + (task.balanceDue ?? 0), 0));
+  const financeSummary = {
+    due: money(rows.reduce((sum, task) => sum + (task.priceIncludingVat ?? 0), 0)),
+    paid: money(rows.reduce((sum, task) => sum + task.paidAmount, 0)),
+    balance: money(rows.reduce((sum, task) => sum + (task.balanceDue ?? 0), 0)),
+  };
+
+  function toggleAll(checked: boolean) {
+    setSelected(checked ? rows.map((task) => task.id) : []);
+  }
 
   if (loading) return <Spinner label="טוען משימות…" />;
 
@@ -187,7 +219,60 @@ export function TasksManageView() {
             <option key={item} value={item}>{labelOf(item)}</option>
           ))}
         </select>
+        {canViewFinance ? (
+          <button type="button" className="text-sm text-slate-600 underline" onClick={() => setMoreFilters((open) => !open)}>
+            מסננים נוספים
+          </button>
+        ) : null}
       </div>
+
+      {canViewFinance && moreFilters ? (
+        <div className="grid gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-3 md:grid-cols-3">
+          <select className={inputClass} value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)}>
+            <option value="">מצב תשלום</option>
+            <option value="UNPAID">לא שולם</option>
+            <option value="PARTIALLY_PAID">שולם חלקית</option>
+            <option value="PAID">שולם</option>
+          </select>
+          <input className={inputClass} inputMode="decimal" placeholder="מחיר מ-" value={minPrice} onChange={(event) => setMinPrice(event.target.value)} />
+          <input className={inputClass} inputMode="decimal" placeholder="מחיר עד" value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)} />
+        </div>
+      ) : null}
+
+      {canViewFinance && canManage ? (
+        <div className="grid gap-2 sm:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <p className="text-xs text-slate-500">לתשלום</p>
+            <p className="text-lg font-semibold">{formatIls(financeSummary.due)}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <p className="text-xs text-slate-500">התקבל</p>
+            <p className="text-lg font-semibold">{formatIls(financeSummary.paid)}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <p className="text-xs text-slate-500">יתרה</p>
+            <p className="text-lg font-semibold">{formatIls(financeSummary.balance)}</p>
+          </div>
+        </div>
+      ) : null}
+
+      {selected.length ? (
+        <div className="hidden items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 md:flex">
+          <div>
+            <p className="text-sm font-medium">{selected.length} משימות נבחרו</p>
+            {selectedUnpriced.length && canReceivePayment ? (
+              <p className="text-xs text-amber-700">יש להגדיר מחיר למשימות לפני קבלת תשלום</p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {canSetPrice ? <GhostButton onClick={() => setPriceOpen(true)}>הגדרת סכום</GhostButton> : null}
+            {canReceivePayment ? (
+              <PrimaryButton disabled={!selectedPayable.length} onClick={() => setPaymentOpen(true)}>קבלת תשלום</PrimaryButton>
+            ) : null}
+            <GhostButton onClick={() => setSelected([])}>ביטול בחירה</GhostButton>
+          </div>
+        </div>
+      ) : null}
 
       {rows.length ? (
         <>
@@ -197,16 +282,35 @@ export function TasksManageView() {
                 key={task.id}
                 task={task}
                 employees={data.employees}
+                departments={data.departments}
                 today={today}
                 onOpen={() => { setDetails(task); setOpenChat(false); }}
+                selectable={canSelectFinance}
+                selected={selected.includes(task.id)}
+                onToggle={() => setSelected((current) => current.includes(task.id) ? current.filter((id) => id !== task.id) : [...current, task.id])}
+                canPay={canReceivePayment}
+                canSetPrice={canSetPrice}
+                showFinance={canViewFinance}
+                onPay={() => { setSelected([task.id]); setPaymentOpen(true); }}
+                onSetPrice={() => { setSelected([task.id]); setPriceOpen(true); }}
               />
             ))}
           </div>
           <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white md:block">
-            <table className="min-w-[980px] w-full text-sm">
+            <table className="min-w-[1100px] w-full text-sm">
               <thead className="sticky top-0 bg-slate-50 text-start text-xs text-slate-500">
                 <tr>
-                  {["משימה", "משתתפים", "מחלקה", "זמן", "עדיפות", "סטטוס", "פעולות"].map((item) => (
+                  {canSelectFinance ? (
+                    <th className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={rows.length > 0 && selected.length === rows.length}
+                        onChange={(event) => toggleAll(event.target.checked)}
+                        aria-label="בחירת הכל"
+                      />
+                    </th>
+                  ) : null}
+                  {["משימה", "משתתפים", "מחלקה", "זמן", "עדיפות", "סטטוס", ...(canViewFinance ? ["כספים"] : []), "פעולות"].map((item) => (
                     <th key={item} className="px-3 py-3 font-medium">{item}</th>
                   ))}
                 </tr>
@@ -216,6 +320,15 @@ export function TasksManageView() {
                   const left = task.dueDate ? daysBetween(today, task.dueDate) : null;
                   return (
                     <tr key={task.id} className="border-t border-slate-100 hover:bg-slate-50/70">
+                      {canSelectFinance ? (
+                        <td className="px-3 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selected.includes(task.id)}
+                            onChange={() => setSelected((current) => current.includes(task.id) ? current.filter((id) => id !== task.id) : [...current, task.id])}
+                          />
+                        </td>
+                      ) : null}
                       <td className="px-3 py-3">
                         <button type="button" className="text-start" onClick={() => { setDetails(task); setOpenChat(false); }}>
                           <p className="font-medium">{task.title}</p>
@@ -234,9 +347,23 @@ export function TasksManageView() {
                       <td className="px-3 py-3">
                         <StatusBadge value={isOverdue(task, today) ? "OVERDUE" : task.status} label={labelOf(isOverdue(task, today) ? "OVERDUE" : task.status)} />
                       </td>
+                      {canViewFinance ? (
+                        <td className="px-3 py-3">
+                          <FinanceCell
+                            task={task}
+                            canSetPrice={canSetPrice}
+                            canPay={canReceivePayment}
+                            onSetPrice={() => { setSelected([task.id]); setPriceOpen(true); }}
+                            onPay={() => { setSelected([task.id]); setPaymentOpen(true); }}
+                          />
+                        </td>
+                      ) : null}
                       <td className="px-3 py-3">
                         <div className="flex flex-wrap gap-1">
                           <GhostButton onClick={() => { setDetails(task); setOpenChat(false); }}>פרטים</GhostButton>
+                          {canReceivePayment && task.priceIncludingVat !== null && (task.balanceDue ?? 0) > 0 ? (
+                            <GhostButton onClick={() => { setSelected([task.id]); setPaymentOpen(true); }}>קבלת תשלום</GhostButton>
+                          ) : null}
                           {canManage || task.createdByUserId === user.id ? (
                             <GhostButton onClick={() => setDraft(draftFromTask(task, today))}>עריכה</GhostButton>
                           ) : null}
@@ -259,6 +386,18 @@ export function TasksManageView() {
         <EmptyState icon={ClipboardList} title="אין משימות להצגה" action={<PrimaryButton onClick={() => setDraft(emptyTaskDraft(today))}>+ יצירת משימה</PrimaryButton>} />
       )}
 
+      {selected.length ? (
+        <div className="fixed inset-x-0 bottom-16 z-40 border-t border-slate-200 bg-white px-4 py-3 shadow-lg md:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-medium">{selected.length} משימות · {formatIls(selectedDue)}</p>
+            <div className="flex gap-2">
+              {canSetPrice ? <GhostButton onClick={() => setPriceOpen(true)}>הגדרת סכום</GhostButton> : null}
+              {canReceivePayment ? <PrimaryButton disabled={!selectedPayable.length} onClick={() => setPaymentOpen(true)}>קבלת תשלום</PrimaryButton> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {toast ? (
         <div className="fixed bottom-24 start-1/2 z-50 -translate-x-1/2 rounded-xl bg-[#0F172A] px-4 py-2.5 text-sm text-white shadow-lg lg:bottom-8">
           {toast}
@@ -272,6 +411,10 @@ export function TasksManageView() {
           departments={data.departments}
           projects={data.projects}
           canManage={canManage}
+          canViewFinance={canViewFinance}
+          canSetPrice={canSetPrice}
+          canReceivePayment={canReceivePayment}
+          vatRate={data.settings.vatRate}
           canChat
           businessId={business.id}
           currentEmployeeId={membershipEmployeeId}
@@ -297,6 +440,35 @@ export function TasksManageView() {
           canCreateDepartment={permissions.includes("departments.manage") || membership?.role === "BUSINESS_OWNER"}
           onCatalogRefresh={() => reload({ silent: true })}
           error={formError}
+        />
+      ) : null}
+
+      {priceOpen && business?.id && selectedTasks.length ? (
+        <PriceModal
+          tasks={selectedTasks.length ? selectedTasks : []}
+          businessId={business.id}
+          vatRate={data.settings.vatRate}
+          onClose={() => setPriceOpen(false)}
+          onSaved={() => {
+            setPriceOpen(false);
+            setToast("הסכום נשמר");
+            void reload({ silent: true });
+          }}
+        />
+      ) : null}
+
+      {paymentOpen && business?.id ? (
+        <PaymentModal
+          tasks={selectedTasks}
+          businessId={business.id}
+          defaultDate={today}
+          onClose={() => setPaymentOpen(false)}
+          onSaved={() => {
+            setPaymentOpen(false);
+            setSelected([]);
+            setToast("התשלום נרשם");
+            void reload({ silent: true });
+          }}
         />
       ) : null}
     </div>

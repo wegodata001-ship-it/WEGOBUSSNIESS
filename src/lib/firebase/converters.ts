@@ -16,6 +16,8 @@ import type { BusinessRole, Locale, PlatformRole } from "@/types/roles";
 import { BUSINESS_ROLES, resolveLocale } from "@/types/roles";
 import { asCalendarColor, asTaskKind } from "@/lib/admin/palette";
 import { normalizeTaskTeam } from "@/lib/admin/task-team";
+import type { PaymentMethod, PaymentRecord, PaymentRecordStatus, TaskPaymentStatus } from "@/types/payment";
+import { PAYMENT_METHODS, PAYMENT_RECORD_STATUSES, TASK_PAYMENT_STATUSES } from "@/types/payment";
 import type { Task, TaskActivity, TaskComment, TaskPriority, TaskStatus } from "@/types/task";
 import { TASK_PRIORITIES, TASK_STATUSES } from "@/types/task";
 import type { AppUser } from "@/types/user";
@@ -25,6 +27,7 @@ import { REQUEST_STATUSES } from "@/types/logistics";
 import { MEETING_STATUSES, MEETING_TYPES } from "@/types/meeting";
 import { dateTimeInZone, toSafeDate, zonedDateTime } from "@/lib/admin/meeting-time";
 import { DEFAULT_TIMEZONE } from "@/lib/env";
+import { DEFAULT_BUSINESS_VAT_RATE } from "@/lib/finance/vat";
 import { isDateOnly, isTimeOnly } from "@/lib/dates/format";
 import { EMPLOYEE_STATUSES } from "@/types/employee";
 
@@ -218,6 +221,16 @@ export function toTask(id: string, data: DocumentData): Task {
     rejectedAt: toDate(data.rejectedAt),
     rejectionReason: asNullableString(data.rejectionReason),
     commentCount: asNumber(data.commentCount, 0) ?? 0,
+    priceBeforeVat: asNumber(data.priceBeforeVat),
+    vatRate: asNumber(data.vatRate),
+    vatAmount: asNumber(data.vatAmount),
+    priceIncludingVat: asNumber(data.priceIncludingVat),
+    paidAmount: asNumber(data.paidAmount, 0) ?? 0,
+    balanceDue: asNumber(data.balanceDue),
+    paymentStatus: data.paymentStatus && TASK_PAYMENT_STATUSES.includes(data.paymentStatus as TaskPaymentStatus)
+      ? data.paymentStatus as TaskPaymentStatus
+      : null,
+    paymentIds: asStringArray(data.paymentIds),
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };
@@ -412,6 +425,37 @@ export function toBusinessSettings(id: string, data: DocumentData): BusinessSett
     businessId: asString(data.businessId),
     allowEmployeeSelfRequests: data.allowEmployeeSelfRequests !== false,
     workWeekStart: asNumber(data.workWeekStart, 0) ?? 0,
+    vatRate: asNumber(data.vatRate, DEFAULT_BUSINESS_VAT_RATE) ?? DEFAULT_BUSINESS_VAT_RATE,
     updatedAt: toDate(data.updatedAt),
+  };
+}
+
+export function toPaymentRecord(id: string, data: DocumentData): PaymentRecord {
+  const allocations = Array.isArray(data.allocations)
+    ? data.allocations
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+      .map((item) => ({
+        paymentId: typeof item.paymentId === "string" ? item.paymentId : id,
+        taskId: typeof item.taskId === "string" ? item.taskId : "",
+        amount: typeof item.amount === "number" ? item.amount : 0,
+      }))
+      .filter((item) => item.taskId)
+    : [];
+  return {
+    id,
+    businessId: asString(data.businessId),
+    amount: asNumber(data.amount, 0) ?? 0,
+    paymentDate: asString(data.paymentDate),
+    paymentMethod: asOneOf<PaymentMethod>(data.paymentMethod, PAYMENT_METHODS, "OTHER"),
+    reference: asString(data.reference),
+    notes: asString(data.notes),
+    status: asOneOf<PaymentRecordStatus>(data.status, PAYMENT_RECORD_STATUSES, "RECORDED"),
+    allocations,
+    createdByUserId: asString(data.createdByUserId),
+    createdByEmployeeId: asNullableString(data.createdByEmployeeId),
+    createdAt: toDate(data.createdAt),
+    cancelledByUserId: asNullableString(data.cancelledByUserId),
+    cancelledAt: toDate(data.cancelledAt),
+    cancelReason: asNullableString(data.cancelReason),
   };
 }

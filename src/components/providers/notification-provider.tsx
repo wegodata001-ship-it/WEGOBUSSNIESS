@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useBusinessContext } from "@/components/providers/business-context";
 import { markNotifications } from "@/lib/business/api";
 import { listNotifications } from "@/lib/data/notifications";
+import { toTimestamp } from "@/lib/dates/timestamp";
 import { reviveSessionDates } from "@/lib/session/serialize";
 import type { AppNotification } from "@/types/notification";
 
@@ -28,7 +29,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
     const result = await listNotifications(business.id);
     const mine = reviveSessionDates(result.data).filter((item) => item.userId === user.id);
-    mine.sort((left, right) => (right.createdAt?.getTime() ?? 0) - (left.createdAt?.getTime() ?? 0));
+    mine.sort((left, right) => toTimestamp(right.createdAt) - toTimestamp(left.createdAt));
     setItems(mine);
   }, [business?.id, user.id]);
 

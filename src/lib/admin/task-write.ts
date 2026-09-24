@@ -1,4 +1,5 @@
-import { notifyEmployees, notifyManagers, notifyUsers, taskHref } from "@/lib/admin/notify";
+import { notifyEmployees, notifyManagers, notifyUnpaidOnComplete, notifyUsers, taskHref } from "@/lib/admin/notify";
+import { remainingBalance } from "@/lib/finance/vat";
 import { writeTaskActivity } from "@/lib/admin/task-activity";
 import { canChangeWorkStatus } from "@/lib/admin/task-access";
 import { normalizeTaskTeam, taskParticipantIds } from "@/lib/admin/task-team";
@@ -408,6 +409,18 @@ export async function changeTaskWorkStatus(input: {
     return { ok: false, error: "FORBIDDEN", status: 403 };
   }
   await ref.set({ status: next, updatedAt: new Date() }, { merge: true });
+  const wasDone = text(existing.status) === "COMPLETED" || text(existing.status) === "DONE";
+  if (!wasDone && (next === "COMPLETED" || next === "DONE")) {
+    const priceIncludingVat = typeof existing.priceIncludingVat === "number" ? existing.priceIncludingVat : null;
+    const paidAmount = typeof existing.paidAmount === "number" ? existing.paidAmount : 0;
+    await notifyUnpaidOnComplete({
+      businessId: input.businessId,
+      taskId: input.taskId,
+      title: text(existing.title),
+      balanceDue: remainingBalance(priceIncludingVat, paidAmount),
+      skipUserId: input.actor.uid,
+    });
+  }
   await writeTaskActivity({
     businessId: input.businessId,
     taskId: input.taskId,

@@ -1,6 +1,9 @@
-export function relativeTimeLabel(value: Date | null | undefined) {
-  if (!value) return "";
-  const minutes = Math.max(0, Math.round((Date.now() - value.getTime()) / 60000));
+import { toSafeDate, toTimestamp } from "@/lib/dates/timestamp";
+
+export function relativeTimeLabel(value: unknown) {
+  const time = toTimestamp(value);
+  if (!time) return "";
+  const minutes = Math.max(0, Math.round((Date.now() - time) / 60000));
   if (minutes < 1) return "עכשיו";
   if (minutes < 60) return `לפני ${minutes} דקות`;
   const hours = Math.floor(minutes / 60);
@@ -10,7 +13,8 @@ export function relativeTimeLabel(value: Date | null | undefined) {
   return `לפני ${days} ימים`;
 }
 
-export function clockLabel(value: Date | null | undefined) {
-  if (!value) return "";
-  return value.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+export function clockLabel(value: unknown) {
+  const date = toSafeDate(value);
+  if (!date) return "";
+  return date.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
 }

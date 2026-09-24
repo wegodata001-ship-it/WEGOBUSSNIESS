@@ -1,3 +1,5 @@
+import { toSafeDate } from "@/lib/dates/timestamp";
+
 const DATE_KEYS = new Set([
   "createdAt",
   "updatedAt",
@@ -7,6 +9,7 @@ const DATE_KEYS = new Set([
   "endAt",
   "approvedAt",
   "rejectedAt",
+  "cancelledAt",
 ]);
 
 export function reviveSessionDates<T>(value: T): T {
@@ -17,8 +20,8 @@ export function reviveSessionDates<T>(value: T): T {
   if (value && typeof value === "object") {
     const result: Record<string, unknown> = {};
     for (const [key, nested] of Object.entries(value)) {
-      if (DATE_KEYS.has(key) && typeof nested === "string") {
-        result[key] = new Date(nested);
+      if (DATE_KEYS.has(key)) {
+        result[key] = toSafeDate(nested);
       } else {
         result[key] = reviveSessionDates(nested);
       }

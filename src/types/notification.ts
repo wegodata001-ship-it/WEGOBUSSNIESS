@@ -28,5 +28,6 @@ export type BusinessSettings = {
   businessId: string;
   allowEmployeeSelfRequests: boolean;
   workWeekStart: number;
+  vatRate: number;
   updatedAt: Date | null;
 };

@@ -44,6 +44,10 @@ const MANAGER_PERMISSIONS: Permission[] = [
   "logistics.approve",
   "users.view",
   "activityLogs.view",
+  "finance.view",
+  "finance.setPrice",
+  "finance.receivePayment",
+  "finance.voidPayment",
 ];
 
 export const ROLE_PERMISSIONS: Record<BusinessRole, Permission[]> = {

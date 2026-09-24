@@ -1,3 +1,5 @@
+import type { TaskPaymentStatus } from "@/types/payment";
+
 export const TASK_STATUSES = [
   "PENDING_APPROVAL",
   "TODO",
@@ -90,6 +92,14 @@ export type Task = {
   rejectedAt: Date | null;
   rejectionReason: string | null;
   commentCount: number;
+  priceBeforeVat: number | null;
+  vatRate: number | null;
+  vatAmount: number | null;
+  priceIncludingVat: number | null;
+  paidAmount: number;
+  balanceDue: number | null;
+  paymentStatus: TaskPaymentStatus | null;
+  paymentIds: string[];
   createdAt: Date | null;
   updatedAt: Date | null;
 };

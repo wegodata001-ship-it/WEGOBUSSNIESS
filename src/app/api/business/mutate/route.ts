@@ -20,10 +20,12 @@ import {
   documentsPath,
   projectDocPath,
   projectsPath,
+  businessSettingsDocPath,
   taskDocPath,
   tasksPath,
   userDocPath,
 } from "@/lib/firebase/paths";
+import { DEFAULT_BUSINESS_VAT_RATE, normalizeVatRate } from "@/lib/finance/vat";
 import { EMPLOYEE_PERMISSIONS } from "@/lib/permissions/defaults";
 import { isDateOnly } from "@/lib/dates/format";
 import type { Permission } from "@/types/permissions";
@@ -447,6 +449,13 @@ export async function POST(request: Request) {
         timezone: text(data.timezone) || undefined,
         updatedAt: now,
       }, { merge: true });
+      if (data.vatRate !== undefined) {
+        await db.doc(businessSettingsDocPath(businessId)).set({
+          businessId,
+          vatRate: normalizeVatRate(data.vatRate, DEFAULT_BUSINESS_VAT_RATE),
+          updatedAt: now,
+        }, { merge: true });
+      }
       await writeActivity({ businessId, actorUserId: actor.uid, action, entityType: "business", entityId: businessId, message: "עודכנו הגדרות העסק" });
       return NextResponse.json({ ok: true, id: businessId });
     }

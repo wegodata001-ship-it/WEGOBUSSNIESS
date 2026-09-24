@@ -58,3 +58,23 @@ export async function notifyManagers(input: NotifyPayload) {
 export function taskHref(taskId: string, chat = false) {
   return chat ? `/tasks?taskId=${encodeURIComponent(taskId)}&chat=1` : `/tasks?taskId=${encodeURIComponent(taskId)}`;
 }
+
+export async function notifyUnpaidOnComplete(input: {
+  businessId: string;
+  taskId: string;
+  title: string;
+  balanceDue: number | null;
+  skipUserId: string;
+}) {
+  if (input.balanceDue === null || input.balanceDue <= 0) return;
+  await notifyManagers({
+    businessId: input.businessId,
+    skipUserIds: [input.skipUserId],
+    title: "משימה הושלמה וממתינה לתשלום",
+    body: `${input.title} הושלמה ונותרו ${input.balanceDue.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₪ לתשלום`,
+    href: taskHref(input.taskId),
+    type: "task.completed_unpaid",
+    entityType: "task",
+    entityId: input.taskId,
+  });
+}

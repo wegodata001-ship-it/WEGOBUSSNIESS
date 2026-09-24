@@ -8,12 +8,18 @@ import { departmentName, employeeName, projectName } from "@/lib/admin/catalog";
 import { labelOf } from "@/lib/admin/labels";
 import { clockLabel, relativeTimeLabel } from "@/lib/admin/relative-time";
 import { taskParticipantIds } from "@/lib/admin/task-team";
-import { changeBusinessTaskStatus, decideBusinessTask, fetchTaskThread, postTaskComment } from "@/lib/business/api";
+import { PaymentModal } from "@/components/tasks/payment-modal";
+import { PaymentStatusBadge } from "@/components/tasks/payment-status-badge";
+import { changeBusinessTaskStatus, decideBusinessTask, fetchTaskPayments, fetchTaskThread, postTaskComment, saveTaskPrice, voidBusinessPayment } from "@/lib/business/api";
+import { toTimestamp } from "@/lib/dates/timestamp";
+import { calculateTaskPrice } from "@/lib/finance/vat";
+import { formatIls, parseMoney } from "@/lib/finance/money";
 import { reviveSessionDates } from "@/lib/session/serialize";
 import type { Department, Project } from "@/types/department";
 import type { Employee } from "@/types/employee";
+import type { PaymentRecord } from "@/types/payment";
 import type { Task, TaskActivity, TaskComment } from "@/types/task";
-import { isPendingApproval } from "@/types/task";
+import { isDoneTaskStatus, isPendingApproval } from "@/types/task";
 
 export function TaskDetailDrawer({
   task,
@@ -21,6 +27,10 @@ export function TaskDetailDrawer({
   departments,
   projects,
   canManage,
+  canViewFinance = false,
+  canSetPrice = false,
+  canReceivePayment = false,
+  vatRate,
   canChat,
   businessId,
   currentEmployeeId,
@@ -33,6 +43,10 @@ export function TaskDetailDrawer({
   departments: Department[];
   projects: Project[];
   canManage: boolean;
+  canViewFinance?: boolean;
+  canSetPrice?: boolean;
+  canReceivePayment?: boolean;
+  vatRate: number;
   canChat: boolean;
   businessId: string;
   currentEmployeeId: string | null;
@@ -49,6 +63,9 @@ export function TaskDetailDrawer({
   const [busy, setBusy] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [reason, setReason] = useState("");
+  const [priceDraft, setPriceDraft] = useState(task.priceBeforeVat === null ? "" : String(task.priceBeforeVat));
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [payOpen, setPayOpen] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -59,13 +76,27 @@ export function TaskDetailDrawer({
       setComments(reviveSessionDates(result.comments ?? []));
       setActivity(reviveSessionDates(result.activity ?? []));
     }
+    async function loadPayments() {
+      if (!canViewFinance) return;
+      const result = await fetchTaskPayments(businessId, task.id);
+      if (!active || !result.ok) return;
+      setPayments(reviveSessionDates(result.data));
+    }
     void loadThread();
-    const timer = window.setInterval(() => void loadThread(), 4000);
+    void loadPayments();
+    const timer = window.setInterval(() => {
+      void loadThread();
+      void loadPayments();
+    }, 4000);
     return () => {
       active = false;
       window.clearInterval(timer);
     };
-  }, [businessId, task.id]);
+  }, [businessId, canViewFinance, task.id]);
+
+  useEffect(() => {
+    setPriceDraft(task.priceBeforeVat === null ? "" : String(task.priceBeforeVat));
+  }, [task.priceBeforeVat]);
 
   useEffect(() => {
     if (openChat) chatRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -147,7 +178,7 @@ export function TaskDetailDrawer({
       name: employeeName(employees, item.authorEmployeeId),
       text: item.body,
     })),
-  ].sort((left, right) => (left.at?.getTime() ?? 0) - (right.at?.getTime() ?? 0));
+  ].sort((left, right) => toTimestamp(left.at) - toTimestamp(right.at));
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40">
@@ -184,6 +215,95 @@ export function TaskDetailDrawer({
               ))}
             </div>
           </section>
+
+          {canViewFinance ? (
+            <section className="rounded-2xl border border-slate-200 p-3">
+              <p className="text-xs font-medium text-slate-500">כספים</p>
+              {canSetPrice ? (
+                <label className="mt-2 block text-sm">
+                  <span className="mb-1 block text-slate-600">מחיר לפני מע״מ</span>
+                  <input className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm" value={priceDraft} onChange={(event) => setPriceDraft(event.target.value)} />
+                </label>
+              ) : (
+                <p className="mt-2 text-sm">{task.priceBeforeVat === null ? "לא הוגדר מחיר" : formatIls(task.priceBeforeVat)}</p>
+              )}
+              {(() => {
+                const next = parseMoney(priceDraft);
+                const preview = next === null ? null : calculateTaskPrice(next, task.vatRate ?? vatRate);
+                const shown = task.priceIncludingVat === null && !preview ? null : preview ?? {
+                  vatAmount: task.vatAmount ?? 0,
+                  priceIncludingVat: task.priceIncludingVat ?? 0,
+                };
+                return shown ? (
+                  <div className="mt-2 space-y-1 text-sm text-slate-600">
+                    <p className="flex justify-between"><span>מע״מ</span><span>{formatIls(shown.vatAmount)}</span></p>
+                    <p className="flex justify-between"><span>מחיר כולל</span><span>{formatIls(shown.priceIncludingVat)}</span></p>
+                    <p className="flex justify-between"><span>שולם</span><span>{formatIls(task.paidAmount)}</span></p>
+                    <p className="flex justify-between"><span>יתרה</span><span>{formatIls(task.balanceDue)}</span></p>
+                    <PaymentStatusBadge status={task.paymentStatus} />
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-400">לא הוגדר מחיר</p>
+                );
+              })()}
+              {isDoneTaskStatus(task.status) && (task.balanceDue ?? 0) > 0 ? (
+                <p className="mt-2 text-sm text-amber-700">המשימה הושלמה — נותרו {formatIls(task.balanceDue)} לתשלום</p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {canSetPrice ? (
+                  <GhostButton disabled={busy} onClick={() => {
+                    const next = parseMoney(priceDraft);
+                    if (next === null) return;
+                    setBusy(true);
+                    void saveTaskPrice({ businessId, taskId: task.id, priceBeforeVat: next }).then(() => {
+                      setBusy(false);
+                      onChanged();
+                    });
+                  }}>שמירת מחיר</GhostButton>
+                ) : null}
+                {canReceivePayment && (task.balanceDue ?? 0) > 0 ? (
+                  <PrimaryButton onClick={() => setPayOpen(true)}>קבלת תשלום</PrimaryButton>
+                ) : null}
+              </div>
+              <div className="mt-4">
+                <p className="text-xs font-medium text-slate-500">היסטוריית תשלומים</p>
+                {payments.length ? payments.map((payment) => {
+                  const allocated = payment.allocations.find((item) => item.taskId === task.id)?.amount ?? payment.amount;
+                  const [year, month, day] = payment.paymentDate.split("-");
+                  const displayDate = year && month && day ? `${day}/${month}/${year}` : payment.paymentDate;
+                  return (
+                    <div key={payment.id} className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                      <p className="font-medium">{displayDate}</p>
+                      <p>{formatIls(allocated)}</p>
+                      <p className="text-xs text-slate-500">
+                        {labelOf(payment.paymentMethod)}
+                        {payment.reference ? ` · אסמכתא ${payment.reference}` : ""}
+                        {payment.status === "VOIDED" ? " · בוטל" : ""}
+                      </p>
+                      {payment.createdByEmployeeId ? (
+                        <p className="text-xs text-slate-500">{employeeName(employees, payment.createdByEmployeeId)}</p>
+                      ) : null}
+                      {canSetPrice && payment.status === "RECORDED" ? (
+                        <button
+                          type="button"
+                          className="mt-1 text-xs text-red-600"
+                          onClick={() => {
+                            const reasonText = window.prompt("סיבת ביטול") ?? "";
+                            if (!reasonText.trim()) return;
+                            void voidBusinessPayment({ businessId, paymentId: payment.id, reason: reasonText }).then(onChanged);
+                          }}
+                        >
+                          ביטול רישום
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                }) : <p className="mt-2 text-sm text-slate-400">אין תשלומים</p>}
+                <p className="mt-2 flex justify-between text-sm"><span>סה״כ שולם</span><span>{formatIls(task.paidAmount)}</span></p>
+                <p className="flex justify-between text-sm"><span>יתרה</span><span>{task.priceIncludingVat === null ? "—" : formatIls(task.balanceDue)}</span></p>
+              </div>
+            </section>
+          ) : null}
 
           {task.description ? (
             <section>
@@ -260,6 +380,18 @@ export function TaskDetailDrawer({
           </div>
         ) : null}
       </aside>
+      {payOpen ? (
+        <PaymentModal
+          tasks={[task]}
+          businessId={businessId}
+          defaultDate={task.dueDate || new Date().toISOString().slice(0, 10)}
+          onClose={() => setPayOpen(false)}
+          onSaved={() => {
+            setPayOpen(false);
+            onChanged();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

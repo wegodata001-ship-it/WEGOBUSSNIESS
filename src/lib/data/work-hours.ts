@@ -1,4 +1,5 @@
 import { fetchBusinessRecords } from "@/lib/data/authorized";
+import { toTimestamp } from "@/lib/dates/timestamp";
 import type { WorkSession } from "@/types/work-hours";
 
 export async function listWorkSessions(
@@ -14,6 +15,6 @@ export async function listWorkSessions(
 
   return {
     ...result,
-    data: [...data].sort((left, right) => (right.startedAt?.getTime() ?? 0) - (left.startedAt?.getTime() ?? 0)),
+    data: [...data].sort((left, right) => toTimestamp(right.startedAt) - toTimestamp(left.startedAt)),
   };
 }

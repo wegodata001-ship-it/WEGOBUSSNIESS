@@ -140,6 +140,77 @@ export async function markNotifications(businessId: string, input: { id?: string
   return response.ok;
 }
 
+export async function saveTaskPrice(input: {
+  businessId: string;
+  taskId: string;
+  priceBeforeVat: number;
+}): Promise<BusinessMutationResult> {
+  const response = await fetch(`/api/business/tasks/${input.taskId}/price`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ businessId: input.businessId, priceBeforeVat: input.priceBeforeVat }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
+  if (!response.ok || payload.error) {
+    return { ok: false, error: payload.error || "NETWORK", status: response.status };
+  }
+  return { ok: true, id: payload.id || input.taskId };
+}
+
+export async function receiveBusinessPayment(input: {
+  businessId: string;
+  taskIds: string[];
+  amount: number;
+  paymentMethod: string;
+  paymentDate: string;
+  reference?: string;
+  notes?: string;
+  allocations?: Array<{ taskId: string; amount: number }>;
+}): Promise<BusinessMutationResult> {
+  const response = await fetch("/api/business/payments", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
+  if (!response.ok || payload.error) {
+    return { ok: false, error: payload.error || "NETWORK", status: response.status };
+  }
+  return { ok: true, id: payload.id || "" };
+}
+
+export async function fetchTaskPayments(businessId: string, taskId: string) {
+  const response = await fetch(
+    `/api/business/payments?businessId=${encodeURIComponent(businessId)}&taskId=${encodeURIComponent(taskId)}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.error) {
+    return { ok: false as const, data: [] };
+  }
+  return { ok: true as const, data: payload.data ?? [] };
+}
+
+export async function voidBusinessPayment(input: {
+  businessId: string;
+  paymentId: string;
+  reason?: string;
+}): Promise<BusinessMutationResult> {
+  const response = await fetch(`/api/business/payments/${input.paymentId}/void`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
+  if (!response.ok || payload.error) {
+    return { ok: false, error: payload.error || "NETWORK", status: response.status };
+  }
+  return { ok: true, id: payload.id || input.paymentId };
+}
+
 export async function deleteBusinessMeeting(businessId: string, id: string): Promise<BusinessMutationResult> {
   const response = await fetch(`/api/business/meetings/${id}?businessId=${encodeURIComponent(businessId)}`, {
     method: "DELETE",

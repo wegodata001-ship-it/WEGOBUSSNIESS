@@ -17,6 +17,8 @@ export const businessCollections = {
   activityLogs: "activityLogs",
   settings: "settings",
   documents: "documents",
+  payments: "payments",
+  paymentAllocations: "paymentAllocations",
 } as const;
 
 export function userDocPath(userId: string) {
@@ -141,4 +143,16 @@ export function documentsPath(businessId: string) {
 
 export function documentDocPath(businessId: string, documentId: string) {
   return `${documentsPath(businessId)}/${documentId}`;
+}
+
+export function paymentsPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.payments);
+}
+
+export function paymentDocPath(businessId: string, paymentId: string) {
+  return `${paymentsPath(businessId)}/${paymentId}`;
+}
+
+export function paymentAllocationsPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.paymentAllocations);
 }

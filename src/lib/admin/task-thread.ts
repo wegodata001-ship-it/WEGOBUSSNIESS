@@ -4,6 +4,7 @@ import { writeTaskActivity } from "@/lib/admin/task-activity";
 import { type ServerActor } from "@/lib/auth/server-actor";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toTask, toTaskActivity, toTaskComment } from "@/lib/firebase/converters";
+import { toTimestamp } from "@/lib/dates/timestamp";
 import { employeeDocPath, taskActivityPath, taskCommentsPath, taskDocPath } from "@/lib/firebase/paths";
 
 export type ThreadError = "FORBIDDEN" | "NOT_FOUND" | "TASK_FIELDS";
@@ -31,10 +32,10 @@ export async function listTaskThread(actor: ServerActor, businessId: string, tas
   ]);
   const comments = commentsSnap.docs
     .map((docSnap) => toTaskComment(docSnap.id, docSnap.data()))
-    .sort((left, right) => (left.createdAt?.getTime() ?? 0) - (right.createdAt?.getTime() ?? 0));
+    .sort((left, right) => toTimestamp(left.createdAt) - toTimestamp(right.createdAt));
   const activity = activitySnap.docs
     .map((docSnap) => toTaskActivity(docSnap.id, docSnap.data()))
-    .sort((left, right) => (left.createdAt?.getTime() ?? 0) - (right.createdAt?.getTime() ?? 0));
+    .sort((left, right) => toTimestamp(left.createdAt) - toTimestamp(right.createdAt));
   return { ok: true as const, comments, activity };
 }
 

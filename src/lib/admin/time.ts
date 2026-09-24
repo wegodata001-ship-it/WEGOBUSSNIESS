@@ -1,3 +1,4 @@
+import { toTimestamp } from "@/lib/dates/timestamp";
 import { isActiveTaskStatus, isArchivedTaskStatus, isDoneTaskStatus, isHiddenFromWorkMetrics, type Task } from "@/types/task";
 
 export { isArchivedTaskStatus, isDoneTaskStatus, isActiveTaskStatus };
@@ -10,9 +11,10 @@ export function daysBetween(from: string, to: string) {
   return Math.round((end - start) / 86400000);
 }
 
-export function elapsedLabel(startedAt: Date | null) {
-  if (!startedAt) return "—";
-  const minutes = Math.max(0, Math.round((Date.now() - startedAt.getTime()) / 60000));
+export function elapsedLabel(startedAt: unknown) {
+  const started = toTimestamp(startedAt);
+  if (!started) return "—";
+  const minutes = Math.max(0, Math.round((Date.now() - started) / 60000));
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
   return hours ? `${hours}:${String(rest).padStart(2, "0")}` : `${rest} דק׳`;

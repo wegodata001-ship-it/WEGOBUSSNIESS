@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { listAllActivity } from "@/lib/data/activity";
 import { listBusinessDepartments } from "@/lib/data/departments";
 import { listDocuments } from "@/lib/data/documents";
+import { listBusinessSettings } from "@/lib/data/settings";
 import { listBusinessEmployees } from "@/lib/data/employees";
 import { listBusinessMeetings } from "@/lib/data/meetings";
 import { listBusinessMembers } from "@/lib/data/members";
@@ -11,7 +12,8 @@ import { listProjects } from "@/lib/data/projects";
 import { listBusinessRequests } from "@/lib/data/requests";
 import { listBusinessTasks } from "@/lib/data/tasks";
 import { listWorkSessions } from "@/lib/data/work-hours";
-import type { ActivityLog } from "@/types/notification";
+import type { ActivityLog, BusinessSettings } from "@/types/notification";
+import { DEFAULT_BUSINESS_VAT_RATE } from "@/lib/finance/vat";
 import type { Department, Project } from "@/types/department";
 import type { BusinessDocument } from "@/types/document";
 import type { Employee } from "@/types/employee";
@@ -32,6 +34,7 @@ export type BusinessCatalog = {
   activity: ActivityLog[];
   projects: Project[];
   documents: BusinessDocument[];
+  settings: BusinessSettings;
 };
 
 const EMPTY: BusinessCatalog = {
@@ -45,6 +48,14 @@ const EMPTY: BusinessCatalog = {
   activity: [],
   projects: [],
   documents: [],
+  settings: {
+    id: "general",
+    businessId: "",
+    allowEmployeeSelfRequests: true,
+    workWeekStart: 0,
+    vatRate: DEFAULT_BUSINESS_VAT_RATE,
+    updatedAt: null,
+  },
 };
 
 export function useBusinessCatalog(businessId: string | null) {
@@ -59,7 +70,7 @@ export function useBusinessCatalog(businessId: string | null) {
     }
     const silent = Boolean(options && typeof options === "object" && "silent" in options && (options as { silent?: boolean }).silent);
     if (!silent) setLoading(true);
-    const [tasks, employees, departments, members, sessions, meetings, requests, activity, projects, documents] =
+    const [tasks, employees, departments, members, sessions, meetings, requests, activity, projects, documents, settings] =
       await Promise.all([
         listBusinessTasks(businessId, { viewAll: true }),
         listBusinessEmployees(businessId),
@@ -71,6 +82,7 @@ export function useBusinessCatalog(businessId: string | null) {
         listAllActivity(businessId),
         listProjects(businessId),
         listDocuments(businessId),
+        listBusinessSettings(businessId),
       ]);
     setData({
       tasks: tasks.data,
@@ -83,6 +95,7 @@ export function useBusinessCatalog(businessId: string | null) {
       activity: activity.data,
       projects: projects.data,
       documents: documents.data,
+      settings: settings.data,
     });
     setLoading(false);
   }, [businessId]);

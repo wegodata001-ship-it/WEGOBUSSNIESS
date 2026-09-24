@@ -2,6 +2,7 @@ import { departmentName, employeeName, projectName, sessionHours, type BusinessC
 import { buildSchedule } from "@/lib/admin/schedule";
 import { daysBetween, isOverdue, openSessions, taskIsActive } from "@/lib/admin/time";
 import { shiftDateOnly } from "@/lib/dates/format";
+import { toTimestamp } from "@/lib/dates/timestamp";
 import type { Employee } from "@/types/employee";
 import type { LogisticsRequest } from "@/types/logistics";
 import type { Meeting } from "@/types/meeting";
@@ -97,7 +98,8 @@ function minutesToday(sessions: WorkSession[], employeeId: string, today: string
   for (const session of sessions) {
     if (session.employeeId !== employeeId || session.date !== today) continue;
     if (session.status === "OPEN" && session.startedAt) {
-      minutes += Math.max(0, Math.round((Date.now() - session.startedAt.getTime()) / 60000));
+      const started = toTimestamp(session.startedAt);
+      if (started) minutes += Math.max(0, Math.round((Date.now() - started) / 60000));
     } else {
       minutes += session.durationMinutes ?? 0;
     }
@@ -155,7 +157,8 @@ export function buildDashboardModel(data: BusinessCatalog, today: string, timeZo
   const todayMinutes = data.sessions.reduce((sum, session) => {
     if (session.date !== today) return sum;
     if (session.status === "OPEN" && session.startedAt) {
-      return sum + Math.max(0, Math.round((Date.now() - session.startedAt.getTime()) / 60000));
+      const started = toTimestamp(session.startedAt);
+      return started ? sum + Math.max(0, Math.round((Date.now() - started) / 60000)) : sum;
     }
     return sum + (session.durationMinutes ?? 0);
   }, 0);
@@ -407,9 +410,10 @@ function buildDepartments(data: BusinessCatalog, today: string, weekFrom: string
   });
 }
 
-export function relativeTime(value: Date | null) {
-  if (!value) return "";
-  const minutes = Math.max(0, Math.round((Date.now() - value.getTime()) / 60000));
+export function relativeTime(value: unknown) {
+  const started = toTimestamp(value);
+  if (!started) return "";
+  const minutes = Math.max(0, Math.round((Date.now() - started) / 60000));
   if (minutes < 1) return "עכשיו";
   if (minutes < 60) return `לפני ${minutes} דקות`;
   const hours = Math.round(minutes / 60);

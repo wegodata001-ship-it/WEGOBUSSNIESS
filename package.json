@@ -12,7 +12,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "seed": "npx tsx scripts/seed.ts",
-    "verify:firebase": "npx tsx scripts/verify-firebase.ts"
+    "verify:firebase": "npx tsx scripts/verify-firebase.ts",
+    "test:payments": "npx tsx src/lib/finance/payments.test.ts",
+    "test:timestamps": "npx tsx src/lib/dates/timestamp.test.ts"
   },
   "dependencies": {
     "firebase": "^12.19.0",

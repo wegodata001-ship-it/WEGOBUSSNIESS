@@ -36,6 +36,13 @@ export const STATUS_LABELS: Record<string, string> = {
   BRIEF: "בריף",
   DESIGN: "עיצוב",
   CLIENT: "מסמך לקוח",
+  UNPAID: "לא שולם",
+  PARTIALLY_PAID: "שולם חלקית",
+  PAID: "שולם",
+  CASH: "מזומן",
+  CREDIT_CARD: "כרטיס אשראי",
+  BANK_TRANSFER: "העברה בנקאית",
+  CHECK: "צ'ק",
 };
 
 export function labelOf(value: string | null | undefined, fallback = "—") {
@@ -48,6 +55,8 @@ export function statusTone(value: string | null | undefined) {
   if (["DONE", "COMPLETED", "APPROVED", "FULFILLED", "ACTIVE"].includes(value)) return "green";
   if (["IN_PROGRESS", "SCHEDULED", "TODO", "OPEN"].includes(value)) return "blue";
   if (["WAITING", "PENDING", "PENDING_APPROVAL", "NEED_INFO", "ON_HOLD"].includes(value)) return "orange";
-  if (["URGENT", "OVERDUE", "REJECTED", "CANCELLED"].includes(value)) return "red";
+  if (["URGENT", "OVERDUE", "REJECTED", "CANCELLED", "UNPAID"].includes(value)) return "red";
+  if (["PARTIALLY_PAID"].includes(value)) return "orange";
+  if (["PAID"].includes(value)) return "green";
   return "gray";
 }
