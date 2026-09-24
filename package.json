@@ -17,7 +17,8 @@
     "test:timestamps": "npx tsx src/lib/dates/timestamp.test.ts",
     "test:legacy-dates": "npx tsx src/lib/dates/legacy.test.ts",
     "import:legacy": "npx tsx scripts/import-legacy-wego-data.ts",
-    "import:legacy:dry": "npx tsx scripts/import-legacy-wego-data.ts --dry-run"
+    "import:legacy:dry": "npx tsx scripts/import-legacy-wego-data.ts --dry-run",
+    "test:category-colors": "npx tsx src/lib/admin/category-color.test.ts"
   },
   "dependencies": {
     "firebase": "^12.19.0",

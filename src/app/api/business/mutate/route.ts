@@ -158,6 +158,9 @@ export async function POST(request: Request) {
       if (denied) return denied;
       const name = text(data.name);
       if (!name) return NextResponse.json({ error: "NAME_REQUIRED" }, { status: 400 });
+      if (action === "createProject" && !text(data.category)) {
+        return NextResponse.json({ error: "CATEGORY_REQUIRED" }, { status: 400 });
+      }
       const existingProjects = await db.collection(projectsPath(businessId)).get();
       const duplicate = existingProjects.docs.find((docSnap) =>
         String(docSnap.data().name ?? "").trim().toLowerCase() === name.toLowerCase() && docSnap.id !== id,

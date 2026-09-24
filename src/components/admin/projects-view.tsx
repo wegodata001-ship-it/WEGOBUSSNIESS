@@ -1,18 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { FolderKanban } from "lucide-react";
+import { useMemo, useState } from "react";
+import { FolderKanban, SlidersHorizontal, X } from "lucide-react";
 import { Field, GhostButton, Modal, PageHeader, PrimaryButton, StatusBadge, inputClass } from "@/components/admin/ui";
 import { useBusinessContext } from "@/components/providers/business-context";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { mutateBusiness } from "@/lib/admin/api";
-import { employeeName, sessionHours, useBusinessCatalog } from "@/lib/admin/catalog";
+import { buildCategoryMap, categoryStyles } from "@/lib/admin/category-color";
+import { employeeName, useBusinessCatalog } from "@/lib/admin/catalog";
 import { labelOf } from "@/lib/admin/labels";
 import { isOverdue, taskIsActive } from "@/lib/admin/time";
+import { toTimestamp } from "@/lib/dates/timestamp";
 import { todayInTimeZone } from "@/lib/dates/format";
 import { PROJECT_STATUSES, type Project } from "@/types/department";
+
+type SortId = "newest" | "oldest" | "name" | "progressHigh" | "progressLow" | "openTasks" | "overdueTasks";
 
 type ProjectDraft = {
   id?: string;
@@ -20,6 +24,9 @@ type ProjectDraft = {
   clientName: string;
   description: string;
   managerEmployeeId: string;
+  category: string;
+  location: string;
+  projectNumber: string;
   startDate: string;
   dueDate: string;
   status: string;
@@ -33,13 +40,113 @@ export function ProjectsView() {
   const [draft, setDraft] = useState<ProjectDraft | null>(null);
   const [showArchive, setShowArchive] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("");
+  const [client, setClient] = useState("");
+  const [managerId, setManagerId] = useState("");
+  const [status, setStatus] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
+  const [sort, setSort] = useState<SortId>("newest");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
-  if (loading) return <Spinner label="טוען פרויקטים…" />;
+  const categoryMap = useMemo(
+    () => buildCategoryMap(data.catalog, data.projects.map((item) => item.category)),
+    [data.catalog, data.projects],
+  );
+  const categories = useMemo(
+    () => [...categoryMap.values()].sort((left, right) => left.value.localeCompare(right.value, "he")),
+    [categoryMap],
+  );
 
-  const visible = data.projects.filter((item) => showArchive || item.isActive);
+  const scoped = useMemo(() => data.projects.filter((item) => showArchive || item.isActive), [data.projects, showArchive]);
+
+  const statsById = useMemo(() => {
+    const map = new Map<string, { total: number; done: number; open: number; late: number; progress: number }>();
+    for (const project of data.projects) {
+      const tasks = data.tasks.filter((task) => task.projectId === project.id);
+      const done = tasks.filter((task) => task.status === "DONE" || task.status === "COMPLETED").length;
+      const late = tasks.filter((task) => isOverdue(task, today)).length;
+      const open = tasks.filter(taskIsActive).length;
+      map.set(project.id, {
+        total: tasks.length,
+        done,
+        open,
+        late,
+        progress: tasks.length ? Math.round((done / tasks.length) * 100) : 0,
+      });
+    }
+    return map;
+  }, [data.projects, data.tasks, today]);
+
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const project of scoped) {
+      if (!project.category) continue;
+      counts.set(project.category, (counts.get(project.category) ?? 0) + 1);
+    }
+    return counts;
+  }, [scoped]);
+
+  const clients = useMemo(
+    () => [...new Set(scoped.map((item) => item.clientName.trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right, "he")),
+    [scoped],
+  );
+
+  const rows = useMemo(() => {
+    const search = query.trim().toLowerCase();
+    const filtered = scoped.filter((project) => {
+      if (category && project.category !== category) return false;
+      if (client && project.clientName !== client) return false;
+      if (managerId && project.managerEmployeeId !== managerId) return false;
+      if (status && (project.isActive ? project.status : "ARCHIVED") !== status) return false;
+      if (departmentId && project.departmentId !== departmentId) return false;
+      if (!search) return true;
+      const manager = employeeName(data.employees, project.managerEmployeeId).toLowerCase();
+      return [
+        project.name,
+        project.clientName,
+        project.projectNumber ?? "",
+        project.location ?? "",
+        project.category ?? "",
+        manager,
+      ].some((value) => value.toLowerCase().includes(search));
+    });
+
+    return filtered.sort((left, right) => {
+      const leftStats = statsById.get(left.id);
+      const rightStats = statsById.get(right.id);
+      if (sort === "name") return left.name.localeCompare(right.name, "he");
+      if (sort === "progressHigh") return (rightStats?.progress ?? 0) - (leftStats?.progress ?? 0);
+      if (sort === "progressLow") return (leftStats?.progress ?? 0) - (rightStats?.progress ?? 0);
+      if (sort === "openTasks") return (rightStats?.open ?? 0) - (leftStats?.open ?? 0);
+      if (sort === "overdueTasks") return (rightStats?.late ?? 0) - (leftStats?.late ?? 0);
+      const leftTime = toTimestamp(left.createdAt) || toTimestamp(left.startDate);
+      const rightTime = toTimestamp(right.createdAt) || toTimestamp(right.startDate);
+      return sort === "oldest" ? leftTime - rightTime : rightTime - leftTime;
+    });
+  }, [category, client, data.employees, departmentId, managerId, query, scoped, sort, statsById, status]);
+
+  const activeFilters = [
+    category ? { key: "category", label: category, clear: () => setCategory("") } : null,
+    client ? { key: "client", label: client, clear: () => setClient("") } : null,
+    managerId ? { key: "manager", label: employeeName(data.employees, managerId), clear: () => setManagerId("") } : null,
+    status ? { key: "status", label: labelOf(status), clear: () => setStatus("") } : null,
+    departmentId ? { key: "department", label: data.departments.find((item) => item.id === departmentId)?.name ?? "", clear: () => setDepartmentId("") } : null,
+    query.trim() ? { key: "query", label: query.trim(), clear: () => setQuery("") } : null,
+  ].filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+  function clearFilters() {
+    setQuery("");
+    setCategory("");
+    setClient("");
+    setManagerId("");
+    setStatus("");
+    setDepartmentId("");
+  }
 
   async function save() {
     if (!business?.id || !draft?.name.trim()) return;
+    if (!draft.id && !draft.category) return;
     setBusy(true);
     try {
       await mutateBusiness({
@@ -51,6 +158,9 @@ export function ProjectsView() {
           clientName: draft.clientName,
           description: draft.description,
           managerEmployeeId: draft.managerEmployeeId,
+          category: draft.category,
+          location: draft.location,
+          projectNumber: draft.projectNumber,
           startDate: draft.startDate,
           dueDate: draft.dueDate,
           status: draft.status,
@@ -60,7 +170,8 @@ export function ProjectsView() {
       setDraft(null);
       await reload();
     } catch (error) {
-      window.alert(error instanceof Error && error.message === "DUPLICATE_PROJECT" ? "פרויקט בשם זה כבר קיים" : "שמירת הפרויקט נכשלה");
+      const code = error instanceof Error ? error.message : "";
+      window.alert(code === "DUPLICATE_PROJECT" ? "פרויקט בשם זה כבר קיים" : code === "CATEGORY_REQUIRED" ? "יש לבחור קטגוריה" : "שמירת הפרויקט נכשלה");
     } finally {
       setBusy(false);
     }
@@ -88,20 +199,68 @@ export function ProjectsView() {
       clientName: project?.clientName ?? "",
       description: project?.description ?? "",
       managerEmployeeId: project?.managerEmployeeId ?? "",
+      category: project?.category ?? "",
+      location: project?.location ?? "",
+      projectNumber: project?.projectNumber ?? "",
       startDate: project?.startDate ?? today,
       dueDate: project?.dueDate ?? today,
       status: project?.status ?? "ACTIVE",
     });
   }
 
+  if (loading) return <Spinner label="טוען פרויקטים…" />;
+
+  const filterControls = (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Field label="לקוח">
+        <select className={inputClass} value={client} onChange={(event) => setClient(event.target.value)}>
+          <option value="">הכל</option>
+          {clients.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+      </Field>
+      <Field label="עובד אחראי">
+        <select className={inputClass} value={managerId} onChange={(event) => setManagerId(event.target.value)}>
+          <option value="">הכל</option>
+          {data.employees.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}
+        </select>
+      </Field>
+      <Field label="סטטוס">
+        <select className={inputClass} value={status} onChange={(event) => setStatus(event.target.value)}>
+          <option value="">הכל</option>
+          {PROJECT_STATUSES.map((item) => <option key={item} value={item}>{labelOf(item)}</option>)}
+          <option value="ARCHIVED">ארכיון</option>
+        </select>
+      </Field>
+      {data.departments.length ? (
+        <Field label="מחלקה">
+          <select className={inputClass} value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
+            <option value="">הכל</option>
+            {data.departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </Field>
+      ) : null}
+      <Field label="מיון לפי">
+        <select className={inputClass} value={sort} onChange={(event) => setSort(event.target.value as SortId)}>
+          <option value="newest">חדש ביותר</option>
+          <option value="oldest">ישן ביותר</option>
+          <option value="name">שם א׳–ת׳</option>
+          <option value="progressHigh">התקדמות גבוהה</option>
+          <option value="progressLow">התקדמות נמוכה</option>
+          <option value="openTasks">הכי הרבה משימות פתוחות</option>
+          <option value="overdueTasks">הכי הרבה משימות באיחור</option>
+        </select>
+      </Field>
+    </div>
+  );
+
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-[1400px] space-y-5">
       <PageHeader
         title="כרטסת פרויקט"
         subtitle="כל הפרויקטים, הלקוחות וההתקדמות במקום אחד"
         actions={
           <div className="flex flex-wrap gap-2">
-            <label className="flex items-center gap-2 text-sm text-slate-600">
+            <label className="flex min-h-11 items-center gap-2 text-sm text-slate-600">
               <input type="checkbox" checked={showArchive} onChange={(event) => setShowArchive(event.target.checked)} />
               הצג ארכיון
             </label>
@@ -109,40 +268,111 @@ export function ProjectsView() {
           </div>
         }
       />
-      {visible.length ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {visible.map((project) => {
-            const tasks = data.tasks.filter((task) => task.projectId === project.id);
-            const done = tasks.filter((task) => task.status === "DONE" || task.status === "COMPLETED").length;
-            const late = tasks.filter((task) => isOverdue(task, today)).length;
-            const hours = sessionHours(data.sessions.filter((session) => tasks.some((task) => task.id === session.taskId)));
-            const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+
+      <div className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            className={`${inputClass} min-h-11 flex-1`}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="חיפוש פרויקט..."
+          />
+          <GhostButton onClick={() => setFiltersOpen(true)}>
+            <span className="inline-flex items-center gap-2 md:hidden"><SlidersHorizontal className="h-4 w-4" /> סינון</span>
+            <span className="hidden md:inline">סינון מתקדם</span>
+          </GhostButton>
+        </div>
+
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          <button
+            type="button"
+            onClick={() => setCategory("")}
+            className={`min-h-11 shrink-0 rounded-full border px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 ${!category ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700"}`}
+          >
+            הכל {scoped.length}
+          </button>
+          {categories.map((item) => {
+            const styles = categoryStyles(item.color);
+            const selected = category === item.value;
             return (
-              <article key={project.id} className="rounded-[var(--radius)] border border-[var(--line)] bg-white p-5 shadow-[var(--shadow)]">
-                <Link href={`/projects/${project.id}`} className="block hover:opacity-90">
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => setCategory(selected ? "" : item.value)}
+                className="min-h-11 shrink-0 rounded-full border px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                style={{
+                  background: selected ? styles.hex : styles.badge,
+                  color: selected ? "#fff" : styles.badgeText,
+                  borderColor: selected ? styles.hex : styles.border,
+                }}
+              >
+                {item.value} {categoryCounts.get(item.value) ?? 0}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="hidden md:block">{filterControls}</div>
+
+        <p className="text-sm text-slate-500">
+          {activeFilters.length ? `מציג ${rows.length} מתוך ${scoped.length} פרויקטים` : `${scoped.length} פרויקטים`}
+        </p>
+        {activeFilters.length ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-slate-500">מסננים פעילים:</span>
+            {activeFilters.map((item) => (
+              <button key={item.key} type="button" onClick={item.clear} className="inline-flex min-h-9 items-center gap-1 rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-700">
+                {item.label} <X className="h-3.5 w-3.5" />
+              </button>
+            ))}
+            <GhostButton onClick={clearFilters}>נקה הכל</GhostButton>
+          </div>
+        ) : null}
+      </div>
+
+      {rows.length ? (
+        <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {rows.map((project) => {
+            const stats = statsById.get(project.id) ?? { total: 0, done: 0, open: 0, late: 0, progress: 0 };
+            const meta = categoryMap.get(project.category ?? "");
+            const styles = categoryStyles(meta?.color);
+            const archived = !project.isActive;
+            return (
+              <article
+                key={project.id}
+                className={`flex h-full flex-col rounded-2xl border p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:shadow-md ${archived ? "opacity-70" : ""}`}
+                style={{ borderColor: styles.border, background: styles.background }}
+              >
+                <Link href={`/projects/${project.id}`} className="flex flex-1 flex-col text-start">
                   <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-semibold">{project.name}</p>
-                      <p className="text-sm text-slate-500">{project.category || project.clientName || "ללא לקוח"}</p>
-                      {project.location || project.projectNumber ? (
-                        <p className="text-xs text-slate-400">{[project.location, project.projectNumber].filter(Boolean).join(" · ")}</p>
-                      ) : null}
+                    {project.category ? (
+                      <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: styles.badge, color: styles.badgeText }}>
+                        {project.category}
+                      </span>
+                    ) : <span />}
+                    <StatusBadge value={archived ? "ARCHIVED" : project.status} label={archived ? "ארכיון" : labelOf(project.status)} />
+                  </div>
+                  <h2 className="mt-3 text-lg font-semibold text-slate-900">{project.name}</h2>
+                  {project.category ? <p className="mt-1 text-sm text-slate-500">{project.category}</p> : null}
+                  {[project.clientName, project.location, project.projectNumber].filter(Boolean).length ? (
+                    <p className="mt-1 text-xs text-slate-500">{[project.clientName, project.location, project.projectNumber].filter(Boolean).join(" · ")}</p>
+                  ) : null}
+                  <div className="mt-4">
+                    <div className="h-2 overflow-hidden rounded-full bg-white/80">
+                      <div className="h-full rounded-full" style={{ width: `${stats.progress}%`, background: styles.progress }} />
                     </div>
-                    <StatusBadge value={project.isActive ? project.status : "ARCHIVED"} label={project.isActive ? labelOf(project.status) : "ארכיון"} />
+                    <p className="mt-2 text-sm font-medium text-slate-700">{stats.progress}%</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {stats.total} משימות · {stats.done} הושלמו · {stats.open} פתוחות · {stats.late} באיחור
+                    </p>
                   </div>
-                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
-                    <div className="h-full bg-[var(--brand-primary)]" style={{ width: `${progress}%` }} />
-                  </div>
-                  <p className="mt-3 text-xs text-slate-500">
-                    {progress}% · {hours} שעות · {tasks.filter(taskIsActive).length} פתוחות · {late} באיחור
-                  </p>
-                  <p className="mt-1 text-xs text-slate-400">מנהל: {employeeName(data.employees, project.managerEmployeeId)}</p>
+                  <p className="mt-3 text-xs text-slate-500">מנהל: {employeeName(data.employees, project.managerEmployeeId)}</p>
                 </Link>
                 {canManage ? (
-                  <div className="mt-3 flex flex-wrap gap-1">
+                  <div className="mt-4 flex flex-wrap gap-1">
                     <GhostButton onClick={() => openDraft(project)}>עריכה</GhostButton>
                     <select
-                      className="h-10 rounded-xl border border-slate-200 px-2 text-xs"
+                      className="h-10 rounded-xl border border-slate-200 bg-white px-2 text-xs"
                       value={project.status}
                       disabled={busy}
                       onChange={(event) => void act("updateProject", project, {
@@ -150,6 +380,9 @@ export function ProjectsView() {
                         clientName: project.clientName,
                         description: project.description,
                         managerEmployeeId: project.managerEmployeeId,
+                        category: project.category,
+                        location: project.location,
+                        projectNumber: project.projectNumber,
                         startDate: project.startDate,
                         dueDate: project.dueDate,
                         status: event.target.value,
@@ -168,9 +401,28 @@ export function ProjectsView() {
             );
           })}
         </div>
+      ) : scoped.length ? (
+        <EmptyState icon={FolderKanban} title="לא נמצאו פרויקטים המתאימים לסינון." action={<PrimaryButton onClick={clearFilters}>נקה מסננים</PrimaryButton>} />
       ) : (
         <EmptyState icon={FolderKanban} title="אין פרויקטים עדיין" action={canManage ? <PrimaryButton onClick={() => openDraft()}>+ יצירת פרויקט</PrimaryButton> : undefined} />
       )}
+
+      {filtersOpen ? (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 md:bg-slate-900/30">
+          <button type="button" className="absolute inset-0" aria-label="סגירה" onClick={() => setFiltersOpen(false)} />
+          <div className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl md:inset-auto md:end-6 md:top-24 md:w-[420px] md:rounded-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">סינון</h2>
+              <button type="button" onClick={() => setFiltersOpen(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-50" aria-label="סגירה"><X className="h-5 w-5" /></button>
+            </div>
+            {filterControls}
+            <div className="mt-5 flex gap-2">
+              <GhostButton onClick={clearFilters}>נקה מסננים</GhostButton>
+              <PrimaryButton onClick={() => setFiltersOpen(false)}>הצג תוצאות</PrimaryButton>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {draft ? (
         <Modal title={draft.id ? "עריכת פרויקט" : "פרויקט חדש"} onClose={() => setDraft(null)}>
@@ -178,6 +430,17 @@ export function ProjectsView() {
             <Field label="שם פרויקט"><input className={inputClass} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></Field>
             <Field label="לקוח"><input className={inputClass} value={draft.clientName} onChange={(event) => setDraft({ ...draft, clientName: event.target.value })} /></Field>
             <Field label="תיאור"><textarea className={`${inputClass} h-24 py-2`} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></Field>
+            <Field label="קטגוריה *">
+              <select className={inputClass} value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })}>
+                <option value="">בחירת קטגוריה</option>
+                {categories.map((item) => <option key={item.value} value={item.value}>● {item.value}</option>)}
+              </select>
+            </Field>
+            {draft.category ? (
+              <p className="text-xs" style={{ color: categoryStyles(categoryMap.get(draft.category)?.color).badgeText }}>
+                ● {draft.category}
+              </p>
+            ) : null}
             <Field label="מנהל פרויקט">
               <select className={inputClass} value={draft.managerEmployeeId} onChange={(event) => setDraft({ ...draft, managerEmployeeId: event.target.value })}>
                 <option value="">ללא</option>
@@ -189,13 +452,18 @@ export function ProjectsView() {
                 {PROJECT_STATUSES.map((item) => <option key={item} value={item}>{labelOf(item)}</option>)}
               </select>
             </Field>
+            {draft.id ? (
+              <p className="text-sm text-slate-500">אחוז התקדמות: {statsById.get(draft.id)?.progress ?? 0}%</p>
+            ) : null}
+            <Field label="מיקום"><input className={inputClass} value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} /></Field>
+            <Field label="מספר פרויקט"><input className={inputClass} value={draft.projectNumber} onChange={(event) => setDraft({ ...draft, projectNumber: event.target.value })} /></Field>
             <div className="grid gap-3 md:grid-cols-2">
               <Field label="התחלה"><input className={inputClass} value={draft.startDate} onChange={(event) => setDraft({ ...draft, startDate: event.target.value })} /></Field>
               <Field label="Deadline"><input className={inputClass} value={draft.dueDate} onChange={(event) => setDraft({ ...draft, dueDate: event.target.value })} /></Field>
             </div>
             <div className="flex justify-end gap-2">
               <GhostButton onClick={() => setDraft(null)}>ביטול</GhostButton>
-              <PrimaryButton disabled={busy || !draft.name.trim()} onClick={() => void save()}>שמירה</PrimaryButton>
+              <PrimaryButton disabled={busy || !draft.name.trim() || (!draft.id && !draft.category)} onClick={() => void save()}>שמירה</PrimaryButton>
             </div>
           </div>
         </Modal>

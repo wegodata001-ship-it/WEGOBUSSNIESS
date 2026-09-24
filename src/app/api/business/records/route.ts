@@ -17,6 +17,7 @@ import {
   toNotification,
   toProject,
   toBusinessSettings,
+  toCatalogSetting,
   toPaymentRecord,
   toTask,
   toWorkSession,
@@ -31,6 +32,7 @@ import {
   employeesPath,
   logisticsRequestsPath,
   businessSettingsDocPath,
+  businessSettingsPath,
   meetingsPath,
   notificationsPath,
   paymentsPath,
@@ -59,6 +61,15 @@ export async function GET(request: Request) {
     const canSeeMoney = canViewTaskFinance(actor);
     return NextResponse.json({
       data: canSeeMoney ? visible : visible.map(hideTaskFinance),
+    });
+  }
+
+  if (kind === "catalog") {
+    const snap = await db.collection(businessSettingsPath(businessId)).get();
+    return NextResponse.json({
+      data: snap.docs
+        .map((docSnap) => toCatalogSetting(docSnap.id, docSnap.data()))
+        .filter((item): item is NonNullable<typeof item> => Boolean(item)),
     });
   }
 

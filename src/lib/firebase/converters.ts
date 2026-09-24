@@ -1,4 +1,6 @@
 import type { DocumentData, Timestamp } from "firebase/firestore";
+import type { CatalogSetting, CatalogSettingType } from "@/types/catalog-setting";
+import { CATALOG_SETTING_TYPES } from "@/types/catalog-setting";
 import type { ActivityLog, AppNotification, BusinessSettings } from "@/types/notification";
 import type { Business } from "@/types/business";
 import type { Department, Project, ProjectStatus } from "@/types/department";
@@ -435,6 +437,21 @@ export function toActivityLog(id: string, data: DocumentData): ActivityLog {
     entityId: asNullableString(data.entityId),
     message: asString(data.message),
     createdAt: toDate(data.createdAt),
+  };
+}
+
+export function toCatalogSetting(id: string, data: DocumentData): CatalogSetting | null {
+  const type = data.type as CatalogSettingType;
+  if (!CATALOG_SETTING_TYPES.includes(type)) return null;
+  return {
+    id,
+    businessId: asString(data.businessId),
+    legacyId: asNullableString(data.legacyId) ?? id,
+    type,
+    value: asString(data.value),
+    color: asString(data.color) || "#64748b",
+    createdAt: toDate(data.createdAt),
+    updatedAt: toDate(data.updatedAt),
   };
 }
 

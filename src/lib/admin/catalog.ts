@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { listAllActivity } from "@/lib/data/activity";
 import { listBusinessDepartments } from "@/lib/data/departments";
 import { listDocuments } from "@/lib/data/documents";
+import { listCatalogSettings } from "@/lib/data/catalog-settings";
 import { listBusinessSettings } from "@/lib/data/settings";
 import { listBusinessEmployees } from "@/lib/data/employees";
 import { listBusinessMeetings } from "@/lib/data/meetings";
@@ -12,6 +13,7 @@ import { listProjects } from "@/lib/data/projects";
 import { listBusinessRequests } from "@/lib/data/requests";
 import { listBusinessTasks } from "@/lib/data/tasks";
 import { listWorkSessions } from "@/lib/data/work-hours";
+import type { CatalogSetting } from "@/types/catalog-setting";
 import type { ActivityLog, BusinessSettings } from "@/types/notification";
 import { DEFAULT_BUSINESS_VAT_RATE } from "@/lib/finance/vat";
 import type { Department, Project } from "@/types/department";
@@ -35,6 +37,7 @@ export type BusinessCatalog = {
   projects: Project[];
   documents: BusinessDocument[];
   settings: BusinessSettings;
+  catalog: CatalogSetting[];
 };
 
 const EMPTY: BusinessCatalog = {
@@ -56,6 +59,7 @@ const EMPTY: BusinessCatalog = {
     vatRate: DEFAULT_BUSINESS_VAT_RATE,
     updatedAt: null,
   },
+  catalog: [],
 };
 
 export function useBusinessCatalog(businessId: string | null) {
@@ -70,7 +74,7 @@ export function useBusinessCatalog(businessId: string | null) {
     }
     const silent = Boolean(options && typeof options === "object" && "silent" in options && (options as { silent?: boolean }).silent);
     if (!silent) setLoading(true);
-    const [tasks, employees, departments, members, sessions, meetings, requests, activity, projects, documents, settings] =
+    const [tasks, employees, departments, members, sessions, meetings, requests, activity, projects, documents, settings, catalog] =
       await Promise.all([
         listBusinessTasks(businessId, { viewAll: true }),
         listBusinessEmployees(businessId),
@@ -83,6 +87,7 @@ export function useBusinessCatalog(businessId: string | null) {
         listProjects(businessId),
         listDocuments(businessId),
         listBusinessSettings(businessId),
+        listCatalogSettings(businessId),
       ]);
     setData({
       tasks: tasks.data,
@@ -96,6 +101,7 @@ export function useBusinessCatalog(businessId: string | null) {
       projects: projects.data,
       documents: documents.data,
       settings: settings.data,
+      catalog: catalog.data,
     });
     setLoading(false);
   }, [businessId]);
