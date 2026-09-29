@@ -19,6 +19,12 @@ export const businessCollections = {
   documents: "documents",
   payments: "payments",
   paymentAllocations: "paymentAllocations",
+  departmentCategories: "departmentCategories",
+  clients: "clients",
+  businessDocs: "businessDocs",
+  termsTemplates: "termsTemplates",
+  serviceItems: "serviceItems",
+  taskTemplates: "taskTemplates",
 } as const;
 
 export function userDocPath(userId: string) {
@@ -63,6 +69,14 @@ export function departmentsPath(businessId: string) {
 
 export function departmentDocPath(businessId: string, departmentId: string) {
   return `${departmentsPath(businessId)}/${departmentId}`;
+}
+
+export function departmentCategoriesPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.departmentCategories);
+}
+
+export function departmentCategoryDocPath(businessId: string, categoryId: string) {
+  return `${departmentCategoriesPath(businessId)}/${categoryId}`;
 }
 
 export function projectsPath(businessId: string) {
@@ -151,6 +165,34 @@ export function paymentsPath(businessId: string) {
 
 export function paymentDocPath(businessId: string, paymentId: string) {
   return `${paymentsPath(businessId)}/${paymentId}`;
+}
+
+export function clientsPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.clients);
+}
+
+export function clientDocPath(businessId: string, clientId: string) {
+  return `${clientsPath(businessId)}/${clientId}`;
+}
+
+export function businessDocsPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.businessDocs);
+}
+
+export function businessDocumentDocPath(businessId: string, docId: string) {
+  return `${businessDocsPath(businessId)}/${docId}`;
+}
+
+export function termsTemplatesPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.termsTemplates);
+}
+
+export function serviceItemsPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.serviceItems);
+}
+
+export function taskTemplatesPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.taskTemplates);
 }
 
 export function paymentAllocationsPath(businessId: string) {

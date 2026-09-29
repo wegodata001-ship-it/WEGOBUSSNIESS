@@ -434,7 +434,11 @@ export function TasksManageView() {
           businessId={business.id}
           employees={data.employees}
           departments={data.departments}
+          departmentCategories={data.departmentCategories}
           projects={data.projects}
+          projectsError={data.projectsError}
+          taskTemplates={data.taskTemplates}
+          libraryTasks={data.tasks}
           canEditTeam={canManage}
           canCreateProject={permissions.includes("projects.manage") || membership?.role === "BUSINESS_OWNER"}
           canCreateDepartment={permissions.includes("departments.manage") || membership?.role === "BUSINESS_OWNER"}

@@ -11,7 +11,7 @@ import { projectName, useBusinessCatalog } from "@/lib/admin/catalog";
 import { labelOf } from "@/lib/admin/labels";
 import { DOCUMENT_CATEGORIES } from "@/types/document";
 
-export function DocumentsView() {
+export function DocumentsView({ embedded = false }: { embedded?: boolean }) {
   const { business } = useBusinessContext();
   const { data, loading, reload } = useBusinessCatalog(business?.id ?? null);
   const [projectId, setProjectId] = useState("");
@@ -64,11 +64,15 @@ export function DocumentsView() {
 
   return (
     <div className="space-y-5">
+      {embedded ? (
+        <div className="flex justify-end"><PrimaryButton onClick={() => setOpen(true)}>+ העלאת מסמך</PrimaryButton></div>
+      ) : (
       <PageHeader
         title="ארכיון מסמכים"
         subtitle="העלאה, צפייה, הורדה וניהול מסמכי העסק"
         actions={<PrimaryButton onClick={() => setOpen(true)}>+ העלאת מסמך</PrimaryButton>}
       />
+      )}
       <div className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-3 md:grid-cols-4">
         <select className={inputClass} value={projectId} onChange={(event) => setProjectId(event.target.value)}>
           <option value="">כל הפרויקטים</option>

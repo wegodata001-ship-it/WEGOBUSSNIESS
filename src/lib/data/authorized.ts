@@ -19,7 +19,8 @@ export async function fetchBusinessRecords<T>(
   );
 
   if (!response.ok) {
-    return readyResult(empty);
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    return { status: "READY", data: empty, error: payload.error || "LOAD_FAILED" };
   }
 
   const payload = reviveSessionDates(await response.json()) as { data?: T };

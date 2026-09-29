@@ -492,7 +492,11 @@ export function MeetingsView() {
           businessId={business.id}
           employees={data.employees}
           departments={data.departments}
+          departmentCategories={data.departmentCategories}
           projects={data.projects}
+          projectsError={data.projectsError}
+          taskTemplates={data.taskTemplates}
+          libraryTasks={data.tasks}
           canEditTeam={canEditTask}
           canCreateProject={canCreateProject}
           canCreateDepartment={canCreateDepartment}

@@ -38,7 +38,7 @@ export const he: Record<MessageKey, string> = {
   "nav.today": "היום שלי",
   "nav.bi": "בינה עסקית",
   "nav.projects": "כרטסת פרויקט",
-  "nav.documents": "ארכיון מסמכים",
+  "nav.documents": "מסמכים",
   "nav.board": "לוח עבודה",
   "nav.tasks": "משימות",
   "nav.hours": "דוחות שעות",

@@ -40,6 +40,10 @@ service cloud.firestore {
         && memberRole(businessId) in ["BUSINESS_OWNER", "MANAGER"];
     }
 
+    function isBusinessOwner(businessId) {
+      return isActiveMember(businessId) && memberRole(businessId) == "BUSINESS_OWNER";
+    }
+
     function canAccessBusiness(businessId) {
       return isSuperAdmin() || isActiveMember(businessId);
     }
@@ -82,6 +86,11 @@ service cloud.firestore {
       }
 
       match /departments/{departmentId} {
+        allow read: if canAccessBusiness(businessId);
+        allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
+      }
+
+      match /departmentCategories/{categoryId} {
         allow read: if canAccessBusiness(businessId);
         allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
       }
@@ -169,9 +178,34 @@ service cloud.firestore {
         allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
       }
 
-      match /settings/{docId} {
+      match /clients/{clientId} {
+        allow read: if canAccessBusiness(businessId);
+        allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
+      }
+
+      match /businessDocs/{docId} {
         allow read: if isSuperAdmin() || isOwnerOrManager(businessId);
         allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
+      }
+
+      match /termsTemplates/{templateId} {
+        allow read: if isSuperAdmin() || isOwnerOrManager(businessId);
+        allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
+      }
+
+      match /serviceItems/{itemId} {
+        allow read: if isSuperAdmin() || isOwnerOrManager(businessId);
+        allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
+      }
+
+      match /taskTemplates/{templateId} {
+        allow read: if canAccessBusiness(businessId);
+        allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
+      }
+
+      match /settings/{docId} {
+        allow read: if isSuperAdmin() || isActiveMember(businessId);
+        allow write: if isSuperAdmin() || isBusinessOwner(businessId);
       }
     }
   }

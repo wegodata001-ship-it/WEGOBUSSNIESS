@@ -70,7 +70,7 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "system",
     labelKey: "nav.system",
     items: [
-      { href: "/settings", labelKey: "nav.settings", icon: Settings, permission: "settings.manage" },
+      { href: "/settings", labelKey: "nav.settings", icon: Settings, permission: "employees.manage" },
     ],
   },
 ];
@@ -95,6 +95,8 @@ export const APP_ROUTES = [
   "/bi",
   "/projects",
   "/documents",
+  "/clients",
+  "/sign",
   "/employees",
   "/attendance",
   "/work-hours",

@@ -18,7 +18,15 @@
     "test:legacy-dates": "npx tsx src/lib/dates/legacy.test.ts",
     "import:legacy": "npx tsx scripts/import-legacy-wego-data.ts",
     "import:legacy:dry": "npx tsx scripts/import-legacy-wego-data.ts --dry-run",
-    "test:category-colors": "npx tsx src/lib/admin/category-color.test.ts"
+    "test:category-colors": "npx tsx src/lib/admin/category-color.test.ts",
+    "test:permissions": "npx tsx src/lib/permissions/engine.test.ts",
+    "test:project-access": "npx tsx src/lib/permissions/project-access.test.ts",
+    "test:task-library": "npx tsx src/lib/admin/task-library.test.ts",
+    "test:task-completion": "npx tsx src/lib/admin/task-completion.test.ts",
+    "test:department-categories": "npx tsx src/lib/admin/department-categories.test.ts",
+    "test:document-totals": "npx tsx src/lib/docs/totals.test.ts",
+    "test:business-profile": "npx tsx src/lib/data/business-profile.test.ts",
+    "verify:settings-control": "npx tsx scripts/verify-settings-control.ts"
   },
   "dependencies": {
     "firebase": "^12.19.0",

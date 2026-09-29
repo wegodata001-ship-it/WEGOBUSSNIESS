@@ -8,9 +8,16 @@ import { useBusinessContext } from "@/components/providers/business-context";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { mutateBusiness } from "@/lib/admin/api";
-import { buildCategoryMap, categoryStyles } from "@/lib/admin/category-color";
+import { categoryStyles } from "@/lib/admin/category-color";
+import {
+  managedProjectCategories,
+  projectMatchesCategoryFilter,
+  resolveProjectCategory,
+  UNCATEGORIZED_FILTER,
+  UNCATEGORIZED_LABEL,
+} from "@/lib/admin/department-categories";
 import { employeeName, useBusinessCatalog } from "@/lib/admin/catalog";
-import { normalizeProjectProgress } from "@/lib/admin/project-progress";
+import { computeProjectProgress, normalizeProjectProgress } from "@/lib/admin/project-progress";
 import { labelOf } from "@/lib/admin/labels";
 import { isOverdue, taskIsActive } from "@/lib/admin/time";
 import { toTimestamp } from "@/lib/dates/timestamp";
@@ -25,7 +32,8 @@ type ProjectDraft = {
   clientName: string;
   description: string;
   managerEmployeeId: string;
-  category: string;
+  departmentId: string;
+  categoryId: string;
   location: string;
   projectNumber: string;
   startDate: string;
@@ -51,13 +59,9 @@ export function ProjectsView() {
   const [sort, setSort] = useState<SortId>("newest");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const categoryMap = useMemo(
-    () => buildCategoryMap(data.catalog, data.projects.map((item) => item.category)),
-    [data.catalog, data.projects],
-  );
-  const categories = useMemo(
-    () => [...categoryMap.values()].sort((left, right) => left.value.localeCompare(right.value, "he")),
-    [categoryMap],
+  const draftCategories = useMemo(
+    () => managedProjectCategories(data.departmentCategories, { includeId: draft?.categoryId }),
+    [data.departmentCategories, draft?.categoryId],
   );
 
   const scoped = useMemo(() => data.projects.filter((item) => showArchive || item.isActive), [data.projects, showArchive]);
@@ -74,7 +78,7 @@ export function ProjectsView() {
         done,
         open,
         late,
-        progress: normalizeProjectProgress(project.progress),
+        progress: computeProjectProgress(tasks),
       });
     }
     return map;
@@ -82,11 +86,15 @@ export function ProjectsView() {
 
   const categoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
+    let uncategorized = 0;
     for (const project of scoped) {
-      if (!project.category) continue;
-      counts.set(project.category, (counts.get(project.category) ?? 0) + 1);
+      if (!project.categoryId) {
+        uncategorized += 1;
+        continue;
+      }
+      counts.set(project.categoryId, (counts.get(project.categoryId) ?? 0) + 1);
     }
-    return counts;
+    return { counts, uncategorized };
   }, [scoped]);
 
   const clients = useMemo(
@@ -97,7 +105,7 @@ export function ProjectsView() {
   const rows = useMemo(() => {
     const search = query.trim().toLowerCase();
     const filtered = scoped.filter((project) => {
-      if (category && project.category !== category) return false;
+      if (!projectMatchesCategoryFilter(project, category)) return false;
       if (client && project.clientName !== client) return false;
       if (managerId && project.managerEmployeeId !== managerId) return false;
       if (status && (project.isActive ? project.status : "ARCHIVED") !== status) return false;
@@ -109,7 +117,7 @@ export function ProjectsView() {
         project.clientName,
         project.projectNumber ?? "",
         project.location ?? "",
-        project.category ?? "",
+        resolveProjectCategory(project, data.departmentCategories).name,
         manager,
       ].some((value) => value.toLowerCase().includes(search));
     });
@@ -126,10 +134,16 @@ export function ProjectsView() {
       const rightTime = toTimestamp(right.createdAt) || toTimestamp(right.startDate);
       return sort === "oldest" ? leftTime - rightTime : rightTime - leftTime;
     });
-  }, [category, client, data.employees, departmentId, managerId, query, scoped, sort, statsById, status]);
+  }, [category, client, data.departmentCategories, data.employees, departmentId, managerId, query, scoped, sort, statsById, status]);
 
   const activeFilters = [
-    category ? { key: "category", label: category, clear: () => setCategory("") } : null,
+    category ? {
+      key: "category",
+      label: category === UNCATEGORIZED_FILTER
+        ? UNCATEGORIZED_LABEL
+        : data.departmentCategories.find((item) => item.id === category)?.name ?? category,
+      clear: () => setCategory(""),
+    } : null,
     client ? { key: "client", label: client, clear: () => setClient("") } : null,
     managerId ? { key: "manager", label: employeeName(data.employees, managerId), clear: () => setManagerId("") } : null,
     status ? { key: "status", label: labelOf(status), clear: () => setStatus("") } : null,
@@ -148,7 +162,7 @@ export function ProjectsView() {
 
   async function save() {
     if (!business?.id || !draft?.name.trim()) return;
-    if (!draft.id && !draft.category) return;
+    if (!draft.id && !draft.categoryId) return;
     setBusy(true);
     try {
       await mutateBusiness({
@@ -160,7 +174,8 @@ export function ProjectsView() {
           clientName: draft.clientName,
           description: draft.description,
           managerEmployeeId: draft.managerEmployeeId,
-          category: draft.category,
+          departmentId: draft.departmentId,
+          categoryId: draft.categoryId,
           location: draft.location,
           projectNumber: draft.projectNumber,
           startDate: draft.startDate,
@@ -174,7 +189,12 @@ export function ProjectsView() {
       await reload();
     } catch (error) {
       const code = error instanceof Error ? error.message : "";
-      window.alert(code === "DUPLICATE_PROJECT" ? "פרויקט בשם זה כבר קיים" : code === "CATEGORY_REQUIRED" ? "יש לבחור קטגוריה" : "שמירת הפרויקט נכשלה");
+      window.alert(
+        code === "DUPLICATE_PROJECT" ? "פרויקט בשם זה כבר קיים"
+          : code === "CATEGORY_REQUIRED" ? "יש לבחור קטגוריה"
+            : code === "CATEGORY_NOT_IN_DEPARTMENT" ? "הקטגוריה אינה שייכת למחלקה שנבחרה"
+              : "שמירת הפרויקט נכשלה",
+      );
     } finally {
       setBusy(false);
     }
@@ -202,7 +222,8 @@ export function ProjectsView() {
       clientName: project?.clientName ?? "",
       description: project?.description ?? "",
       managerEmployeeId: project?.managerEmployeeId ?? "",
-      category: project?.category ?? "",
+      departmentId: project?.departmentId ?? "",
+      categoryId: project?.categoryId ?? "",
       location: project?.location ?? "",
       projectNumber: project?.projectNumber ?? "",
       startDate: project?.startDate ?? today,
@@ -275,6 +296,18 @@ export function ProjectsView() {
 
       <div className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row">
+          <select
+            className={`${inputClass} min-h-11 sm:max-w-xs`}
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+            aria-label="סינון לפי קטגוריה"
+          >
+            <option value="">כל הקטגוריות</option>
+            {managedProjectCategories(data.departmentCategories, { includeInactive: true }).map((item) => (
+              <option key={item.id} value={item.id}>{item.name}</option>
+            ))}
+            <option value={UNCATEGORIZED_FILTER}>{UNCATEGORIZED_LABEL}</option>
+          </select>
           <input
             className={`${inputClass} min-h-11 flex-1`}
             value={query}
@@ -295,14 +328,14 @@ export function ProjectsView() {
           >
             הכל {scoped.length}
           </button>
-          {categories.map((item) => {
+          {managedProjectCategories(data.departmentCategories, { includeInactive: true }).map((item) => {
             const styles = categoryStyles(item.color);
-            const selected = category === item.value;
+            const selected = category === item.id;
             return (
               <button
-                key={item.value}
+                key={item.id}
                 type="button"
-                onClick={() => setCategory(selected ? "" : item.value)}
+                onClick={() => setCategory(selected ? "" : item.id)}
                 className="min-h-11 shrink-0 rounded-full border px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                 style={{
                   background: selected ? styles.hex : styles.badge,
@@ -310,10 +343,17 @@ export function ProjectsView() {
                   borderColor: selected ? styles.hex : styles.border,
                 }}
               >
-                {item.value} {categoryCounts.get(item.value) ?? 0}
+                {item.name} {categoryCounts.counts.get(item.id) ?? 0}
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={() => setCategory(category === UNCATEGORIZED_FILTER ? "" : UNCATEGORIZED_FILTER)}
+            className={`min-h-11 shrink-0 rounded-full border px-3 text-sm font-medium ${category === UNCATEGORIZED_FILTER ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700"}`}
+          >
+            {UNCATEGORIZED_LABEL} {categoryCounts.uncategorized}
+          </button>
         </div>
 
         <div className="hidden md:block">{filterControls}</div>
@@ -338,8 +378,8 @@ export function ProjectsView() {
         <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
           {rows.map((project) => {
             const stats = statsById.get(project.id) ?? { total: 0, done: 0, open: 0, late: 0, progress: 0 };
-            const meta = categoryMap.get(project.category ?? "");
-            const styles = categoryStyles(meta?.color);
+            const resolved = resolveProjectCategory(project, data.departmentCategories);
+            const styles = categoryStyles(resolved.color);
             const archived = !project.isActive;
             return (
               <article
@@ -349,15 +389,13 @@ export function ProjectsView() {
               >
                 <Link href={`/projects/${project.id}`} className="flex flex-1 flex-col text-start">
                   <div className="flex items-start justify-between gap-2">
-                    {project.category ? (
-                      <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: styles.badge, color: styles.badgeText }}>
-                        {project.category}
+                    <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: styles.badge, color: styles.badgeText }}>
+                        {resolved.name}
                       </span>
-                    ) : <span />}
                     <StatusBadge value={archived ? "ARCHIVED" : project.status} label={archived ? "ארכיון" : labelOf(project.status)} />
                   </div>
                   <h2 className="mt-3 text-lg font-semibold text-slate-900">{project.name}</h2>
-                  {project.category ? <p className="mt-1 text-sm text-slate-500">{project.category}</p> : null}
+                  <p className="mt-1 text-sm text-slate-500">קטגוריה: {resolved.name}</p>
                   {[project.clientName, project.location, project.projectNumber].filter(Boolean).length ? (
                     <p className="mt-1 text-xs text-slate-500">{[project.clientName, project.location, project.projectNumber].filter(Boolean).join(" · ")}</p>
                   ) : null}
@@ -384,7 +422,9 @@ export function ProjectsView() {
                         clientName: project.clientName,
                         description: project.description,
                         managerEmployeeId: project.managerEmployeeId,
-                        category: project.category,
+                        departmentId: project.departmentId,
+                        categoryId: project.categoryId,
+                        categoryName: project.categoryName,
                         location: project.location,
                         projectNumber: project.projectNumber,
                         startDate: project.startDate,
@@ -435,15 +475,55 @@ export function ProjectsView() {
             <Field label="שם פרויקט"><input className={inputClass} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></Field>
             <Field label="לקוח"><input className={inputClass} value={draft.clientName} onChange={(event) => setDraft({ ...draft, clientName: event.target.value })} /></Field>
             <Field label="תיאור"><textarea className={`${inputClass} h-24 py-2`} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></Field>
-            <Field label="קטגוריה *">
-              <select className={inputClass} value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })}>
-                <option value="">בחירת קטגוריה</option>
-                {categories.map((item) => <option key={item.value} value={item.value}>● {item.value}</option>)}
+            <Field label="מחלקה">
+              <select
+                className={inputClass}
+                value={draft.departmentId}
+                onChange={(event) => setDraft({ ...draft, departmentId: event.target.value })}
+              >
+                <option value="">בחירת מחלקה</option>
+                {data.departments.filter((item) => item.isActive || item.id === draft.departmentId).map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
               </select>
             </Field>
-            {draft.category ? (
-              <p className="text-xs" style={{ color: categoryStyles(categoryMap.get(draft.category)?.color).badgeText }}>
-                ● {draft.category}
+            <Field label="קטגוריה *">
+              <select
+                className={inputClass}
+                value={draft.categoryId}
+                onChange={(event) => {
+                  const categoryId = event.target.value;
+                  setDraft({ ...draft, categoryId });
+                  const current = data.projects.find((item) => item.id === draft.id);
+                  if (current && categoryId) {
+                    void act("updateProject", current, {
+                      name: draft.name,
+                      clientName: draft.clientName,
+                      description: draft.description,
+                      managerEmployeeId: draft.managerEmployeeId,
+                      departmentId: draft.departmentId,
+                      categoryId,
+                      location: draft.location,
+                      projectNumber: draft.projectNumber,
+                      startDate: draft.startDate,
+                      dueDate: draft.dueDate,
+                      status: draft.status,
+                      progress: draft.progress,
+                      isActive: true,
+                    });
+                  }
+                }}
+              >
+                <option value="">{draft.id ? UNCATEGORIZED_LABEL : "בחר קטגוריה"}</option>
+                {draftCategories.map((item) => <option key={item.id} value={item.id}>● {item.name}</option>)}
+              </select>
+            </Field>
+            {draftCategories.length === 0 ? (
+              <p className="text-xs text-amber-700">אין קטגוריות. הוסיפו קטגוריה בהגדרות ושליטה → קטגוריות.</p>
+            ) : null}
+            {draft.categoryId ? (
+              <p className="text-xs" style={{ color: categoryStyles(data.departmentCategories.find((item) => item.id === draft.categoryId)?.color).badgeText }}>
+                ● {data.departmentCategories.find((item) => item.id === draft.categoryId)?.name}
               </p>
             ) : null}
             <Field label="מנהל פרויקט">
@@ -502,7 +582,7 @@ export function ProjectsView() {
             </div>
             <div className="flex justify-end gap-2">
               <GhostButton onClick={() => setDraft(null)}>ביטול</GhostButton>
-              <PrimaryButton disabled={busy || !draft.name.trim() || (!draft.id && !draft.category)} onClick={() => void save()}>שמירה</PrimaryButton>
+              <PrimaryButton disabled={busy || !draft.name.trim() || (!draft.id && !draft.categoryId)} onClick={() => void save()}>שמירה</PrimaryButton>
             </div>
           </div>
         </Modal>

@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useBusinessContext } from "@/components/providers/business-context";
 import { Spinner } from "@/components/ui/spinner";
 import { employeeName, sessionHours, useBusinessCatalog } from "@/lib/admin/catalog";
+import { computeProjectProgress } from "@/lib/admin/project-progress";
 import { labelOf } from "@/lib/admin/labels";
 import { actualHoursForTask } from "@/lib/admin/time";
 import { APP_NAME } from "@/lib/env";
@@ -35,6 +36,7 @@ export function ProjectPrint() {
         <p><strong>פרויקט:</strong> {project.name}</p>
         <p><strong>לקוח:</strong> {project.clientName || "—"}</p>
         <p><strong>סטטוס:</strong> {labelOf(project.status)}</p>
+        <p><strong>התקדמות:</strong> {computeProjectProgress(tasks)}%</p>
         <p><strong>מנהל:</strong> {employeeName(data.employees, project.managerEmployeeId)}</p>
         <p><strong>תקופה:</strong> {project.startDate ?? "—"} – {project.dueDate ?? "—"}</p>
         <p><strong>תיאור:</strong> {project.description || "—"}</p>

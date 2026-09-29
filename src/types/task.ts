@@ -69,6 +69,7 @@ export type Task = {
   priority: TaskPriority;
   color: string;
   taskType: string;
+  templateId: string | null;
   assigneeId: string | null;
   collaboratorIds: string[];
   assigneeEmployeeId: string | null;
@@ -109,6 +110,8 @@ export type Task = {
   legacyPriority: string | null;
   legacyCategory: string | null;
   completedDate: string | null;
+  completedAt: Date | null;
+  completedByUserId: string | null;
   recurrence: string | null;
   isSent: boolean | null;
   createdAt: Date | null;

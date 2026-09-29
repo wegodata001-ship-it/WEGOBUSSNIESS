@@ -4,11 +4,13 @@ import { canViewTaskFinance } from "@/lib/finance/access";
 import { hideTaskFinance } from "@/lib/finance/public-task";
 import { toTimestamp } from "@/lib/dates/timestamp";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
+import { canListBusinessProjects } from "@/lib/permissions/project-access";
 import {
   toActivityLog,
   toAppUser,
   toBusiness,
   toDepartment,
+  toDepartmentCategory,
   toEmployee,
   toLogisticsRequest,
   toBusinessDocument,
@@ -17,16 +19,24 @@ import {
   toNotification,
   toProject,
   toBusinessSettings,
+  toBusinessClient,
+  toBusinessDocumentRecord,
   toCatalogSetting,
   toPaymentRecord,
+  toServiceItem,
+  toTermsTemplate,
   toTask,
+  toTaskTemplate,
   toWorkSession,
 } from "@/lib/firebase/converters";
 import { getAdminDb } from "@/lib/firebase/admin";
 import {
   activityLogsPath,
+  businessDocsPath,
   businessMembersPath,
+  clientsPath,
   collections,
+  departmentCategoriesPath,
   departmentsPath,
   documentsPath,
   employeesPath,
@@ -37,7 +47,10 @@ import {
   notificationsPath,
   paymentsPath,
   projectsPath,
+  serviceItemsPath,
   tasksPath,
+  taskTemplatesPath,
+  termsTemplatesPath,
   workSessionsPath,
 } from "@/lib/firebase/paths";
 
@@ -108,6 +121,16 @@ export async function GET(request: Request) {
     });
   }
 
+  if (kind === "departmentCategories") {
+    if (!actorCan(actor, "departments.view") && !actorCan(actor, "projects.view") && !actor.isSuperAdmin) {
+      return NextResponse.json({ data: [] });
+    }
+    const snap = await db.collection(departmentCategoriesPath(businessId)).get();
+    return NextResponse.json({
+      data: snap.docs.map((docSnap) => toDepartmentCategory(docSnap.id, docSnap.data())),
+    });
+  }
+
   if (kind === "members") {
     if (!actorCan(actor, "users.view") && !actor.isSuperAdmin) {
       return NextResponse.json({ data: [] });
@@ -149,12 +172,62 @@ export async function GET(request: Request) {
   }
 
   if (kind === "projects") {
-    if (!actorCan(actor, "projects.view") && !actor.isSuperAdmin) {
-      return NextResponse.json({ data: [] });
+    if (!canListBusinessProjects(actor)) {
+      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
     }
     const snap = await db.collection(projectsPath(businessId)).get();
     return NextResponse.json({
       data: snap.docs.map((docSnap) => toProject(docSnap.id, docSnap.data())),
+    });
+  }
+
+  if (kind === "clients") {
+    if (!actorCan(actor, "documents.view") && !actorCan(actor, "projects.view") && !actor.isSuperAdmin) {
+      return NextResponse.json({ data: [] });
+    }
+    const snap = await db.collection(clientsPath(businessId)).get();
+    return NextResponse.json({
+      data: snap.docs.map((docSnap) => toBusinessClient(docSnap.id, docSnap.data())),
+    });
+  }
+
+  if (kind === "businessDocs") {
+    if (!actorCan(actor, "documents.view") && !actor.isSuperAdmin) {
+      return NextResponse.json({ data: [] });
+    }
+    const snap = await db.collection(businessDocsPath(businessId)).get();
+    return NextResponse.json({
+      data: snap.docs.map((docSnap) => toBusinessDocumentRecord(docSnap.id, docSnap.data())),
+    });
+  }
+
+  if (kind === "termsTemplates") {
+    if (!actorCan(actor, "documents.view") && !actor.isSuperAdmin) {
+      return NextResponse.json({ data: [] });
+    }
+    const snap = await db.collection(termsTemplatesPath(businessId)).get();
+    return NextResponse.json({
+      data: snap.docs.map((docSnap) => toTermsTemplate(docSnap.id, docSnap.data())),
+    });
+  }
+
+  if (kind === "taskTemplates") {
+    if (!canListBusinessProjects(actor)) {
+      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+    }
+    const snap = await db.collection(taskTemplatesPath(businessId)).get();
+    return NextResponse.json({
+      data: snap.docs.map((docSnap) => toTaskTemplate(docSnap.id, docSnap.data())),
+    });
+  }
+
+  if (kind === "serviceItems") {
+    if (!actorCan(actor, "documents.view") && !actor.isSuperAdmin) {
+      return NextResponse.json({ data: [] });
+    }
+    const snap = await db.collection(serviceItemsPath(businessId)).get();
+    return NextResponse.json({
+      data: snap.docs.map((docSnap) => toServiceItem(docSnap.id, docSnap.data())),
     });
   }
 

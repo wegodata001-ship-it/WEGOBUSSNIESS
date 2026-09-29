@@ -1,5 +1,5 @@
 import { departmentName, employeeName, projectName, sessionHours, type BusinessCatalog } from "@/lib/admin/catalog";
-import { normalizeProjectProgress } from "@/lib/admin/project-progress";
+import { computeProjectProgress } from "@/lib/admin/project-progress";
 import { buildSchedule } from "@/lib/admin/schedule";
 import { daysBetween, isOverdue, openSessions, taskIsActive } from "@/lib/admin/time";
 import { shiftDateOnly } from "@/lib/dates/format";
@@ -327,7 +327,7 @@ function buildProjects(data: BusinessCatalog, today: string): ProjectHealth[] {
     const tasks = data.tasks.filter((task) => task.projectId === project.id);
     const done = tasks.filter((task) => isDoneTaskStatus(task.status)).length;
     const overdue = tasks.filter((task) => isOverdue(task, today)).length;
-    const progress = normalizeProjectProgress(project.progress);
+    const progress = computeProjectProgress(tasks);
     const pastDue = Boolean(project.dueDate && project.dueDate < today && project.status === "ACTIVE");
     const health: ProjectHealth["health"] = overdue > 0 || pastDue
       ? "risk"

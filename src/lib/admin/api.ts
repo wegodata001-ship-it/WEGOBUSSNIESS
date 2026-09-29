@@ -67,9 +67,19 @@ export async function mutateBusiness(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
+  const payload = (await response.json().catch(() => ({}))) as {
+    ok?: boolean;
+    id?: string;
+    error?: string;
+    count?: number;
+    token?: string;
+    newVersion?: boolean;
+    client?: unknown;
+  };
   if (!response.ok || payload.error) {
-    throw new Error(payload.error || "MUTATE_FAILED");
+    const error = new Error(payload.error || "MUTATE_FAILED") as Error & { count?: number };
+    if (typeof payload.count === "number") error.count = payload.count;
+    throw error;
   }
   return payload;
 }
@@ -93,6 +103,33 @@ export async function deleteBusinessDocument(businessId: string, id: string) {
     { method: "DELETE", credentials: "include" },
   );
   if (!response.ok) throw new Error("DELETE_FAILED");
+}
+
+export async function uploadBusinessLogo(businessId: string, file: File) {
+  const form = new FormData();
+  form.set("businessId", businessId);
+  form.set("file", file);
+  const response = await fetch("/api/business/branding", {
+    method: "POST",
+    credentials: "include",
+    body: form,
+  });
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; url?: string; error?: string };
+  if (!response.ok || payload.error || !payload.url) {
+    throw new Error(payload.error || "LOGO_UPLOAD_FAILED");
+  }
+  return payload.url;
+}
+
+export async function removeBusinessLogo(businessId: string) {
+  const response = await fetch(
+    `/api/business/branding?businessId=${encodeURIComponent(businessId)}`,
+    { method: "DELETE", credentials: "include" },
+  );
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  if (!response.ok || payload.error) {
+    throw new Error(payload.error || "LOGO_REMOVE_FAILED");
+  }
 }
 
 export async function documentDownloadUrl(businessId: string, id: string) {

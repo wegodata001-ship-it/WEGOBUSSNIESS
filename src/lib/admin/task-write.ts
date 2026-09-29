@@ -6,6 +6,10 @@ import { normalizeTaskTeam, taskParticipantIds } from "@/lib/admin/task-team";
 import { actorCan, type ServerActor } from "@/lib/auth/server-actor";
 import { isDateOnly, isTimeOnly } from "@/lib/dates/format";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { ensureTaskTemplate } from "@/lib/admin/task-template-write";
+import { isCompletedTaskStatus } from "@/lib/admin/project-progress";
+import { syncProjectProgressFromTasks } from "@/lib/admin/project-progress-sync";
+import { canonicalTaskStatus, taskCompletionPatch } from "@/lib/admin/task-completion";
 import { departmentDocPath, employeeDocPath, projectDocPath, taskDocPath, tasksPath } from "@/lib/firebase/paths";
 import { isPendingApproval, type TaskStatus } from "@/types/task";
 
@@ -116,6 +120,17 @@ export async function upsertTask(input: {
   const title = text(data.title);
   if (!title) return { ok: false, error: "TASK_FIELDS", status: 400 };
 
+  let templateId = nullable(data.templateId);
+  if (data.saveToLibrary === true) {
+    templateId = await ensureTaskTemplate({
+      businessId,
+      title,
+      description: text(data.libraryDescription ?? data.description),
+      taskType: text(data.taskType) || text(data.type) || "GENERAL",
+      departmentId,
+    });
+  }
+
   const requestedStatus = text(data.status);
   const existingStatus = text(existing.status);
   let status: TaskStatus;
@@ -129,11 +144,18 @@ export async function upsertTask(input: {
     status = (existingStatus || "TODO") as TaskStatus;
   }
 
+  const completion = taskCompletionPatch({
+    previousStatus: existingStatus,
+    nextStatus: status,
+    actorUserId: actor.uid,
+    now,
+  });
+
   const payload = {
     businessId,
     title,
     description: text(data.description),
-    status,
+    ...completion,
     priority: text(data.priority) === "MEDIUM" ? "NORMAL" : text(data.priority) || "NORMAL",
     assigneeId: team.assigneeId,
     collaboratorIds: team.collaboratorIds,
@@ -150,6 +172,7 @@ export async function upsertTask(input: {
     endTime: timeOrNull(data.endTime),
     color: text(data.color) || "BLUE",
     taskType: text(data.taskType) || text(data.type) || "GENERAL",
+    templateId,
     createdByEmployeeId: isUpdate
       ? (typeof existing.createdByEmployeeId === "string" ? existing.createdByEmployeeId : actor.employeeId)
       : actor.employeeId,
@@ -175,6 +198,12 @@ export async function upsertTask(input: {
       rejectionReason: null,
       createdAt: now,
     }, { merge: true });
+
+  const previousProjectId = typeof existing.projectId === "string" ? existing.projectId : null;
+  await syncProjectProgressFromTasks(businessId, projectId);
+  if (previousProjectId && previousProjectId !== projectId) {
+    await syncProjectProgressFromTasks(businessId, previousProjectId);
+  }
 
   const previousIds = new Set(taskParticipantIds({
     assigneeId: existingTeam.assigneeId,
@@ -404,13 +433,21 @@ export async function changeTaskWorkStatus(input: {
   if (isPendingApproval(text(existing.status) as TaskStatus) || text(existing.status) === "REJECTED") {
     return { ok: false, error: "FORBIDDEN", status: 403 };
   }
-  const next = input.status === "DONE" ? "COMPLETED" : input.status;
+  const next = canonicalTaskStatus(input.status);
   if (!canManageTasks(input.actor) && !EMPLOYEE_STATUSES.has(next)) {
     return { ok: false, error: "FORBIDDEN", status: 403 };
   }
-  await ref.set({ status: next, updatedAt: new Date() }, { merge: true });
-  const wasDone = text(existing.status) === "COMPLETED" || text(existing.status) === "DONE";
-  if (!wasDone && (next === "COMPLETED" || next === "DONE")) {
+  const now = new Date();
+  const completion = taskCompletionPatch({
+    previousStatus: text(existing.status),
+    nextStatus: next,
+    actorUserId: input.actor.uid,
+    now,
+  });
+  await ref.set({ ...completion, updatedAt: now }, { merge: true });
+  await syncProjectProgressFromTasks(input.businessId, typeof existing.projectId === "string" ? existing.projectId : null);
+  const wasDone = isCompletedTaskStatus(text(existing.status));
+  if (!wasDone && isCompletedTaskStatus(next)) {
     const priceIncludingVat = typeof existing.priceIncludingVat === "number" ? existing.priceIncludingVat : null;
     const paidAmount = typeof existing.paidAmount === "number" ? existing.paidAmount : 0;
     await notifyUnpaidOnComplete({

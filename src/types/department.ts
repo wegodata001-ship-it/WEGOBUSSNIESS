@@ -14,6 +14,17 @@ export type Department = {
   updatedAt: Date | null;
 };
 
+export type DepartmentCategory = {
+  id: string;
+  businessId: string;
+  departmentId: string;
+  name: string;
+  isActive: boolean;
+  color: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+};
+
 export type Project = {
   id: string;
   businessId: string;
@@ -23,6 +34,8 @@ export type Project = {
   clientName: string;
   description: string;
   status: ProjectStatus;
+  categoryId: string | null;
+  categoryName: string | null;
   category: string | null;
   location: string | null;
   projectNumber: string | null;

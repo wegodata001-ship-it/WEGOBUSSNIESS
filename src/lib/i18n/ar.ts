@@ -38,7 +38,7 @@ export const ar: Record<MessageKey, string> = {
   "nav.today": "يومي",
   "nav.bi": "الذكاء التجاري",
   "nav.projects": "بطاقة المشروع",
-  "nav.documents": "أرشيف المستندات",
+  "nav.documents": "المستندات",
   "nav.board": "لوحة العمل",
   "nav.tasks": "المهام",
   "nav.hours": "تقارير الساعات",

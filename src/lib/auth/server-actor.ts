@@ -6,11 +6,13 @@ import { memberDocPath, userDocPath } from "@/lib/firebase/paths";
 import { hasPermission, isSuperAdmin, resolvePermissions } from "@/lib/permissions/engine";
 import { verifyOrRefreshUid } from "@/lib/session/resolve-admin";
 import type { Permission } from "@/types/permissions";
+import type { BusinessRole } from "@/types/roles";
 
 export type ServerActor = {
   uid: string;
   businessId: string;
   employeeId: string | null;
+  role: BusinessRole | null;
   permissions: Permission[];
   isOwnerOrManager: boolean;
   isSuperAdmin: boolean;
@@ -51,6 +53,7 @@ export async function requireActor(request: Request, businessId: string) {
         uid: verified.uid,
         businessId,
         employeeId: membership?.employeeId ?? null,
+        role: membership?.role ?? null,
         permissions,
         isOwnerOrManager: superAdmin || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER",
         isSuperAdmin: superAdmin,

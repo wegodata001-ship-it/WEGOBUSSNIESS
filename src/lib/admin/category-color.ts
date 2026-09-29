@@ -1,4 +1,5 @@
 import type { CatalogSetting } from "@/types/catalog-setting";
+import type { DepartmentCategory } from "@/types/department";
 
 export const FALLBACK_CATEGORY_COLOR = "#64748b";
 
@@ -40,11 +41,28 @@ export function categoryStyles(color: string | null | undefined) {
   };
 }
 
-export function buildCategoryMap(settings: CatalogSetting[], projectCategories: Array<string | null | undefined>) {
+export function buildCategoryMap(
+  settings: CatalogSetting[],
+  projectCategories: Array<string | null | undefined>,
+  departmentCategories: DepartmentCategory[] = [],
+) {
   const map = new Map<string, CatalogSetting>();
   for (const item of settings) {
     if (item.type !== "PROJ_CATEGORY" || !item.value) continue;
     map.set(item.value, item);
+  }
+  for (const item of departmentCategories) {
+    if (!item.name) continue;
+    map.set(item.name, {
+      id: item.id,
+      businessId: item.businessId,
+      legacyId: item.id,
+      type: "PROJ_CATEGORY",
+      value: item.name,
+      color: item.color || FALLBACK_CATEGORY_COLOR,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    });
   }
   for (const name of projectCategories) {
     if (!name || map.has(name)) continue;

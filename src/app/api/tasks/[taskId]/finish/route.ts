@@ -1,6 +1,9 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 import { notifyUnpaidOnComplete } from "@/lib/admin/notify";
+import { isCompletedTaskStatus } from "@/lib/admin/project-progress";
+import { syncProjectProgressFromTasks } from "@/lib/admin/project-progress-sync";
+import { taskCompletionPatch } from "@/lib/admin/task-completion";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
 import { remainingBalance } from "@/lib/finance/vat";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -68,11 +71,18 @@ export async function POST(
     }, { merge: true });
   }
 
-  const wasDone = task.status === "DONE" || task.status === "COMPLETED";
+  const wasDone = isCompletedTaskStatus(typeof task.status === "string" ? task.status : "");
+  const completion = taskCompletionPatch({
+    previousStatus: typeof task.status === "string" ? task.status : "",
+    nextStatus: "COMPLETED",
+    actorUserId: actor.uid,
+    now,
+  });
   await taskRef.set({
-    status: "DONE",
+    ...completion,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
+  await syncProjectProgressFromTasks(businessId, typeof task.projectId === "string" ? task.projectId : null);
 
   if (wasDone) return NextResponse.json({ ok: true });
 

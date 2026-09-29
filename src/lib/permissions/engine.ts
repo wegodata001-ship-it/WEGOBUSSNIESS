@@ -13,12 +13,7 @@ export function permissionsForRole(role: Membership["role"]): Permission[] {
 
 export function resolvePermissions(membership: Membership | null): Permission[] {
   if (!membership) return [];
-
-  const granted = new Set<Permission>(permissionsForRole(membership.role));
-  for (const permission of membership.permissions) {
-    granted.add(permission);
-  }
-  return [...granted];
+  return permissionsForRole(membership.role);
 }
 
 export function hasPermission(

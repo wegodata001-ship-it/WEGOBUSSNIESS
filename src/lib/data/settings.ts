@@ -9,6 +9,17 @@ export async function listBusinessSettings(businessId: string | null) {
     allowEmployeeSelfRequests: true,
     workWeekStart: 0,
     vatRate: DEFAULT_BUSINESS_VAT_RATE,
+    legalType: "",
+    customBusinessType: "",
+    taxId: "",
+    phone: "",
+    email: "",
+    address: "",
+    website: "",
+    about: "",
+    services: [],
+    logoUrl: null,
+    logoStoragePath: null,
     updatedAt: null,
   };
   return fetchBusinessRecords<BusinessSettings>(businessId, "settings", empty);

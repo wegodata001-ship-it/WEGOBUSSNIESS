@@ -1,7 +1,7 @@
 "use client";
 
-import { DocumentsView } from "@/components/admin/documents-view";
+import { DocumentsHub } from "@/components/admin/docs-hub";
 
 export default function DocumentsPage() {
-  return <DocumentsView />;
+  return <DocumentsHub />;
 }
