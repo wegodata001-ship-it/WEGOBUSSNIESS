@@ -1,5 +1,4 @@
-import { getAdminDb } from "@/lib/firebase/admin";
-import { businessMembersPath, employeeDocPath, notificationsPath } from "@/lib/firebase/paths";
+import { sendAdminNotification, sendEmployeeNotification, sendNotification, type NotifyInput } from "@/lib/notify/service";
 
 export type NotifyPayload = {
   businessId: string;
@@ -10,49 +9,63 @@ export type NotifyPayload = {
   entityType?: string;
   entityId?: string;
   skipUserIds?: string[];
+  rows?: NotifyInput["rows"];
+  subject?: string;
+  dedupeKey?: string;
+  channels?: NotifyInput["channels"];
 };
 
 export async function notifyUsers(input: NotifyPayload & { userIds: string[] }) {
-  const db = getAdminDb();
-  const skip = new Set((input.skipUserIds ?? []).filter(Boolean));
-  const unique = [...new Set(input.userIds.filter((id) => id && !skip.has(id)))];
-  await Promise.all(unique.map((userId) => db.collection(notificationsPath(input.businessId)).add({
+  await sendEmployeeNotification({
     businessId: input.businessId,
-    userId,
     type: input.type ?? "general",
     title: input.title,
-    body: input.body,
-    href: input.href ?? "/notifications",
-    entityType: input.entityType ?? null,
-    entityId: input.entityId ?? null,
-    isRead: false,
-    read: false,
-    createdAt: new Date(),
-  })));
+    message: input.body,
+    href: input.href,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    userIds: input.userIds,
+    skipUserIds: input.skipUserIds,
+    rows: input.rows,
+    subject: input.subject,
+    dedupeKey: input.dedupeKey,
+    channels: input.channels,
+  });
 }
 
 export async function notifyEmployees(input: NotifyPayload & { employeeIds: string[] }) {
-  const db = getAdminDb();
-  const unique = [...new Set(input.employeeIds.filter(Boolean))];
-  const userIds = await Promise.all(unique.map(async (employeeId) => {
-    const snap = await db.doc(employeeDocPath(input.businessId, employeeId)).get();
-    return typeof snap.data()?.userId === "string" ? snap.data()!.userId as string : "";
-  }));
-  await notifyUsers({ ...input, userIds });
+  await sendEmployeeNotification({
+    businessId: input.businessId,
+    type: input.type ?? "general",
+    title: input.title,
+    message: input.body,
+    href: input.href,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    employeeIds: input.employeeIds,
+    skipUserIds: input.skipUserIds,
+    rows: input.rows,
+    subject: input.subject,
+    dedupeKey: input.dedupeKey,
+    channels: input.channels,
+  });
 }
 
 export async function notifyManagers(input: NotifyPayload) {
-  const db = getAdminDb();
-  const snap = await db.collection(businessMembersPath(input.businessId)).get();
-  const userIds = snap.docs
-    .filter((docSnap) => {
-      const data = docSnap.data();
-      const role = data.role;
-      const active = data.isActive !== false;
-      return active && (role === "BUSINESS_OWNER" || role === "MANAGER");
-    })
-    .map((docSnap) => (typeof docSnap.data().userId === "string" ? docSnap.data().userId as string : docSnap.id));
-  await notifyUsers({ ...input, userIds });
+  await sendAdminNotification({
+    businessId: input.businessId,
+    type: input.type ?? "general",
+    title: input.title,
+    message: input.body,
+    href: input.href,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    skipUserIds: input.skipUserIds,
+    rows: input.rows,
+    subject: input.subject,
+    dedupeKey: input.dedupeKey,
+    channels: input.channels,
+  });
 }
 
 export function taskHref(taskId: string, chat = false) {
@@ -76,5 +89,6 @@ export async function notifyUnpaidOnComplete(input: {
     type: "task.completed_unpaid",
     entityType: "task",
     entityId: input.taskId,
+    dedupeKey: `PAYMENT_DUE:${input.taskId}`,
   });
 }

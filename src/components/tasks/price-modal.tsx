@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Field, GhostButton, Modal, PrimaryButton, inputClass } from "@/components/admin/ui";
+import { useI18n } from "@/components/providers/i18n-provider";
 import { saveTaskPrice } from "@/lib/business/api";
 import { formatIls, parseMoney } from "@/lib/finance/money";
 import { calculateTaskPrice } from "@/lib/finance/vat";
@@ -20,6 +21,7 @@ export function PriceModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useI18n();
   const first = tasks[0];
   const [amount, setAmount] = useState(first?.priceBeforeVat != null ? String(first.priceBeforeVat) : "");
   const [busy, setBusy] = useState(false);
@@ -38,7 +40,7 @@ export function PriceModal({
       const result = await saveTaskPrice({ businessId, taskId: task.id, priceBeforeVat: parsed });
       if (!result.ok) {
         setBusy(false);
-        setError(result.error === "FORBIDDEN" ? "אין הרשאה להגדיר מחיר" : "לא ניתן לשמור את הסכום");
+        setError(result.error === "FORBIDDEN" ? t("pay.priceForbidden") : t("pay.priceFailed"));
         return;
       }
     }
@@ -47,11 +49,11 @@ export function PriceModal({
   }
 
   return (
-    <Modal title="הגדרת סכום למשימה" onClose={onClose}>
+    <Modal title={t("pay.setAmountTask")} onClose={onClose}>
       <p className="mb-4 text-sm text-slate-600">
-        {tasks.length === 1 ? first?.title : `${tasks.length} משימות נבחרו`}
+        {tasks.length === 1 ? first?.title : t("work.selectedCount", { count: String(tasks.length) })}
       </p>
-      <Field label="מחיר לפני מע״מ">
+      <Field label={t("work.priceBeforeVat")}>
         <div className="relative">
           <input className={`${inputClass} pe-10`} inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} />
           <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-sm text-slate-500">₪</span>
@@ -60,19 +62,19 @@ export function PriceModal({
       {preview ? (
         <div className="mt-4 space-y-1 text-sm">
           <p className="flex justify-between text-slate-600">
-            <span>מע״מ {Math.round(preview.vatRate * 100)}%</span>
+            <span>{t("pay.vatPct", { pct: String(Math.round(preview.vatRate * 100)) })}</span>
             <span>{formatIls(preview.vatAmount)}</span>
           </p>
           <p className="flex justify-between border-t border-slate-200 pt-2 font-semibold">
-            <span>סה״כ כולל מע״מ</span>
+            <span>{t("pay.totalInclVat")}</span>
             <span>{formatIls(preview.priceIncludingVat)}</span>
           </p>
         </div>
       ) : null}
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       <div className="mt-5 flex justify-end gap-2">
-        <GhostButton onClick={onClose}>ביטול</GhostButton>
-        <PrimaryButton disabled={busy || !preview} onClick={() => void save()}>שמירה</PrimaryButton>
+        <GhostButton onClick={onClose}>{t("common.cancel")}</GhostButton>
+        <PrimaryButton disabled={busy || !preview} onClick={() => void save()}>{t("common.save")}</PrimaryButton>
       </div>
     </Modal>
   );

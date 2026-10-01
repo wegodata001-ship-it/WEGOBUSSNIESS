@@ -26,7 +26,9 @@ import {
   toServiceItem,
   toTermsTemplate,
   toTask,
+  toTaskStatusDefinition,
   toTaskTemplate,
+  toMoneyMovement,
   toWorkSession,
 } from "@/lib/firebase/converters";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -49,7 +51,9 @@ import {
   projectsPath,
   serviceItemsPath,
   tasksPath,
+  taskStatusesPath,
   taskTemplatesPath,
+  movementsPath,
   termsTemplatesPath,
   workSessionsPath,
 } from "@/lib/firebase/paths";
@@ -208,6 +212,22 @@ export async function GET(request: Request) {
     const snap = await db.collection(termsTemplatesPath(businessId)).get();
     return NextResponse.json({
       data: snap.docs.map((docSnap) => toTermsTemplate(docSnap.id, docSnap.data())),
+    });
+  }
+
+  if (kind === "taskStatuses") {
+    const { ensureDefaultTaskStatuses } = await import("@/lib/admin/task-status-write");
+    const data = await ensureDefaultTaskStatuses(businessId);
+    return NextResponse.json({ data });
+  }
+
+  if (kind === "movements") {
+    if (!canViewTaskFinance(actor)) return NextResponse.json({ data: [] });
+    const snap = await db.collection(movementsPath(businessId)).get();
+    return NextResponse.json({
+      data: snap.docs
+        .map((docSnap) => toMoneyMovement(docSnap.id, docSnap.data()))
+        .sort((left, right) => right.date.localeCompare(left.date) || (toTimestamp(right.createdAt) - toTimestamp(left.createdAt))),
     });
   }
 

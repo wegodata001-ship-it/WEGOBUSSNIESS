@@ -193,6 +193,8 @@ export async function updateBusinessEmployee(input: {
       displayName,
       phone: input.data.phone !== undefined ? nullable(input.data.phone) : undefined,
       isActive: status === "ACTIVE",
+      ...(input.data.notifyInApp !== undefined ? { notifyInApp: input.data.notifyInApp !== false } : {}),
+      ...(input.data.notifyEmail !== undefined ? { notifyEmail: input.data.notifyEmail !== false } : {}),
       updatedAt: now,
     }, { merge: true });
     await db.doc(memberDocPath(input.businessId, uid)).set({

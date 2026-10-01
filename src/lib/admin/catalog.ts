@@ -15,8 +15,11 @@ import { listBusinessMembers } from "@/lib/data/members";
 import { listProjects } from "@/lib/data/projects";
 import { listBusinessRequests } from "@/lib/data/requests";
 import { listTaskTemplates } from "@/lib/data/task-templates";
+import { listTaskStatuses } from "@/lib/data/task-statuses";
+import { listMoneyMovements } from "@/lib/data/movements";
 import { listBusinessTasks } from "@/lib/data/tasks";
 import { listWorkSessions } from "@/lib/data/work-hours";
+import { getI18nLocale, translate } from "@/lib/i18n";
 import type { BusinessDocumentRecord, ServiceItem, TermsTemplate } from "@/types/business-doc";
 import type { BusinessClient } from "@/types/client";
 import type { CatalogSetting } from "@/types/catalog-setting";
@@ -28,7 +31,9 @@ import type { Employee } from "@/types/employee";
 import type { LogisticsRequest } from "@/types/logistics";
 import type { Meeting } from "@/types/meeting";
 import type { Membership } from "@/types/membership";
+import type { MoneyMovement } from "@/types/movement";
 import type { Task } from "@/types/task";
+import type { TaskStatusDefinition } from "@/types/task-status";
 import type { TaskTemplate } from "@/types/task-template";
 import type { WorkSession } from "@/types/work-hours";
 
@@ -51,6 +56,8 @@ export type BusinessCatalog = {
   catalog: CatalogSetting[];
   departmentCategories: DepartmentCategory[];
   taskTemplates: TaskTemplate[];
+  taskStatuses: TaskStatusDefinition[];
+  movements: MoneyMovement[];
   projectsError: string | null;
 };
 
@@ -91,6 +98,8 @@ const EMPTY: BusinessCatalog = {
   catalog: [],
   departmentCategories: [],
   taskTemplates: [],
+  taskStatuses: [],
+  movements: [],
   projectsError: null,
 };
 
@@ -106,7 +115,7 @@ export function useBusinessCatalog(businessId: string | null) {
     }
     const silent = Boolean(options && typeof options === "object" && "silent" in options && (options as { silent?: boolean }).silent);
     if (!silent) setLoading(true);
-    const [tasks, employees, departments, members, sessions, meetings, requests, activity, projects, documents, settings, catalog, departmentCategories, businessDocs, clients, termsTemplates, serviceItems, taskTemplates] =
+    const [tasks, employees, departments, members, sessions, meetings, requests, activity, projects, documents, settings, catalog, departmentCategories, businessDocs, clients, termsTemplates, serviceItems, taskTemplates, taskStatuses, movements] =
       await Promise.all([
         listBusinessTasks(businessId, { viewAll: true }),
         listBusinessEmployees(businessId),
@@ -126,6 +135,8 @@ export function useBusinessCatalog(businessId: string | null) {
         listTermsTemplates(businessId),
         listServiceItems(businessId),
         listTaskTemplates(businessId),
+        listTaskStatuses(businessId),
+        listMoneyMovements(businessId),
       ]);
     setData({
       tasks: tasks.data,
@@ -146,6 +157,8 @@ export function useBusinessCatalog(businessId: string | null) {
       catalog: catalog.data,
       departmentCategories: departmentCategories.data,
       taskTemplates: taskTemplates.data,
+      taskStatuses: taskStatuses.data,
+      movements: movements.data,
       projectsError: projects.error ?? null,
     });
     setLoading(false);
@@ -159,18 +172,18 @@ export function useBusinessCatalog(businessId: string | null) {
 }
 
 export function employeeName(employees: Employee[], id: string | null | undefined) {
-  if (!id) return "לא משויך";
-  return employees.find((item) => item.id === id)?.displayName ?? "לא משויך";
+  if (!id) return translate(getI18nLocale(), "common.unassigned");
+  return employees.find((item) => item.id === id)?.displayName ?? translate(getI18nLocale(), "common.unassigned");
 }
 
 export function departmentName(departments: Department[], id: string | null | undefined) {
-  if (!id) return "ללא מחלקה";
-  return departments.find((item) => item.id === id)?.name ?? "ללא מחלקה";
+  if (!id) return translate(getI18nLocale(), "common.noDepartment");
+  return departments.find((item) => item.id === id)?.name ?? translate(getI18nLocale(), "common.noDepartment");
 }
 
 export function projectName(projects: Project[], id: string | null | undefined) {
-  if (!id) return "ללא פרויקט";
-  return projects.find((item) => item.id === id)?.name ?? "ללא פרויקט";
+  if (!id) return translate(getI18nLocale(), "common.noProject");
+  return projects.find((item) => item.id === id)?.name ?? translate(getI18nLocale(), "common.noProject");
 }
 
 export function sessionHours(sessions: WorkSession[]) {

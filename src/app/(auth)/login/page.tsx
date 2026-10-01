@@ -27,7 +27,7 @@ function BrandPreview() {
         <div className="h-full w-[72%] rounded-full bg-[#60A5FA]/80" />
       </div>
       <div className="mt-5 space-y-2.5">
-        <p className="text-[11px] font-medium text-slate-300">{t("nav.today")}</p>
+        <p className="text-[11px] font-medium text-slate-300">{t("nav.myWork")}</p>
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <span className="h-1.5 w-1.5 rounded-full bg-sky-300/80" />
           <span className="h-2 flex-1 rounded bg-white/10" />

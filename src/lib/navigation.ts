@@ -2,10 +2,10 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   Building2,
-  CalendarDays,
   CalendarRange,
   ClipboardList,
   Clock3,
+  Coins,
   FileArchive,
   FolderKanban,
   LayoutDashboard,
@@ -36,7 +36,6 @@ export const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.main",
     items: [
       { href: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
-      { href: "/today", labelKey: "nav.today", icon: CalendarDays, permission: "tasks.view" },
     ],
   },
   {
@@ -56,6 +55,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/attendance", labelKey: "nav.attendance", icon: Clock3, permission: "workHours.viewOwn" },
       { href: "/work-hours", labelKey: "nav.hours", icon: Clock3, permission: "workHours.viewOwn" },
       { href: "/requests", labelKey: "nav.requests", icon: Truck, permission: "logistics.create" },
+      { href: "/movements", labelKey: "nav.movements", icon: Coins, permission: "finance.view" },
     ],
   },
   {
@@ -102,6 +102,7 @@ export const APP_ROUTES = [
   "/work-hours",
   "/meetings",
   "/requests",
+  "/movements",
   "/notifications",
   "/settings",
   "/admin/businesses",

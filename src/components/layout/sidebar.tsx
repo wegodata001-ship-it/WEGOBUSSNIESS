@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { useAppSession } from "@/components/providers/auth-provider";
 import { useI18n } from "@/components/providers/i18n-provider";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { APP_NAME } from "@/lib/env";
 import { NAV_GROUPS, PLATFORM_NAV, type NavItem } from "@/lib/navigation";
 import { hasPermission, isSuperAdmin } from "@/lib/permissions/engine";
@@ -20,21 +21,23 @@ function canSee(item: NavItem, permissions: readonly Permission[], superAdmin: b
 function NavLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
   const pathname = usePathname();
   const { t } = useI18n();
+  const { membership } = useAppSession();
   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
   const Icon = item.icon;
+  const label = item.href === "/dashboard" && membership?.role === "EMPLOYEE" ? t("nav.myWork") : t(item.labelKey);
 
   return (
     <Link
       href={item.href}
       onClick={onNavigate}
-      className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
+      className={`flex items-center gap-3 rounded-lg border-s-2 px-3 py-2 text-[15px] transition ${
         active
-          ? "bg-white/12 text-white shadow-[inset_3px_0_0_#2563EB]"
-          : "text-slate-300 hover:bg-white/5 hover:text-white"
+          ? "border-s-[#2563EB] bg-white/10 text-white"
+          : "border-s-transparent text-slate-300 hover:bg-white/5 hover:text-white"
       }`}
     >
       <Icon className="h-4 w-4 shrink-0" />
-      <span>{t(item.labelKey)}</span>
+      <span>{label}</span>
     </Link>
   );
 }
@@ -77,17 +80,17 @@ export function Sidebar({
         </span>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{business?.name || APP_NAME}</p>
-          <p className="truncate text-xs text-slate-400">Business Admin</p>
+          <p className="truncate text-xs text-slate-300">Business Admin</p>
         </div>
       </div>
 
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+      <nav className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
         {groups.map((group) => (
           <div key={group.id}>
-            <p className="mb-2 px-3 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+            <p className="mb-1 px-3 text-xs font-semibold tracking-wide text-slate-400 uppercase">
               {t(group.labelKey)}
             </p>
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {group.items.map((item) => (
                 <NavLink key={item.href} item={item} onNavigate={onNavigate} />
               ))}
@@ -96,10 +99,10 @@ export function Sidebar({
         ))}
         {platform.length > 0 ? (
           <div>
-            <p className="mb-2 px-3 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+            <p className="mb-1 px-3 text-xs font-semibold tracking-wide text-slate-400 uppercase">
               {t("nav.admin")}
             </p>
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {platform.map((item) => (
                 <NavLink key={item.href} item={item} onNavigate={onNavigate} />
               ))}
@@ -109,11 +112,14 @@ export function Sidebar({
       </nav>
 
       <div className="border-t border-white/10 p-4">
-        <p className="truncate text-sm font-medium">{user.displayName || user.email}</p>
+        <p className="truncate text-sm font-semibold">{user.displayName || user.email}</p>
         <p className="truncate text-xs text-slate-400">
-          תפקיד: <RoleLabel />
+          {t("common.role")}: <RoleLabel />
         </p>
         <p className="mt-1 truncate text-xs text-slate-500">{user.email}</p>
+        <div className="mt-3 lg:hidden">
+          <LanguageSwitcher />
+        </div>
         <button
           type="button"
           onClick={onLogout}

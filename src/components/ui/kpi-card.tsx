@@ -25,9 +25,9 @@ export function KpiCard({
     <article className="rounded-[var(--radius)] border border-[var(--line)] bg-white p-5 shadow-[var(--shadow)]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm text-slate-500">{label}</p>
-          <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{value}</p>
-          {hint ? <p className="mt-1 text-xs text-slate-400">{hint}</p> : null}
+          <p className="text-sm text-slate-600">{label}</p>
+          <p data-kpi className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{value}</p>
+          {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
         </div>
         <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${TONES[tone]}`}>
           <Icon className="h-5 w-5" />

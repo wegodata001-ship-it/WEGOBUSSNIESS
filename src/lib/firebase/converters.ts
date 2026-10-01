@@ -24,7 +24,11 @@ import { asCalendarColor, asTaskKind } from "@/lib/admin/palette";
 import { normalizeTaskTeam } from "@/lib/admin/task-team";
 import type { PaymentMethod, PaymentRecord, PaymentRecordStatus, TaskPaymentStatus } from "@/types/payment";
 import { PAYMENT_METHODS, PAYMENT_RECORD_STATUSES, TASK_PAYMENT_STATUSES } from "@/types/payment";
+import type { MoneyMovement, MovementStatus, MovementType } from "@/types/movement";
+import { MOVEMENT_STATUSES, MOVEMENT_TYPES } from "@/types/movement";
 import type { Task, TaskActivity, TaskComment, TaskPriority, TaskStatus } from "@/types/task";
+import type { TaskStatusDefinition, TaskStatusType } from "@/types/task-status";
+import { TASK_STATUS_TYPES } from "@/types/task-status";
 import type { TaskTemplate } from "@/types/task-template";
 import { taskLibraryKey } from "@/lib/admin/task-library";
 import { TASK_PRIORITIES, TASK_STATUSES } from "@/types/task";
@@ -113,6 +117,7 @@ export function toBusiness(id: string, data: DocumentData): Business {
   return {
     id,
     name: asString(data.name),
+    nameAr: asString(data.nameAr) || undefined,
     slug: asString(data.slug),
     logoUrl: asNullableString(data.logoUrl),
     primaryColor: asString(data.primaryColor, "#2563eb"),
@@ -235,6 +240,7 @@ export function toTask(id: string, data: DocumentData): Task {
     title: asString(data.title),
     description: asString(data.description),
     status: asOneOf<TaskStatus>(data.status, TASK_STATUSES, "TODO"),
+    statusId: asNullableString(data.statusId),
     priority: asOneOf<TaskPriority>(data.priority === "MEDIUM" ? "NORMAL" : data.priority, TASK_PRIORITIES, "NORMAL"),
     color: asCalendarColor(data.color),
     taskType: asTaskKind(data.taskType ?? data.type),
@@ -507,6 +513,8 @@ export function toBusinessSettings(id: string, data: DocumentData): BusinessSett
     address: asString(data.address),
     website: asString(data.website),
     about: asString(data.about) || asString(data.description),
+    aboutAr: asString(data.aboutAr) || undefined,
+    nameAr: asString(data.nameAr) || undefined,
     services: normalizeBusinessServices(data.services),
     logoUrl: asNullableString(data.logoUrl),
     logoStoragePath: asNullableString(data.logoStoragePath),
@@ -577,6 +585,7 @@ export function toBusinessDocumentRecord(id: string, data: DocumentData): Busine
     id,
     businessId: asString(data.businessId),
     kind: asOneOf<BusinessDocKind>(data.kind, BUSINESS_DOC_KINDS, "QUOTE"),
+    language: data.language === "ar" ? "ar" : "he",
     number: asString(data.number),
     title: asString(data.title),
     intro: asString(data.intro),
@@ -660,6 +669,47 @@ export function toTaskTemplate(id: string, data: DocumentData): TaskTemplate {
     departmentId: asNullableString(data.departmentId),
     titleKey: asString(data.titleKey) || taskLibraryKey(title, taskType),
     active: data.active !== false,
+    createdAt: toDate(data.createdAt),
+    updatedAt: toDate(data.updatedAt),
+  };
+}
+
+export function toTaskStatusDefinition(id: string, data: DocumentData): TaskStatusDefinition {
+  return {
+    id,
+    businessId: asString(data.businessId),
+    name: asString(data.name),
+    nameAr: asString(data.nameAr),
+    color: asCalendarColor(data.color),
+    type: asOneOf<TaskStatusType>(data.type, TASK_STATUS_TYPES, "TODO"),
+    sortOrder: asNumber(data.sortOrder, 0) ?? 0,
+    isActive: data.isActive !== false,
+    isSystem: data.isSystem === true,
+    createdAt: toDate(data.createdAt),
+    updatedAt: toDate(data.updatedAt),
+  };
+}
+
+export function toMoneyMovement(id: string, data: DocumentData): MoneyMovement {
+  return {
+    id,
+    businessId: asString(data.businessId),
+    type: asOneOf<MovementType>(data.type, MOVEMENT_TYPES, "INCOME"),
+    amount: asNumber(data.amount, 0) ?? 0,
+    date: asString(data.date),
+    clientId: asNullableString(data.clientId),
+    clientName: asString(data.clientName),
+    projectId: asNullableString(data.projectId),
+    taskIds: asStringArray(data.taskIds),
+    paymentId: asNullableString(data.paymentId),
+    paymentMethod: data.paymentMethod
+      ? asOneOf<PaymentMethod>(data.paymentMethod, PAYMENT_METHODS, "OTHER")
+      : null,
+    description: asString(data.description),
+    note: asString(data.note),
+    status: asOneOf<MovementStatus>(data.status, MOVEMENT_STATUSES, "RECORDED"),
+    createdByUserId: asString(data.createdByUserId),
+    createdByEmployeeId: asNullableString(data.createdByEmployeeId),
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };

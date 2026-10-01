@@ -7,6 +7,7 @@ import { Bell, ChevronDown, LogOut, Menu, Search, Settings, UserRound } from "lu
 import { useAppSession } from "@/components/providers/auth-provider";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { useNotifications } from "@/components/providers/notification-provider";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { relativeTimeLabel } from "@/lib/admin/relative-time";
 import { APP_NAME } from "@/lib/env";
 
@@ -55,8 +56,10 @@ export function Topbar({
           <Menu className="h-5 w-5" />
         </button>
         <form onSubmit={search} className="relative hidden min-w-0 flex-1 md:block">
+          <label className="sr-only" htmlFor="wego-search">{t("shell.searchPlaceholder")}</label>
           <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
+            id="wego-search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t("shell.searchPlaceholder")}
@@ -66,6 +69,9 @@ export function Topbar({
       </div>
 
       <div className="flex items-center gap-2">
+        <div className="hidden md:block">
+          <LanguageSwitcher compact />
+        </div>
         <div className="relative" ref={bellRef}>
           <button
             type="button"
@@ -83,10 +89,10 @@ export function Topbar({
           {bellOpen ? (
             <div className="absolute end-0 z-40 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white shadow-xl">
               <div className="flex items-center justify-between px-4 py-3">
-                <p className="text-sm font-semibold">התראות</p>
+                <p className="text-sm font-semibold">{t("shell.notifications")}</p>
                 {unread ? (
                   <button type="button" className="text-xs text-[#2563EB]" onClick={() => void markAll()}>
-                    סמן הכל כנקרא
+                    {t("notify.markAll")}
                   </button>
                 ) : null}
               </div>
@@ -109,10 +115,10 @@ export function Topbar({
                     <p className="mt-1 text-[11px] text-slate-400">{relativeTimeLabel(item.createdAt)}</p>
                   </Link>
                 ))}
-                {!items.length ? <p className="px-4 py-8 text-center text-sm text-slate-400">אין התראות חדשות</p> : null}
+                {!items.length ? <p className="px-4 py-8 text-center text-sm text-slate-400">{t("notify.empty")}</p> : null}
               </div>
               <Link href="/notifications" onClick={() => setBellOpen(false)} className="block border-t border-slate-100 px-4 py-3 text-center text-sm font-medium text-[#2563EB]">
-                הצג את כל ההתראות
+                {t("notify.viewAll")}
               </Link>
             </div>
           ) : null}
@@ -133,7 +139,8 @@ export function Topbar({
             <ChevronDown className="hidden h-4 w-4 text-slate-400 sm:block" />
           </button>
           {open ? (
-            <div className="absolute end-0 z-30 mt-2 w-48 rounded-xl border border-[#E2E8F0] bg-white py-1 shadow-lg">
+            <div className="absolute end-0 z-30 mt-2 w-56 rounded-xl border border-[#E2E8F0] bg-white py-1 shadow-lg">
+              <LanguageSwitcher />
               <Link href="/settings" onClick={() => setOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
                 <UserRound className="h-4 w-4" />
                 {t("shell.profile")}

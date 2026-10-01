@@ -1,3 +1,5 @@
+import { getI18nLocale, translate, type MessageKey } from "@/lib/i18n";
+
 export const STATUS_LABELS: Record<string, string> = {
   TODO: "לביצוע",
   OPEN: "לביצוע",
@@ -42,17 +44,21 @@ export const STATUS_LABELS: Record<string, string> = {
   BRIEF: "בריף",
   DESIGN: "עיצוב",
   CLIENT: "מסמך לקוח",
-  UNPAID: "לא שולם",
+  UNPAID: "ממתין לתשלום",
   PARTIALLY_PAID: "שולם חלקית",
   PAID: "שולם",
   CASH: "מזומן",
   CREDIT_CARD: "כרטיס אשראי",
   BANK_TRANSFER: "העברה בנקאית",
+  BIT: "ביט",
   CHECK: "צ'ק",
 };
 
 export function labelOf(value: string | null | undefined, fallback = "—") {
   if (!value) return fallback;
+  const key = `status.${value}` as MessageKey;
+  const translated = translate(getI18nLocale(), key);
+  if (translated !== key) return translated;
   return STATUS_LABELS[value] ?? value;
 }
 

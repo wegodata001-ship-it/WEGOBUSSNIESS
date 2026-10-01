@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 import { Field, GhostButton, PrimaryButton, inputClass } from "@/components/admin/ui";
+import { useI18n } from "@/components/providers/i18n-provider";
 import { mutateBusiness, removeBusinessLogo, uploadBusinessLogo } from "@/lib/admin/api";
+import type { MessageKey } from "@/lib/i18n";
 import {
   displayBusinessType,
   emptyBusinessService,
@@ -14,12 +16,12 @@ import { DEFAULT_BUSINESS_VAT_RATE } from "@/lib/finance/vat";
 import type { Business } from "@/types/business";
 import { BUSINESS_LEGAL_TYPES, type BusinessService, type BusinessSettings } from "@/types/notification";
 
-function saveError(code: string) {
-  if (code === "NAME_REQUIRED") return "יש להזין שם עסק";
-  if (code === "FORBIDDEN") return "אין הרשאה לערוך את הגדרות העסק";
-  if (code === "LOGO_UPLOAD_FAILED") return "העלאת הלוגו נכשלה";
-  if (code === "LOGO_REMOVE_FAILED") return "הסרת הלוגו נכשלה";
-  return "שמירת הגדרות העסק נכשלה";
+function saveErrorKey(code: string): MessageKey {
+  if (code === "NAME_REQUIRED") return "settings.nameRequired";
+  if (code === "FORBIDDEN") return "settings.forbidden";
+  if (code === "LOGO_UPLOAD_FAILED") return "settings.logoUploadFailed";
+  if (code === "LOGO_REMOVE_FAILED") return "settings.logoRemoveFailed";
+  return "settings.saveFailed";
 }
 
 export function BusinessSettingsForm({
@@ -31,8 +33,10 @@ export function BusinessSettingsForm({
   settings: BusinessSettings;
   onSaved: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const fileRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(business.name);
+  const [nameAr, setNameAr] = useState(business.nameAr || settings.nameAr || "");
   const [timezone, setTimezone] = useState(business.timezone);
   const [language, setLanguage] = useState(business.language);
   const [vatPercent, setVatPercent] = useState(String((settings.vatRate || DEFAULT_BUSINESS_VAT_RATE) * 100));
@@ -44,6 +48,7 @@ export function BusinessSettingsForm({
   const [address, setAddress] = useState(settings.address);
   const [website, setWebsite] = useState(settings.website);
   const [about, setAbout] = useState(settings.about);
+  const [aboutAr, setAboutAr] = useState(settings.aboutAr || "");
   const [services, setServices] = useState<BusinessService[]>(settings.services);
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || business.logoUrl);
   const [primaryColor, setPrimaryColor] = useState(business.primaryColor);
@@ -54,6 +59,7 @@ export function BusinessSettingsForm({
 
   useEffect(() => {
     setName(business.name);
+    setNameAr(business.nameAr || settings.nameAr || "");
     setTimezone(business.timezone);
     setLanguage(business.language);
     setPrimaryColor(business.primaryColor);
@@ -72,6 +78,7 @@ export function BusinessSettingsForm({
     setAddress(settings.address);
     setWebsite(settings.website);
     setAbout(settings.about);
+    setAboutAr(settings.aboutAr || "");
     setServices(settings.services);
   }, [business, settings]);
 
@@ -101,7 +108,7 @@ export function BusinessSettingsForm({
       if (fileRef.current) fileRef.current.value = "";
       await onSaved();
     } catch (caught) {
-      setError(saveError(caught instanceof Error ? caught.message : ""));
+      setError(t(saveErrorKey(caught instanceof Error ? caught.message : "")));
     } finally {
       setBusy(false);
     }
@@ -116,7 +123,7 @@ export function BusinessSettingsForm({
       if (fileRef.current) fileRef.current.value = "";
       await onSaved();
     } catch (caught) {
-      setError(saveError(caught instanceof Error ? caught.message : ""));
+      setError(t(saveErrorKey(caught instanceof Error ? caught.message : "")));
     } finally {
       setBusy(false);
     }
@@ -124,7 +131,7 @@ export function BusinessSettingsForm({
 
   async function save() {
     if (!name.trim()) {
-      setError(saveError("NAME_REQUIRED"));
+      setError(t(saveErrorKey("NAME_REQUIRED")));
       return;
     }
     setBusy(true);
@@ -136,6 +143,7 @@ export function BusinessSettingsForm({
         action: "updateBusiness",
         data: {
           name: name.trim(),
+          nameAr: nameAr.trim(),
           timezone,
           language,
           vatRate: Number(vatPercent) / 100,
@@ -147,6 +155,7 @@ export function BusinessSettingsForm({
           address,
           website,
           about,
+          aboutAr,
           services,
           primaryColor,
           secondaryColor,
@@ -155,7 +164,7 @@ export function BusinessSettingsForm({
       setSaved(true);
       await onSaved();
     } catch (caught) {
-      setError(saveError(caught instanceof Error ? caught.message : ""));
+      setError(t(saveErrorKey(caught instanceof Error ? caught.message : "")));
     } finally {
       setBusy(false);
     }
@@ -166,19 +175,22 @@ export function BusinessSettingsForm({
   return (
     <div className="grid gap-5">
       <section className="grid gap-3">
-        <h3 className="text-sm font-semibold text-slate-900">פרטי העסק</h3>
-        <Field label="שם העסק *">
+        <h3 className="text-sm font-semibold text-slate-900">{t("settings.details")}</h3>
+        <Field label={t("business.nameHe")}>
           <input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} />
         </Field>
+        <Field label={t("business.nameAr")}>
+          <input className={inputClass} dir="rtl" value={nameAr} onChange={(event) => setNameAr(event.target.value)} />
+        </Field>
         <div>
-          <p className="mb-1.5 text-sm font-medium text-slate-700">לוגו העסק</p>
+          <p className="mb-1.5 text-sm font-medium text-slate-700">{t("settings.logo")}</p>
           <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 sm:flex-row sm:items-center">
             <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl bg-slate-50">
               {logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={logoUrl} alt={name || "לוגו העסק"} className="h-full w-full object-contain" />
+                <img src={logoUrl} alt={name || t("settings.logo")} className="h-full w-full object-contain" />
               ) : (
-                <span className="text-xs text-slate-400">אין לוגו</span>
+                <span className="text-xs text-slate-400">{t("settings.noLogo")}</span>
               )}
             </div>
             <div className="flex flex-1 flex-wrap gap-2">
@@ -190,31 +202,31 @@ export function BusinessSettingsForm({
                 onChange={(event) => void onLogoChange(event.target.files?.[0])}
               />
               <GhostButton disabled={busy} onClick={() => fileRef.current?.click()}>
-                {logoUrl ? "החלפת לוגו" : "העלאת לוגו"}
+                {logoUrl ? t("settings.replaceLogo") : t("settings.uploadLogo")}
               </GhostButton>
               {logoUrl ? (
-                <GhostButton disabled={busy} onClick={() => void onRemoveLogo()}>הסרת לוגו</GhostButton>
+                <GhostButton disabled={busy} onClick={() => void onRemoveLogo()}>{t("settings.removeLogo")}</GhostButton>
               ) : null}
             </div>
           </div>
         </div>
-        <Field label="ח.פ / ע.מ">
+        <Field label={t("settings.taxId")}>
           <input className={inputClass} value={taxId} onChange={(event) => setTaxId(event.target.value)} />
         </Field>
-        <Field label="סוג העסק">
+        <Field label={t("settings.businessType")}>
           <select
             className={inputClass}
             value={knownBusinessType(legalType)}
             onChange={(event) => setLegalType(event.target.value)}
           >
-            <option value="">בחר סוג עסק</option>
+            <option value="">{t("settings.chooseType")}</option>
             {BUSINESS_LEGAL_TYPES.map((item) => (
               <option key={item} value={item}>{item}</option>
             ))}
           </select>
         </Field>
         {isOtherBusinessType(legalType) ? (
-          <Field label="סוג העסק — פירוט">
+          <Field label={t("settings.businessTypeDetail")}>
             <input
               className={inputClass}
               value={customBusinessType}
@@ -223,101 +235,123 @@ export function BusinessSettingsForm({
             />
           </Field>
         ) : null}
-        <Field label="טלפון"><input className={inputClass} value={phone} onChange={(event) => setPhone(event.target.value)} /></Field>
-        <Field label="אימייל"><input className={inputClass} type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></Field>
-        <Field label="כתובת"><input className={inputClass} value={address} onChange={(event) => setAddress(event.target.value)} /></Field>
-        <Field label="אתר אינטרנט"><input className={inputClass} value={website} onChange={(event) => setWebsite(event.target.value)} /></Field>
+        <Field label={t("settings.phone")}><input className={inputClass} value={phone} onChange={(event) => setPhone(event.target.value)} /></Field>
+        <Field label={t("settings.email")}><input className={inputClass} type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></Field>
+        <Field label={t("settings.address")}><input className={inputClass} value={address} onChange={(event) => setAddress(event.target.value)} /></Field>
+        <Field label={t("settings.website")}><input className={inputClass} value={website} onChange={(event) => setWebsite(event.target.value)} /></Field>
       </section>
 
       <section className="grid gap-3">
-        <h3 className="text-sm font-semibold text-slate-900">אודות העסק</h3>
-        <Field label="הסבר על העסק">
+        <h3 className="text-sm font-semibold text-slate-900">{t("settings.aboutTitle")}</h3>
+        <Field label={t("business.aboutHe")}>
           <textarea
             className={`${inputClass} min-h-36 py-3`}
-            placeholder="הסבר קצר על תחום הפעילות והשירותים של העסק"
+            placeholder={t("settings.aboutPlaceholder")}
             value={about}
             onChange={(event) => setAbout(event.target.value)}
+          />
+        </Field>
+        <Field label={t("business.aboutAr")}>
+          <textarea
+            className={`${inputClass} min-h-36 py-3`}
+            dir="rtl"
+            value={aboutAr}
+            onChange={(event) => setAboutAr(event.target.value)}
           />
         </Field>
       </section>
 
       <section className="grid gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-slate-900">שירותי העסק</h3>
+          <h3 className="text-sm font-semibold text-slate-900">{t("settings.services")}</h3>
           <GhostButton onClick={() => setServices((current) => [...current, emptyBusinessService(current.length)])}>
-            + הוסף שירות
+            {t("settings.addService")}
           </GhostButton>
         </div>
         {services.length ? services.map((service, index) => (
           <article key={service.id} className="grid gap-2 rounded-2xl border border-slate-200 p-3">
-            <Field label="שם השירות *">
+            <Field label={t("business.serviceNameHe")}>
               <input
                 className={inputClass}
                 value={service.name}
-                placeholder="לדוגמה: בניית אתרים"
                 onChange={(event) => updateService(service.id, { name: event.target.value })}
               />
             </Field>
-            <Field label="תיאור">
+            <Field label={t("business.serviceNameAr")}>
+              <input
+                className={inputClass}
+                dir="rtl"
+                value={service.nameAr || ""}
+                onChange={(event) => updateService(service.id, { nameAr: event.target.value })}
+              />
+            </Field>
+            <Field label={t("business.serviceDescHe")}>
               <textarea
                 className={`${inputClass} min-h-20 py-2`}
                 value={service.description}
-                placeholder="לדוגמה: פיתוח אתרי תדמית וחנויות אינטרנטיות"
                 onChange={(event) => updateService(service.id, { description: event.target.value })}
+              />
+            </Field>
+            <Field label={t("business.serviceDescAr")}>
+              <textarea
+                className={`${inputClass} min-h-20 py-2`}
+                dir="rtl"
+                value={service.descriptionAr || ""}
+                onChange={(event) => updateService(service.id, { descriptionAr: event.target.value })}
               />
             </Field>
             <div className="flex flex-wrap gap-2">
               <GhostButton disabled={index === 0} onClick={() => moveService(index, -1)}>
-                <span className="inline-flex items-center gap-1"><ArrowUp className="h-4 w-4" /> למעלה</span>
+                <span className="inline-flex items-center gap-1"><ArrowUp className="h-4 w-4" /> {t("settings.up")}</span>
               </GhostButton>
               <GhostButton disabled={index === services.length - 1} onClick={() => moveService(index, 1)}>
-                <span className="inline-flex items-center gap-1"><ArrowDown className="h-4 w-4" /> למטה</span>
+                <span className="inline-flex items-center gap-1"><ArrowDown className="h-4 w-4" /> {t("settings.down")}</span>
               </GhostButton>
               <GhostButton onClick={() => setServices((current) => current.filter((item) => item.id !== service.id).map((item, order) => ({ ...item, order })))}>
-                <span className="inline-flex items-center gap-1"><Trash2 className="h-4 w-4" /> מחיקה</span>
+                <span className="inline-flex items-center gap-1"><Trash2 className="h-4 w-4" /> {t("common.delete")}</span>
               </GhostButton>
             </div>
           </article>
-        )) : <p className="text-sm text-slate-500">אין שירותים עדיין. הוסיפו שירות כדי שיופיע בהצעות ובחוזים.</p>}
+        )) : <p className="text-sm text-slate-500">{t("settings.noServices")}</p>}
       </section>
 
       <section className="grid gap-3">
-        <h3 className="text-sm font-semibold text-slate-900">מיתוג</h3>
+        <h3 className="text-sm font-semibold text-slate-900">{t("settings.branding")}</h3>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="צבע ראשי"><input className={inputClass} value={primaryColor} onChange={(event) => setPrimaryColor(event.target.value)} /></Field>
-          <Field label="צבע משני"><input className={inputClass} value={secondaryColor} onChange={(event) => setSecondaryColor(event.target.value)} /></Field>
+          <Field label={t("settings.primaryColor")}><input className={inputClass} value={primaryColor} onChange={(event) => setPrimaryColor(event.target.value)} /></Field>
+          <Field label={t("settings.secondaryColor")}><input className={inputClass} value={secondaryColor} onChange={(event) => setSecondaryColor(event.target.value)} /></Field>
         </div>
-        <Field label="מע״מ (%)">
+        <Field label={t("settings.vat")}>
           <input className={inputClass} inputMode="decimal" value={vatPercent} onChange={(event) => setVatPercent(event.target.value)} />
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="אזור זמן"><input className={inputClass} value={timezone} onChange={(event) => setTimezone(event.target.value)} /></Field>
-          <Field label="שפה">
+          <Field label={t("settings.timezone")}><input className={inputClass} value={timezone} onChange={(event) => setTimezone(event.target.value)} /></Field>
+          <Field label={t("settings.language")}>
             <select className={inputClass} value={language} onChange={(event) => setLanguage(event.target.value === "ar" ? "ar" : "he")}>
-              <option value="he">עברית</option>
-              <option value="ar">العربية</option>
+              <option value="he">{t("common.hebrew")}</option>
+              <option value="ar">{t("common.arabic")}</option>
             </select>
           </Field>
         </div>
         <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: primaryColor }}>
-          <p className="text-xs text-slate-500">תצוגת המסמך</p>
+          <p className="text-xs text-slate-500">{t("settings.documentPreview")}</p>
           <div className="mt-2 flex items-start gap-3">
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={logoUrl} alt="" className="h-12 w-12 object-contain" />
             ) : null}
             <div>
-              <p className="font-semibold" style={{ color: primaryColor }}>{name || "שם העסק"}</p>
+              <p className="font-semibold" style={{ color: primaryColor }}>{name || t("settings.businessName")}</p>
               {typeLabel ? <p className="text-xs text-slate-500">{typeLabel}</p> : null}
-              {taxId ? <p className="text-xs text-slate-500">ח.פ: {taxId}</p> : null}
+              {taxId ? <p className="text-xs text-slate-500">{t("settings.taxIdShort")}: {taxId}</p> : null}
             </div>
           </div>
         </div>
       </section>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      {saved ? <p className="text-sm text-emerald-700">הגדרות העסק נשמרו</p> : null}
-      <PrimaryButton disabled={busy} onClick={() => void save()}>שמור הגדרות העסק</PrimaryButton>
+      {saved ? <p className="text-sm text-emerald-700">{t("settings.saved")}</p> : null}
+      <PrimaryButton disabled={busy} onClick={() => void save()}>{t("settings.saveBusiness")}</PrimaryButton>
     </div>
   );
 }

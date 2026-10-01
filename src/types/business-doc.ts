@@ -49,6 +49,7 @@ export type BusinessDocumentRecord = {
   id: string;
   businessId: string;
   kind: BusinessDocKind;
+  language: "he" | "ar";
   number: string;
   title: string;
   intro: string;

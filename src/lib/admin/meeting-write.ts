@@ -168,6 +168,16 @@ export async function upsertMeeting(input: {
       title: `נוספת לפגישה חדשה: ${payload.title}`,
       body: `${payload.title}\n${when}`,
       href: "/meetings",
+      type: "meeting.created",
+      entityType: "meeting",
+      entityId: ref.id,
+      subject: "WEGO BIZ — נוספת לפגישה",
+      rows: [
+        { label: "פגישה", value: payload.title },
+        { label: "תאריך", value: resolvedDate },
+        { label: "שעה", value: `${resolvedStart}${payload.endTime ? `–${payload.endTime}` : ""}` },
+      ],
+      dedupeKey: `MEETING_CREATED:${ref.id}`,
     });
   } else if (status === "CANCELLED" && text(existing.status) !== "CANCELLED") {
     await notifyEmployees({
@@ -176,6 +186,11 @@ export async function upsertMeeting(input: {
       title: `הפגישה בוטלה: ${payload.title}`,
       body: `${payload.title}\n${when}`,
       href: "/meetings",
+      type: "meeting.cancelled",
+      entityType: "meeting",
+      entityId: ref.id,
+      subject: "WEGO BIZ — הפגישה בוטלה",
+      dedupeKey: `MEETING_CANCELLED:${ref.id}`,
     });
   } else {
     const added = participants.filter((employeeId) => !previousIds.includes(employeeId));
@@ -186,6 +201,11 @@ export async function upsertMeeting(input: {
         title: `נוספת לפגישה חדשה: ${payload.title}`,
         body: `${payload.title}\n${when}`,
         href: "/meetings",
+        type: "meeting.created",
+        entityType: "meeting",
+        entityId: ref.id,
+        subject: "WEGO BIZ — נוספת לפגישה",
+        dedupeKey: `MEETING_ADDED:${ref.id}:${added.join(",")}`,
       });
     }
     if (timeChanged) {
@@ -195,6 +215,9 @@ export async function upsertMeeting(input: {
         title: `עודכן זמן הפגישה: ${payload.title}`,
         body: `${payload.title}\n${when}`,
         href: "/meetings",
+        type: "meeting.rescheduled",
+        entityType: "meeting",
+        entityId: ref.id,
       });
     }
   }

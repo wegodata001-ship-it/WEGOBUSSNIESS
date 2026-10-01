@@ -4,10 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Users, Building2, Tags } from "lucide-react";
 import { BusinessSettingsForm } from "@/components/admin/business-settings-form";
+import { NotificationSettingsPanel } from "@/components/admin/notification-settings";
+import { TaskStatusesSettings } from "@/components/admin/task-statuses-settings";
 import { Field, GhostButton, Modal, PageHeader, PrimaryButton, StatusBadge, inputClass } from "@/components/admin/ui";
 import { ColorPicker } from "@/components/admin/form-chips";
 import { useAuth } from "@/components/providers/auth-provider";
 import { useBusinessContext } from "@/components/providers/business-context";
+import { useI18n } from "@/components/providers/i18n-provider";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@/components/ui/section-card";
 import { Spinner } from "@/components/ui/spinner";
@@ -16,27 +19,39 @@ import { categoriesForDepartment, departmentColorHex } from "@/lib/admin/departm
 import { departmentName, useBusinessCatalog } from "@/lib/admin/catalog";
 import { labelOf } from "@/lib/admin/labels";
 import type { CalendarColor } from "@/lib/admin/palette";
+import type { MessageKey } from "@/lib/i18n/types";
 import { BUSINESS_ROLES } from "@/types/roles";
 import type { Department } from "@/types/department";
 import type { Employee } from "@/types/employee";
 
-const TABS = ["צוות", "מחלקות", "קטגוריות", "הגדרות העסק"] as const;
+type SettingsTab = "team" | "departments" | "categories" | "statuses" | "mail" | "business";
 
-function mutationMessage(code: string) {
-  if (code === "PASSWORD_REQUIRED") return "יש להזין סיסמה";
-  if (code === "WEAK_PASSWORD") return "הסיסמה חייבת להכיל לפחות 6 תווים";
-  if (code === "AUTH_EMAIL_EXISTS") return "כבר קיים משתמש ב-Firebase עם האימייל הזה. העובד לא נוצר.";
-  if (code === "DUPLICATE_EMPLOYEE") return "עובד עם האימייל הזה כבר קיים";
-  if (code === "AUTH_CREATE_FAILED") return "יצירת המשתמש ב-Firebase נכשלה. העובד לא נוצר.";
-  if (code === "INVALID_EMAIL") return "כתובת האימייל אינה תקינה";
-  if (code === "FORBIDDEN") return "אין הרשאה לבצע פעולה זו";
-  if (code === "NAME_REQUIRED") return "יש להזין שם";
-  if (code === "EMAIL_REQUIRED") return "יש להזין אימייל";
-  if (code === "DUPLICATE_DEPARTMENT") return "מחלקה בשם זה כבר קיימת";
-  if (code === "DUPLICATE_CATEGORY") return "קטגוריה בשם זה כבר קיימת במחלקה";
-  if (code === "DEPARTMENT_IN_USE") return "לא ניתן למחוק מחלקה שמקושרת למשימות, עובדים או פרויקטים. אפשר להשבית אותה.";
-  if (code === "CATEGORY_IN_USE") return "קטגוריה זו משויכת לפרויקטים. יש להעביר אותם לפני המחיקה.";
-  return "הפעולה נכשלה";
+const TABS: Array<{ id: SettingsTab; key: MessageKey }> = [
+  { id: "team", key: "nav.team" },
+  { id: "departments", key: "nav.departments" },
+  { id: "categories", key: "settings.categories" },
+  { id: "statuses", key: "settings.statuses" },
+  { id: "mail", key: "settings.mailTab" },
+  { id: "business", key: "settings.businessTab" },
+];
+
+function mutationMessage(code: string, t: (key: MessageKey) => string) {
+  const map: Record<string, MessageKey> = {
+    PASSWORD_REQUIRED: "settings.passwordRequired",
+    WEAK_PASSWORD: "settings.weakPassword",
+    AUTH_EMAIL_EXISTS: "settings.authEmailExists",
+    DUPLICATE_EMPLOYEE: "settings.duplicateEmployee",
+    AUTH_CREATE_FAILED: "settings.authCreateFailed",
+    INVALID_EMAIL: "settings.invalidEmail",
+    FORBIDDEN: "settings.forbidden",
+    NAME_REQUIRED: "settings.employeeNameRequired",
+    EMAIL_REQUIRED: "settings.emailRequired",
+    DUPLICATE_DEPARTMENT: "settings.duplicateDepartment",
+    DUPLICATE_CATEGORY: "settings.duplicateCategory",
+    DEPARTMENT_IN_USE: "settings.departmentInUse",
+    CATEGORY_IN_USE: "settings.categoryInUse",
+  };
+  return t(map[code] ?? "common.failed");
 }
 
 type EmployeeDraft = {
@@ -61,6 +76,7 @@ const EMPTY_EMPLOYEE: EmployeeDraft = {
 };
 
 export function SettingsControlView() {
+  const { t, locale } = useI18n();
   const { business, permissions, membership } = useBusinessContext();
   const { refresh } = useAuth();
   const { data, loading, reload } = useBusinessCatalog(business?.id ?? null);
@@ -69,9 +85,29 @@ export function SettingsControlView() {
   const canTeam = permissions.includes("employees.manage") || owner;
   const canDept = permissions.includes("departments.manage") || owner;
   const canBiz = permissions.includes("settings.manage") || owner;
-  const tabs = TABS.filter((tab) => tab !== "הגדרות העסק" || canBiz);
+  const canStatuses = canBiz || canDept;
+  const tabs = TABS.filter((tab) =>
+    (tab.id !== "business" || canBiz)
+    && (tab.id !== "statuses" || canStatuses)
+    && (tab.id !== "mail" || canBiz)
+  );
+  const [mailBusy, setMailBusy] = useState(false);
+  const [mailStatus, setMailStatus] = useState<{
+    senderEmail?: string;
+    adminEmail?: string;
+    provider?: string;
+    reason?: string;
+    wegoSenderVerified?: boolean;
+  } | null>(null);
+  const [mailResult, setMailResult] = useState<{
+    ok: boolean;
+    message: string;
+    reason?: string;
+    to?: string;
+    messageId?: string;
+  } | null>(null);
 
-  const [tab, setTab] = useState<(typeof TABS)[number]>("צוות");
+  const [tab, setTab] = useState<SettingsTab>("team");
   const [employeeDraft, setEmployeeDraft] = useState<EmployeeDraft | null>(null);
   const [passwordDraft, setPasswordDraft] = useState<{ id: string; name: string; password: string } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -89,26 +125,46 @@ export function SettingsControlView() {
 
   useEffect(() => {
     if (searchParams.get("new") === "employee" && canTeam) {
-      setTab("צוות");
+      setTab("team");
       setEmployeeDraft({ ...EMPTY_EMPLOYEE });
     }
   }, [canTeam, searchParams]);
 
+  useEffect(() => {
+    if (tab !== "mail" || !business?.id || !canBiz) return;
+    void fetch(`/api/business/mail/test?businessId=${encodeURIComponent(business.id)}`, { credentials: "include" })
+      .then((response) => response.json())
+      .then((payload: {
+        config?: { senderEmail?: string; adminEmail?: string; provider?: string };
+        wegoSenderVerified?: boolean;
+        connection?: { reason?: string };
+      }) => {
+        setMailStatus({
+          senderEmail: payload.config?.senderEmail,
+          adminEmail: payload.config?.adminEmail,
+          provider: payload.config?.provider,
+          reason: payload.connection?.reason,
+          wegoSenderVerified: payload.wegoSenderVerified,
+        });
+      })
+      .catch(() => undefined);
+  }, [tab, business?.id, canBiz]);
+
   const employees = useMemo(() => data.employees, [data.employees]);
 
-  if (loading) return <Spinner label="טוען הגדרות…" />;
+  if (loading) return <Spinner label={t("common.loading")} />;
   if (!canTeam && !canDept && !canBiz) {
-    return <EmptyState icon={Users} title="אין הרשאה להגדרות ושליטה" />;
+    return <EmptyState icon={Users} title={t("empty.noAccess")} />;
   }
 
   async function saveEmployee() {
     if (!business?.id || !employeeDraft) return;
     if (!employeeDraft.displayName.trim() || !employeeDraft.email.trim()) {
-      setError(mutationMessage(!employeeDraft.displayName.trim() ? "NAME_REQUIRED" : "EMAIL_REQUIRED"));
+      setError(mutationMessage(!employeeDraft.displayName.trim() ? "NAME_REQUIRED" : "EMAIL_REQUIRED", t));
       return;
     }
     if (!employeeDraft.id && !employeeDraft.password) {
-      setError(mutationMessage("PASSWORD_REQUIRED"));
+      setError(mutationMessage("PASSWORD_REQUIRED", t));
       return;
     }
     setBusy(true);
@@ -135,7 +191,7 @@ export function SettingsControlView() {
       setShowPassword(false);
       await reload();
     } catch (caught) {
-      setError(mutationMessage(caught instanceof Error ? caught.message : ""));
+      setError(mutationMessage(caught instanceof Error ? caught.message : "", t));
     } finally {
       setBusy(false);
     }
@@ -155,7 +211,7 @@ export function SettingsControlView() {
       setPasswordDraft(null);
       setShowResetPassword(false);
     } catch (caught) {
-      setError(mutationMessage(caught instanceof Error ? caught.message : ""));
+      setError(mutationMessage(caught instanceof Error ? caught.message : "", t));
     } finally {
       setBusy(false);
     }
@@ -175,7 +231,7 @@ export function SettingsControlView() {
       setDeptColor("BLUE");
       await reload();
     } catch (caught) {
-      window.alert(mutationMessage(caught instanceof Error ? caught.message : ""));
+      window.alert(mutationMessage(caught instanceof Error ? caught.message : "", t));
     } finally {
       setBusy(false);
     }
@@ -194,7 +250,7 @@ export function SettingsControlView() {
       setCategoryDrafts((current) => ({ ...current, [department.id]: "" }));
       await reload();
     } catch (caught) {
-      window.alert(mutationMessage(caught instanceof Error ? caught.message : ""));
+      window.alert(mutationMessage(caught instanceof Error ? caught.message : "", t));
     } finally {
       setBusy(false);
     }
@@ -215,7 +271,7 @@ export function SettingsControlView() {
       setCatDept("");
       await reload();
     } catch (caught) {
-      window.alert(mutationMessage(caught instanceof Error ? caught.message : ""));
+      window.alert(mutationMessage(caught instanceof Error ? caught.message : "", t));
     } finally {
       setBusy(false);
     }
@@ -237,7 +293,7 @@ export function SettingsControlView() {
       if (error.message === "CATEGORY_IN_USE") {
         setReassign({ id: categoryId, name, count: error.count ?? count, moveTo: "" });
       } else {
-        window.alert(mutationMessage(error.message));
+        window.alert(mutationMessage(error.message, t));
       }
     } finally {
       setBusy(false);
@@ -257,7 +313,7 @@ export function SettingsControlView() {
       setReassign(null);
       await reload();
     } catch (caught) {
-      window.alert(mutationMessage(caught instanceof Error ? caught.message : ""));
+      window.alert(mutationMessage(caught instanceof Error ? caught.message : "", t));
     } finally {
       setBusy(false);
     }
@@ -278,31 +334,35 @@ export function SettingsControlView() {
     });
   }
 
+  function roleLabel(role: string) {
+    return t(`roles.${role}` as MessageKey);
+  }
+
   return (
     <div className="space-y-5">
-      <PageHeader title="הגדרות ושליטה" subtitle="ניהול צוות ומחלקות ממקום אחד. התפקיד של העובד קובע את ההרשאות." />
+      <PageHeader title={t("nav.settings")} subtitle={t("settings.subtitle")} />
       <div className="flex flex-wrap gap-2">
         {tabs.map((item) => (
           <button
-            key={item}
+            key={item.id}
             type="button"
-            onClick={() => setTab(item)}
-            className={`min-h-11 rounded-xl px-3 py-2 text-sm ${tab === item ? "bg-[var(--brand-primary)] text-white" : "bg-white text-slate-600"}`}
+            onClick={() => setTab(item.id)}
+            className={`min-h-11 rounded-xl px-3 py-2 text-sm ${tab === item.id ? "bg-[var(--brand-primary)] text-white" : "bg-white text-slate-600"}`}
           >
-            {item}
+            {t(item.key)}
           </button>
         ))}
       </div>
 
-      {tab === "צוות" && canTeam ? (
-        <SectionCard title="צוות" action={<PrimaryButton onClick={() => { setError(""); setShowPassword(false); setEmployeeDraft({ ...EMPTY_EMPLOYEE }); }}>+ הוסף עובד</PrimaryButton>}>
+      {tab === "team" && canTeam ? (
+        <SectionCard title={t("nav.team")} action={<PrimaryButton onClick={() => { setError(""); setShowPassword(false); setEmployeeDraft({ ...EMPTY_EMPLOYEE }); }}>{t("settings.addEmployee")}</PrimaryButton>}>
           {employees.length ? (
             <>
               <div className="hidden overflow-x-auto md:block">
                 <table className="min-w-full text-sm">
                   <thead className="text-xs text-slate-500">
                     <tr>
-                      {["שם", "אימייל", "טלפון", "מחלקה", "תפקיד", "סטטוס", "פעולות"].map((item) => <th key={item} className="py-2 text-start">{item}</th>)}
+                      {(["common.name", "common.email", "common.phone", "common.department", "common.role", "common.status", "common.actions"] as const).map((item) => <th key={item} className="py-2 text-start">{t(item)}</th>)}
                     </tr>
                   </thead>
                   <tbody>
@@ -315,11 +375,11 @@ export function SettingsControlView() {
                           <td className="py-2">{employee.email}</td>
                           <td className="py-2">{employee.phone || "—"}</td>
                           <td className="py-2">{departmentName(data.departments, employee.departmentId)}</td>
-                          <td className="py-2">{role}</td>
+                          <td className="py-2">{roleLabel(role)}</td>
                           <td className="py-2"><StatusBadge value={employee.status} label={labelOf(employee.status)} /></td>
                           <td className="py-2">
                             <div className="flex flex-wrap gap-1">
-                              <GhostButton onClick={() => openEdit(employee)}>עריכה</GhostButton>
+                              <GhostButton onClick={() => openEdit(employee)}>{t("common.edit")}</GhostButton>
                               <GhostButton onClick={() => {
                                 if (!business?.id) return;
                                 void mutateBusiness({
@@ -332,9 +392,9 @@ export function SettingsControlView() {
                                     role,
                                   },
                                 }).then(reload);
-                              }}>{employee.status === "ACTIVE" ? "השבתה" : "הפעלה"}</GhostButton>
+                              }}>{employee.status === "ACTIVE" ? t("common.deactivate") : t("common.activate")}</GhostButton>
                               <GhostButton onClick={() => { setError(""); setShowResetPassword(false); setPasswordDraft({ id: employee.id, name: employee.displayName, password: "" }); }}>
-                                איפוס סיסמה
+                                {t("settings.resetPassword")}
                               </GhostButton>
                             </div>
                           </td>
@@ -352,9 +412,9 @@ export function SettingsControlView() {
                     <article key={employee.id} className="rounded-2xl border border-slate-200 p-3">
                       <p className="font-medium">{employee.displayName}</p>
                       <p className="text-xs text-slate-500">{employee.email}</p>
-                      <p className="mt-1 text-xs text-slate-500">{departmentName(data.departments, employee.departmentId)} · {role}</p>
+                      <p className="mt-1 text-xs text-slate-500">{departmentName(data.departments, employee.departmentId)} · {roleLabel(role)}</p>
                       <div className="mt-3 flex flex-wrap gap-1">
-                        <GhostButton onClick={() => openEdit(employee)}>עריכה</GhostButton>
+                        <GhostButton onClick={() => openEdit(employee)}>{t("common.edit")}</GhostButton>
                         <GhostButton onClick={() => {
                           if (!business?.id) return;
                           void mutateBusiness({
@@ -363,9 +423,9 @@ export function SettingsControlView() {
                             id: employee.id,
                             data: { displayName: employee.displayName, status: employee.status === "ACTIVE" ? "INACTIVE" : "ACTIVE", role },
                           }).then(reload);
-                        }}>{employee.status === "ACTIVE" ? "השבתה" : "הפעלה"}</GhostButton>
+                        }}>{employee.status === "ACTIVE" ? t("common.deactivate") : t("common.activate")}</GhostButton>
                         <GhostButton onClick={() => { setError(""); setShowResetPassword(false); setPasswordDraft({ id: employee.id, name: employee.displayName, password: "" }); }}>
-                          איפוס סיסמה
+                          {t("settings.resetPassword")}
                         </GhostButton>
                       </div>
                     </article>
@@ -373,12 +433,12 @@ export function SettingsControlView() {
                 })}
               </div>
             </>
-          ) : <EmptyState icon={Users} title="אין עובדים להצגה" />}
+          ) : <EmptyState icon={Users} title={t("empty.employees")} />}
         </SectionCard>
       ) : null}
 
-      {tab === "מחלקות" && canDept ? (
-        <SectionCard title="מחלקות" action={<PrimaryButton onClick={() => setOpenDept(true)}>+ מחלקה</PrimaryButton>}>
+      {tab === "departments" && canDept ? (
+        <SectionCard title={t("nav.departments")} action={<PrimaryButton onClick={() => setOpenDept(true)}>{t("settings.addDepartment")}</PrimaryButton>}>
           {data.departments.length ? data.departments.map((item) => {
             const categories = categoriesForDepartment(data.departmentCategories, item.id, { includeInactive: true });
             return (
@@ -389,7 +449,7 @@ export function SettingsControlView() {
                       <span className="h-3 w-3 rounded-full" style={{ background: departmentColorHex(item.color) }} />
                       <p className="font-medium">{item.name}</p>
                     </div>
-                    <p className="text-xs text-slate-500">{item.isActive ? "פעילה" : "מושבתת"} · {categories.length} קטגוריות</p>
+                    <p className="text-xs text-slate-500">{item.isActive ? t("common.active") : t("common.inactive")} · {t("settings.categoryCount", { count: String(categories.length) })}</p>
                     <div className="mt-2">
                       <ColorPicker
                         value={item.color}
@@ -407,42 +467,42 @@ export function SettingsControlView() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <GhostButton onClick={() => {
-                      const next = window.prompt("שם מחלקה", item.name);
+                      const next = window.prompt(t("settings.departmentNamePrompt"), item.name);
                       if (!next || !business?.id) return;
                       void mutateBusiness({ businessId: business.id, action: "updateDepartment", id: item.id, data: { name: next, isActive: item.isActive, color: item.color } })
                         .then(reload)
-                        .catch((caught: Error) => window.alert(mutationMessage(caught.message)));
-                    }}>עריכה</GhostButton>
+                        .catch((caught: Error) => window.alert(mutationMessage(caught.message, t)));
+                    }}>{t("common.edit")}</GhostButton>
                     <GhostButton onClick={() => {
                       if (!business?.id) return;
                       void mutateBusiness({ businessId: business.id, action: "updateDepartment", id: item.id, data: { name: item.name, isActive: !item.isActive, color: item.color } }).then(reload);
-                    }}>{item.isActive ? "השבתה" : "הפעלה"}</GhostButton>
+                    }}>{item.isActive ? t("common.deactivate") : t("common.activate")}</GhostButton>
                     <GhostButton onClick={() => {
                       if (!business?.id) return;
                       void mutateBusiness({ businessId: business.id, action: "deleteDepartment", id: item.id })
                         .then(reload)
-                        .catch((caught: Error) => window.alert(mutationMessage(caught.message)));
-                    }}>מחיקה</GhostButton>
+                        .catch((caught: Error) => window.alert(mutationMessage(caught.message, t)));
+                    }}>{t("common.delete")}</GhostButton>
                   </div>
                 </div>
                 <div className="mt-3 rounded-2xl bg-slate-50 p-3">
-                  <p className="mb-2 text-xs font-medium text-slate-500">קטגוריות / תתי-מחלקות</p>
+                  <p className="mb-2 text-xs font-medium text-slate-500">{t("settings.subcategories")}</p>
                   <div className="grid gap-2">
                     {categories.map((category) => (
                       <div key={category.id} className="flex flex-col gap-2 rounded-xl bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-sm">{category.name}</p>
                         <div className="flex flex-wrap gap-1">
-                          <StatusBadge value={category.isActive ? "ACTIVE" : "INACTIVE"} label={category.isActive ? "פעיל" : "לא פעיל"} />
+                          <StatusBadge value={category.isActive ? "ACTIVE" : "INACTIVE"} label={category.isActive ? t("common.active") : t("common.inactive")} />
                           <GhostButton onClick={() => {
-                            const next = window.prompt("שם קטגוריה", category.name);
+                            const next = window.prompt(t("settings.categoryNamePrompt"), category.name);
                             if (!next || !business?.id) return;
                             void mutateBusiness({
                               businessId: business.id,
                               action: "updateDepartmentCategory",
                               id: category.id,
                               data: { name: next, departmentId: item.id, isActive: category.isActive, color: category.color },
-                            }).then(reload).catch((caught: Error) => window.alert(mutationMessage(caught.message)));
-                          }}>עריכה</GhostButton>
+                            }).then(reload).catch((caught: Error) => window.alert(mutationMessage(caught.message, t)));
+                          }}>{t("common.edit")}</GhostButton>
                           <GhostButton onClick={() => {
                             if (!business?.id) return;
                             void mutateBusiness({
@@ -451,35 +511,35 @@ export function SettingsControlView() {
                               id: category.id,
                               data: { name: category.name, departmentId: item.id, isActive: !category.isActive, color: category.color },
                             }).then(reload);
-                          }}>{category.isActive ? "השבתה" : "הפעלה"}</GhostButton>
-                          <GhostButton onClick={() => void requestDeleteCategory(category.id, category.name)}>מחיקה</GhostButton>
+                          }}>{category.isActive ? t("common.deactivate") : t("common.activate")}</GhostButton>
+                          <GhostButton onClick={() => void requestDeleteCategory(category.id, category.name)}>{t("common.delete")}</GhostButton>
                         </div>
                       </div>
                     ))}
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <input
                         className={inputClass}
-                        placeholder="שם קטגוריה"
+                        placeholder={t("settings.categoryNamePrompt")}
                         value={categoryDrafts[item.id] ?? ""}
                         onChange={(event) => setCategoryDrafts((current) => ({ ...current, [item.id]: event.target.value }))}
                       />
-                      <PrimaryButton disabled={busy} onClick={() => void addCategory(item)}>+ הוסף קטגוריה</PrimaryButton>
+                      <PrimaryButton disabled={busy} onClick={() => void addCategory(item)}>{t("settings.addCategory")}</PrimaryButton>
                     </div>
                   </div>
                 </div>
               </div>
             );
-          }) : <EmptyState icon={Building2} title="אין מחלקות מוגדרות" />}
+          }) : <EmptyState icon={Building2} title={t("empty.departments")} />}
         </SectionCard>
       ) : null}
 
-      {tab === "קטגוריות" && canDept ? (
-        <SectionCard title="קטגוריות" action={<PrimaryButton onClick={() => setOpenCategory(true)}>+ הוסף קטגוריה</PrimaryButton>}>
+      {tab === "categories" && canDept ? (
+        <SectionCard title={t("settings.categories")} action={<PrimaryButton onClick={() => setOpenCategory(true)}>{t("settings.addCategory")}</PrimaryButton>}>
           {data.departmentCategories.length ? (
             <div className="grid gap-2">
               {data.departmentCategories
                 .slice()
-                .sort((left, right) => left.name.localeCompare(right.name, "he"))
+                .sort((left, right) => left.name.localeCompare(right.name, locale))
                 .map((category) => {
                   const used = data.projects.filter((item) => item.categoryId === category.id).length;
                   return (
@@ -487,20 +547,20 @@ export function SettingsControlView() {
                       <div>
                         <p className="font-medium">{category.name}</p>
                         <p className="text-xs text-slate-500">
-                          {departmentName(data.departments, category.departmentId)} · {used} פרויקטים · {category.isActive ? "פעיל" : "לא פעיל"}
+                          {departmentName(data.departments, category.departmentId)} · {t("settings.projectCount", { count: String(used) })} · {category.isActive ? t("common.active") : t("common.inactive")}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-1">
                         <GhostButton onClick={() => {
-                          const next = window.prompt("שם קטגוריה", category.name);
+                          const next = window.prompt(t("settings.categoryNamePrompt"), category.name);
                           if (!next || !business?.id) return;
                           void mutateBusiness({
                             businessId: business.id,
                             action: "updateDepartmentCategory",
                             id: category.id,
                             data: { name: next, departmentId: category.departmentId, isActive: category.isActive, color: category.color },
-                          }).then(reload).catch((caught: Error) => window.alert(mutationMessage(caught.message)));
-                        }}>עריכה</GhostButton>
+                          }).then(reload).catch((caught: Error) => window.alert(mutationMessage(caught.message, t)));
+                        }}>{t("common.edit")}</GhostButton>
                         <GhostButton onClick={() => {
                           if (!business?.id) return;
                           void mutateBusiness({
@@ -509,19 +569,142 @@ export function SettingsControlView() {
                             id: category.id,
                             data: { name: category.name, departmentId: category.departmentId, isActive: !category.isActive, color: category.color },
                           }).then(reload);
-                        }}>{category.isActive ? "השבתה" : "הפעלה"}</GhostButton>
-                        <GhostButton onClick={() => void requestDeleteCategory(category.id, category.name)}>מחיקה</GhostButton>
+                        }}>{category.isActive ? t("common.deactivate") : t("common.activate")}</GhostButton>
+                        <GhostButton onClick={() => void requestDeleteCategory(category.id, category.name)}>{t("common.delete")}</GhostButton>
                       </div>
                     </div>
                   );
                 })}
             </div>
-          ) : <EmptyState icon={Tags} title="אין קטגוריות מוגדרות" />}
+          ) : <EmptyState icon={Tags} title={t("empty.categories")} />}
         </SectionCard>
       ) : null}
 
-      {tab === "הגדרות העסק" && canBiz && business ? (
-        <SectionCard title="הגדרות העסק">
+      {tab === "statuses" && canStatuses && business?.id ? (
+        <SectionCard title={t("settings.statuses")}>
+          <TaskStatusesSettings
+            statuses={data.taskStatuses}
+            busy={busy}
+            onSave={async (input) => {
+              setBusy(true);
+              setError("");
+              const response = await fetch("/api/business/task-statuses", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ businessId: business.id, id: input.id, data: input }),
+              });
+              const payload = await response.json().catch(() => ({})) as { error?: string };
+              setBusy(false);
+              if (!response.ok || payload.error) {
+                setError(mutationMessage(payload.error || "FORBIDDEN", t));
+                return;
+              }
+              await reload({ silent: true });
+            }}
+            onReorder={async (ids) => {
+              await fetch("/api/business/task-statuses", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ businessId: business.id, action: "reorder", ids }),
+              });
+              await reload({ silent: true });
+            }}
+          />
+        </SectionCard>
+      ) : null}
+
+      {tab === "mail" && canBiz && business?.id ? (
+        <SectionCard title={t("settings.mailTab")}>
+          <p className="mb-4 text-sm text-slate-600">{t("settings.mailSubtitle")}</p>
+          <div className="mb-4 space-y-1 text-sm text-slate-700">
+            <p>{t("settings.mailProvider")}: Brevo</p>
+            <p>{t("settings.mailSender")}: {mailStatus?.senderEmail || "—"}</p>
+            <p>{t("settings.mailAdmin")}: {mailStatus?.adminEmail || "wego.biz24@gmail.com"}</p>
+            <p>{t("settings.mailRecipient")}: abulieltasneem23@gmail.com</p>
+            {mailStatus?.reason === "IP_ALLOWLIST" ? (
+              <p className="text-rose-700">{t("settings.mailIpBlocked")}</p>
+            ) : mailStatus?.reason === "WEGO_EMAIL_SENDER_NOT_CONFIGURED" || mailStatus?.reason === "SENDER_NOT_VERIFIED" ? (
+              <p className="text-rose-700">{t("settings.mailSenderMissing")}</p>
+            ) : mailStatus?.reason === "AUTH_FAILED" ? (
+              <p className="text-rose-700">{t("settings.mailAuthFailed")}</p>
+            ) : mailStatus?.reason === "MAIL_NOT_CONFIGURED" ? (
+              <p className="text-rose-700">{t("settings.mailNotConfigured")}</p>
+            ) : null}
+          </div>
+          <PrimaryButton
+            disabled={mailBusy}
+            onClick={() => {
+              void (async () => {
+                setMailBusy(true);
+                setMailResult(null);
+                if (!mailStatus) {
+                  const statusRes = await fetch(`/api/business/mail/test?businessId=${encodeURIComponent(business.id)}`, { credentials: "include" });
+                  const statusPayload = await statusRes.json().catch(() => ({})) as {
+                    config?: { senderEmail?: string; adminEmail?: string; provider?: string };
+                    wegoSenderVerified?: boolean;
+                    connection?: { reason?: string };
+                  };
+                  setMailStatus({
+                    senderEmail: statusPayload.config?.senderEmail,
+                    adminEmail: statusPayload.config?.adminEmail,
+                    provider: statusPayload.config?.provider,
+                    reason: statusPayload.connection?.reason,
+                    wegoSenderVerified: statusPayload.wegoSenderVerified,
+                  });
+                }
+                const response = await fetch("/api/business/mail/test", {
+                  method: "POST",
+                  credentials: "include",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ businessId: business.id }),
+                });
+                const payload = await response.json().catch(() => ({})) as {
+                  ok?: boolean;
+                  messageId?: string;
+                  to?: string;
+                  reason?: string;
+                  error?: string;
+                };
+                setMailBusy(false);
+                const reason = payload.reason || payload.error || "";
+                const reasonText = reason === "IP_ALLOWLIST" ? t("settings.mailIpBlocked")
+                  : reason === "SENDER_NOT_VERIFIED" || reason === "WEGO_EMAIL_SENDER_NOT_CONFIGURED" ? t("settings.mailSenderMissing")
+                    : reason === "AUTH_FAILED" ? t("settings.mailAuthFailed")
+                      : reason === "MAIL_NOT_CONFIGURED" ? t("settings.mailNotConfigured")
+                        : t("settings.testMailFailed");
+                setMailResult({
+                  ok: Boolean(response.ok && payload.ok && payload.messageId),
+                  message: response.ok && payload.ok && payload.messageId ? t("settings.testMailSent") : t("settings.testMailFailed"),
+                  reason: reasonText,
+                  to: payload.to,
+                  messageId: payload.messageId,
+                });
+              })();
+            }}
+          >
+            {t("settings.sendTestMail")}
+          </PrimaryButton>
+          {mailResult ? (
+            <div className={`mt-4 space-y-1 text-sm ${mailResult.ok ? "text-emerald-700" : "text-rose-700"}`}>
+              <p className="font-medium">{mailResult.message}</p>
+              {mailResult.to ? <p>{t("settings.mailRecipient")}: {mailResult.to}</p> : null}
+              {mailResult.ok && mailResult.messageId ? <p>{t("settings.mailMessageId")}: {mailResult.messageId}</p> : null}
+              {!mailResult.ok && mailResult.reason ? <p>{t("settings.mailReason")}: {mailResult.reason}</p> : null}
+            </div>
+          ) : null}
+          <div className="mt-8 border-t border-slate-200 pt-6">
+            <NotificationSettingsPanel
+              businessId={business.id}
+              employees={employees.map((item) => ({ id: item.id, displayName: item.displayName, email: item.email }))}
+            />
+          </div>
+        </SectionCard>
+      ) : null}
+
+      {tab === "business" && canBiz && business ? (
+        <SectionCard title={t("settings.businessTab")}>
           <div className="max-w-xl">
             <BusinessSettingsForm
               business={business}
@@ -535,14 +718,14 @@ export function SettingsControlView() {
       ) : null}
 
       {employeeDraft ? (
-        <Modal title={employeeDraft.id ? "עריכת עובד" : "הוספת עובד"} onClose={() => setEmployeeDraft(null)}>
+        <Modal title={employeeDraft.id ? t("settings.editEmployee") : t("settings.addEmployeeTitle")} onClose={() => setEmployeeDraft(null)}>
           <div className="grid gap-3">
-            <Field label="שם *"><input className={inputClass} value={employeeDraft.displayName} onChange={(event) => setEmployeeDraft({ ...employeeDraft, displayName: event.target.value })} /></Field>
-            <Field label="אימייל *">
+            <Field label={`${t("common.name")} *`}><input className={inputClass} value={employeeDraft.displayName} onChange={(event) => setEmployeeDraft({ ...employeeDraft, displayName: event.target.value })} /></Field>
+            <Field label={`${t("common.email")} *`}>
               <input className={inputClass} type="email" value={employeeDraft.email} disabled={Boolean(employeeDraft.id)} onChange={(event) => setEmployeeDraft({ ...employeeDraft, email: event.target.value })} />
             </Field>
             {!employeeDraft.id ? (
-              <Field label="סיסמה *">
+              <Field label={`${t("auth.password")} *`}>
                 <div className="flex gap-2">
                   <input
                     className={inputClass}
@@ -552,42 +735,42 @@ export function SettingsControlView() {
                     onChange={(event) => setEmployeeDraft({ ...employeeDraft, password: event.target.value })}
                   />
                   <GhostButton onClick={() => setShowPassword((value) => !value)}>
-                    {showPassword ? <span className="inline-flex items-center gap-1"><EyeOff className="h-4 w-4" /> הסתר</span> : <span className="inline-flex items-center gap-1"><Eye className="h-4 w-4" /> הצג</span>}
+                    {showPassword ? <span className="inline-flex items-center gap-1"><EyeOff className="h-4 w-4" /> {t("auth.hidePassword")}</span> : <span className="inline-flex items-center gap-1"><Eye className="h-4 w-4" /> {t("auth.showPassword")}</span>}
                   </GhostButton>
                 </div>
               </Field>
             ) : null}
-            <Field label="טלפון"><input className={inputClass} value={employeeDraft.phone} onChange={(event) => setEmployeeDraft({ ...employeeDraft, phone: event.target.value })} /></Field>
-            <Field label="מחלקה">
+            <Field label={t("common.phone")}><input className={inputClass} value={employeeDraft.phone} onChange={(event) => setEmployeeDraft({ ...employeeDraft, phone: event.target.value })} /></Field>
+            <Field label={t("common.department")}>
               <select className={inputClass} value={employeeDraft.departmentId} onChange={(event) => setEmployeeDraft({ ...employeeDraft, departmentId: event.target.value })}>
-                <option value="">ללא</option>
+                <option value="">{t("settings.none")}</option>
                 {data.departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             </Field>
-            <Field label="תפקיד">
+            <Field label={t("common.role")}>
               <select className={inputClass} value={employeeDraft.role} onChange={(event) => setEmployeeDraft({ ...employeeDraft, role: event.target.value })}>
-                {BUSINESS_ROLES.map((item) => <option key={item} value={item}>{item}</option>)}
+                {BUSINESS_ROLES.map((item) => <option key={item} value={item}>{roleLabel(item)}</option>)}
               </select>
             </Field>
-            <Field label="סטטוס">
+            <Field label={t("common.status")}>
               <select className={inputClass} value={employeeDraft.status} onChange={(event) => setEmployeeDraft({ ...employeeDraft, status: event.target.value as "ACTIVE" | "INACTIVE" })}>
-                <option value="ACTIVE">פעיל</option>
-                <option value="INACTIVE">לא פעיל</option>
+                <option value="ACTIVE">{t("status.ACTIVE")}</option>
+                <option value="INACTIVE">{t("status.INACTIVE")}</option>
               </select>
             </Field>
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
             <div className="flex justify-end gap-2">
-              <GhostButton onClick={() => setEmployeeDraft(null)}>ביטול</GhostButton>
-              <PrimaryButton disabled={busy} onClick={() => void saveEmployee()}>שמירה</PrimaryButton>
+              <GhostButton onClick={() => setEmployeeDraft(null)}>{t("common.cancel")}</GhostButton>
+              <PrimaryButton disabled={busy} onClick={() => void saveEmployee()}>{t("common.save")}</PrimaryButton>
             </div>
           </div>
         </Modal>
       ) : null}
 
       {passwordDraft ? (
-        <Modal title={`איפוס סיסמה · ${passwordDraft.name}`} onClose={() => setPasswordDraft(null)}>
+        <Modal title={`${t("settings.resetPassword")} · ${passwordDraft.name}`} onClose={() => setPasswordDraft(null)}>
           <div className="grid gap-3">
-            <Field label="סיסמה חדשה *">
+            <Field label={t("settings.newPassword")}>
               <div className="flex gap-2">
                 <input
                   className={inputClass}
@@ -597,69 +780,69 @@ export function SettingsControlView() {
                   onChange={(event) => setPasswordDraft({ ...passwordDraft, password: event.target.value })}
                 />
                 <GhostButton onClick={() => setShowResetPassword((value) => !value)}>
-                  {showResetPassword ? <span className="inline-flex items-center gap-1"><EyeOff className="h-4 w-4" /> הסתר</span> : <span className="inline-flex items-center gap-1"><Eye className="h-4 w-4" /> הצג</span>}
+                  {showResetPassword ? <span className="inline-flex items-center gap-1"><EyeOff className="h-4 w-4" /> {t("auth.hidePassword")}</span> : <span className="inline-flex items-center gap-1"><Eye className="h-4 w-4" /> {t("auth.showPassword")}</span>}
                 </GhostButton>
               </div>
             </Field>
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
             <div className="flex justify-end gap-2">
-              <GhostButton onClick={() => setPasswordDraft(null)}>ביטול</GhostButton>
-              <PrimaryButton disabled={busy} onClick={() => void savePassword()}>שמירה</PrimaryButton>
+              <GhostButton onClick={() => setPasswordDraft(null)}>{t("common.cancel")}</GhostButton>
+              <PrimaryButton disabled={busy} onClick={() => void savePassword()}>{t("common.save")}</PrimaryButton>
             </div>
           </div>
         </Modal>
       ) : null}
 
       {openDept ? (
-        <Modal title="מחלקה חדשה" onClose={() => setOpenDept(false)}>
+        <Modal title={t("settings.newDepartment")} onClose={() => setOpenDept(false)}>
           <div className="grid gap-3">
-            <Field label="שם"><input className={inputClass} value={deptName} onChange={(event) => setDeptName(event.target.value)} /></Field>
-            <Field label="צבע מחלקה">
+            <Field label={t("common.name")}><input className={inputClass} value={deptName} onChange={(event) => setDeptName(event.target.value)} /></Field>
+            <Field label={t("settings.departmentColor")}>
               <ColorPicker value={deptColor} onChange={setDeptColor} />
             </Field>
             <div className="flex justify-end gap-2">
-              <GhostButton onClick={() => setOpenDept(false)}>ביטול</GhostButton>
-              <PrimaryButton disabled={busy} onClick={() => void createDepartment()}>שמירה</PrimaryButton>
+              <GhostButton onClick={() => setOpenDept(false)}>{t("common.cancel")}</GhostButton>
+              <PrimaryButton disabled={busy} onClick={() => void createDepartment()}>{t("common.save")}</PrimaryButton>
             </div>
           </div>
         </Modal>
       ) : null}
 
       {openCategory ? (
-        <Modal title="קטגוריה חדשה" onClose={() => setOpenCategory(false)}>
+        <Modal title={t("settings.newCategory")} onClose={() => setOpenCategory(false)}>
           <div className="grid gap-3">
-            <Field label="שם *"><input className={inputClass} value={catName} onChange={(event) => setCatName(event.target.value)} /></Field>
-            <Field label="מחלקה *">
+            <Field label={`${t("common.name")} *`}><input className={inputClass} value={catName} onChange={(event) => setCatName(event.target.value)} /></Field>
+            <Field label={`${t("common.department")} *`}>
               <select className={inputClass} value={catDept} onChange={(event) => setCatDept(event.target.value)}>
-                <option value="">בחירת מחלקה</option>
+                <option value="">{t("settings.pickDepartment")}</option>
                 {data.departments.filter((item) => item.isActive).map((item) => (
                   <option key={item.id} value={item.id}>{item.name}</option>
                 ))}
               </select>
             </Field>
             <div className="flex justify-end gap-2">
-              <GhostButton onClick={() => setOpenCategory(false)}>ביטול</GhostButton>
-              <PrimaryButton disabled={busy || !catName.trim() || !catDept} onClick={() => void createGlobalCategory()}>שמירה</PrimaryButton>
+              <GhostButton onClick={() => setOpenCategory(false)}>{t("common.cancel")}</GhostButton>
+              <PrimaryButton disabled={busy || !catName.trim() || !catDept} onClick={() => void createGlobalCategory()}>{t("common.save")}</PrimaryButton>
             </div>
           </div>
         </Modal>
       ) : null}
 
       {reassign ? (
-        <Modal title="מחיקת קטגוריה" onClose={() => setReassign(null)}>
+        <Modal title={t("settings.deleteCategory")} onClose={() => setReassign(null)}>
           <div className="grid gap-3">
-            <p className="text-sm text-slate-700">קטגוריה זו משויכת ל-{reassign.count} פרויקטים</p>
-            <Field label="העבר פרויקטים לקטגוריה אחרת">
+            <p className="text-sm text-slate-700">{t("settings.categoryLinked", { count: String(reassign.count) })}</p>
+            <Field label={t("settings.moveProjects")}>
               <select className={inputClass} value={reassign.moveTo} onChange={(event) => setReassign({ ...reassign, moveTo: event.target.value })}>
-                <option value="">בחר קטגוריה</option>
+                <option value="">{t("settings.pickCategory")}</option>
                 {data.departmentCategories.filter((item) => item.id !== reassign.id && item.isActive).map((item) => (
                   <option key={item.id} value={item.id}>{item.name}</option>
                 ))}
               </select>
             </Field>
             <div className="flex justify-end gap-2">
-              <GhostButton onClick={() => setReassign(null)}>ביטול</GhostButton>
-              <PrimaryButton disabled={busy || !reassign.moveTo} onClick={() => void confirmReassign()}>העבר פרויקטים לקטגוריה אחרת</PrimaryButton>
+              <GhostButton onClick={() => setReassign(null)}>{t("common.cancel")}</GhostButton>
+              <PrimaryButton disabled={busy || !reassign.moveTo} onClick={() => void confirmReassign()}>{t("settings.moveProjects")}</PrimaryButton>
             </div>
           </div>
         </Modal>

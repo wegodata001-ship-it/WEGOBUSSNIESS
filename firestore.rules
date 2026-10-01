@@ -168,6 +168,11 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      match /notificationDeliveries/{deliveryId} {
+        allow read: if isSuperAdmin() || isOwnerOrManager(businessId);
+        allow write: if false;
+      }
+
       match /activityLogs/{logId} {
         allow read: if isSuperAdmin() || isOwnerOrManager(businessId);
         allow write: if false;

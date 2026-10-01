@@ -1,10 +1,9 @@
-import type { TaskPaymentStatus } from "@/types/payment";
+"use client";
 
-const LABELS: Record<TaskPaymentStatus, string> = {
-  UNPAID: "לא שולם",
-  PARTIALLY_PAID: "שולם חלקית",
-  PAID: "שולם",
-};
+import { useI18n } from "@/components/providers/i18n-provider";
+import { getI18nLocale, translate } from "@/lib/i18n";
+import { labelOf } from "@/lib/admin/labels";
+import type { TaskPaymentStatus } from "@/types/payment";
 
 const TONE: Record<TaskPaymentStatus, string> = {
   UNPAID: "bg-rose-50 text-rose-700",
@@ -13,12 +12,14 @@ const TONE: Record<TaskPaymentStatus, string> = {
 };
 
 export function paymentStatusLabel(status: TaskPaymentStatus | null) {
-  return status ? LABELS[status] : "לא הוגדר מחיר";
+  if (!status) return translate(getI18nLocale(), "work.noPrice");
+  return labelOf(status);
 }
 
 export function PaymentStatusBadge({ status }: { status: TaskPaymentStatus | null }) {
+  const { t } = useI18n();
   if (!status) {
-    return <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">לא הוגדר מחיר</span>;
+    return <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{t("work.noPrice")}</span>;
   }
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${TONE[status]}`}>{LABELS[status]}</span>;
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${TONE[status]}`}>{labelOf(status)}</span>;
 }

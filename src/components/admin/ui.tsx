@@ -1,9 +1,10 @@
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { shiftDateOnly, todayInTimeZone } from "@/lib/dates/format";
 import { statusTone } from "@/lib/admin/labels";
+import { useI18n } from "@/components/providers/i18n-provider";
 
 export function PageHeader({
   title,
@@ -17,8 +18,8 @@ export function PageHeader({
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">{title}</h1>
-        {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
+        <h1 className="page-title text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">{title}</h1>
+        {subtitle ? <p className="mt-1 text-sm text-slate-600">{subtitle}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
@@ -108,14 +109,22 @@ export function Modal({
   children: ReactNode;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 px-0 py-0 md:px-4 md:py-8">
-      <button type="button" className="absolute inset-0" aria-label="סגירה" onClick={onClose} />
+      <button type="button" className="absolute inset-0" aria-label={t("common.close")} onClick={onClose} />
       <div className="relative min-h-dvh w-full max-w-2xl rounded-none border-0 bg-white p-5 shadow-2xl md:min-h-0 md:rounded-3xl md:border md:border-slate-200 md:p-6">
         <div className="mb-5 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
           <button type="button" onClick={onClose} className="text-sm text-slate-500 hover:text-slate-800">
-            סגירה
+            {t("common.close")}
           </button>
         </div>
         {children}
@@ -131,6 +140,7 @@ export function DatePicker({
   value: string;
   onChange: (next: string) => void;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const monthStart = useMemo(() => `${value.slice(0, 7)}-01`, [value]);
   const [year, month] = monthStart.split("-").map(Number);
@@ -203,7 +213,7 @@ export function DatePicker({
               setOpen(false);
             }}
           >
-            היום
+            {t("common.today")}
           </button>
         </div>
       ) : null}
@@ -218,11 +228,12 @@ export function DateNav({
   value: string;
   onChange: (next: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <GhostButton onClick={() => onChange(shiftDateOnly(value, -1))}>יום קודם</GhostButton>
-      <GhostButton onClick={() => onChange(todayInTimeZone())}>היום</GhostButton>
-      <GhostButton onClick={() => onChange(shiftDateOnly(value, 1))}>יום הבא</GhostButton>
+      <GhostButton onClick={() => onChange(shiftDateOnly(value, -1))}>{t("board.previousDay")}</GhostButton>
+      <GhostButton onClick={() => onChange(todayInTimeZone())}>{t("common.today")}</GhostButton>
+      <GhostButton onClick={() => onChange(shiftDateOnly(value, 1))}>{t("board.nextDay")}</GhostButton>
       <div className="w-44">
         <DatePicker value={value} onChange={onChange} />
       </div>

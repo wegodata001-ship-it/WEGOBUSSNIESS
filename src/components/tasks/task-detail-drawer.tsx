@@ -20,6 +20,7 @@ import type { Employee } from "@/types/employee";
 import type { PaymentRecord } from "@/types/payment";
 import type { Task, TaskActivity, TaskComment } from "@/types/task";
 import { isDoneTaskStatus, isPendingApproval } from "@/types/task";
+import { useI18n } from "@/components/providers/i18n-provider";
 
 export function TaskDetailDrawer({
   task,
@@ -54,6 +55,7 @@ export function TaskDetailDrawer({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const { t } = useI18n();
   const people = taskParticipantIds(task);
   const [comments, setComments] = useState<TaskComment[]>([]);
   const [activity, setActivity] = useState<TaskActivity[]>([]);
@@ -166,25 +168,25 @@ export function TaskDetailDrawer({
       id: `a-${item.id}`,
       kind: "activity" as const,
       at: item.createdAt,
-      name: employeeName(employees, item.actorEmployeeId) !== "לא משויך"
+      name: employeeName(employees, item.actorEmployeeId) !== t("common.unassigned")
         ? employeeName(employees, item.actorEmployeeId)
-        : "מערכת",
+        : t("work.system"),
       text: item.message,
     })),
     ...comments.map((item) => ({
       id: `c-${item.id}`,
       kind: "comment" as const,
       at: item.createdAt,
-      name: employeeName(employees, item.authorEmployeeId) !== "לא משויך"
+      name: employeeName(employees, item.authorEmployeeId) !== t("common.unassigned")
         ? employeeName(employees, item.authorEmployeeId)
-        : item.legacyAuthorEmail || "לא משויך",
+        : item.legacyAuthorEmail || t("common.unassigned"),
       text: item.body,
     })),
   ].sort((left, right) => toTimestamp(left.at) - toTimestamp(right.at));
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40">
-      <button type="button" className="h-full flex-1" aria-label="סגירה" onClick={onClose} />
+      <button type="button" className="h-full flex-1" aria-label={t("common.close")} onClick={onClose} />
       <aside className="flex h-full w-full max-w-lg flex-col bg-white shadow-2xl">
         <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div>
@@ -199,33 +201,33 @@ export function TaskDetailDrawer({
               {task.startDate || task.scheduledDate || ""} {task.startTime || ""}{task.endTime ? ` - ${task.endTime}` : ""}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-50" aria-label="סגירה">
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-50" aria-label={t("common.close")}>
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
           <section className="space-y-1 text-sm text-slate-600">
-            {task.legacyCategory ? <p className="flex justify-between gap-3"><span>קטגוריה</span><span>{task.legacyCategory}</span></p> : null}
-            <p className="flex justify-between gap-3"><span>סטטוס אישור</span><span>{task.legacyApprovalStatus === "PENDING" ? "ממתין לאישור" : task.legacyApprovalStatus === "APPROVED" ? "מאושר" : isPendingApproval(task.status) ? "ממתין לאישור" : "—"}</span></p>
-            {task.createdAt ? <p className="flex justify-between gap-3"><span>נוצר</span><span>{dateTimeLabel(task.createdAt)}</span></p> : null}
-            {task.startDate ? <p className="flex justify-between gap-3"><span>התחלה</span><span>{task.startDate}{task.startTime ? ` ${task.startTime}` : ""}</span></p> : null}
-            {task.dueDate ? <p className="flex justify-between gap-3"><span>יעד</span><span>{task.dueDate}</span></p> : null}
-            {task.completedDate ? <p className="flex justify-between gap-3"><span>הושלם</span><span>{task.completedDate}</span></p> : null}
-            {task.estimatedHours != null ? <p className="flex justify-between gap-3"><span>שעות מתוכננות</span><span>{task.estimatedHours}</span></p> : null}
-            {task.legacyCreatorEmail ? <p className="flex justify-between gap-3"><span>יוצר</span><span dir="ltr">{task.legacyCreatorEmail}</span></p> : null}
-            {task.updatedAt ? <p className="flex justify-between gap-3"><span>עדכון אחרון</span><span>{dateTimeLabel(task.updatedAt)}</span></p> : null}
-            {task.recurrence ? <p className="flex justify-between gap-3"><span>חזרתיות</span><span>{task.recurrence}</span></p> : null}
+            {task.legacyCategory ? <p className="flex justify-between gap-3"><span>{t("common.category")}</span><span>{task.legacyCategory}</span></p> : null}
+            <p className="flex justify-between gap-3"><span>{t("work.approvalStatus")}</span><span>{task.legacyApprovalStatus === "PENDING" ? t("status.PENDING_APPROVAL") : task.legacyApprovalStatus === "APPROVED" ? t("status.APPROVED") : isPendingApproval(task.status) ? t("status.PENDING_APPROVAL") : "—"}</span></p>
+            {task.createdAt ? <p className="flex justify-between gap-3"><span>{t("common.created")}</span><span>{dateTimeLabel(task.createdAt)}</span></p> : null}
+            {task.startDate ? <p className="flex justify-between gap-3"><span>{t("common.start")}</span><span>{task.startDate}{task.startTime ? ` ${task.startTime}` : ""}</span></p> : null}
+            {task.dueDate ? <p className="flex justify-between gap-3"><span>{t("common.deadline")}</span><span>{task.dueDate}</span></p> : null}
+            {task.completedDate ? <p className="flex justify-between gap-3"><span>{t("common.done")}</span><span>{task.completedDate}</span></p> : null}
+            {task.estimatedHours != null ? <p className="flex justify-between gap-3"><span>{t("work.plannedHours")}</span><span>{task.estimatedHours}</span></p> : null}
+            {task.legacyCreatorEmail ? <p className="flex justify-between gap-3"><span>{t("work.creator")}</span><span dir="ltr">{task.legacyCreatorEmail}</span></p> : null}
+            {task.updatedAt ? <p className="flex justify-between gap-3"><span>{t("work.lastUpdate")}</span><span>{dateTimeLabel(task.updatedAt)}</span></p> : null}
+            {task.recurrence ? <p className="flex justify-between gap-3"><span>{t("work.recurrence")}</span><span>{task.recurrence}</span></p> : null}
           </section>
 
           <section>
-            <p className="text-xs font-medium text-slate-500">משתתפים</p>
+            <p className="text-xs font-medium text-slate-500">{t("work.participants")}</p>
             <div className="mt-2 space-y-2">
               {people.map((id) => (
                 <div key={id} className="flex items-center gap-2 text-sm">
                   <EmployeeAvatar name={employeeName(employees, id)} />
                   {employeeName(employees, id)}
-                  {id === currentEmployeeId ? <span className="text-xs text-slate-400">את/ה</span> : null}
+                  {id === currentEmployeeId ? <span className="text-xs text-slate-400">{t("work.you")}</span> : null}
                 </div>
               ))}
               {task.legacyAssignee ? <p className="text-xs text-slate-400" dir="ltr">{task.legacyAssignee}</p> : null}
@@ -234,14 +236,14 @@ export function TaskDetailDrawer({
 
           {canViewFinance ? (
             <section className="rounded-2xl border border-slate-200 p-3">
-              <p className="text-xs font-medium text-slate-500">כספים</p>
+              <p className="text-xs font-medium text-slate-500">{t("work.finance")}</p>
               {canSetPrice ? (
                 <label className="mt-2 block text-sm">
-                  <span className="mb-1 block text-slate-600">מחיר לפני מע״מ</span>
+                  <span className="mb-1 block text-slate-600">{t("work.priceBeforeVat")}</span>
                   <input className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm" value={priceDraft} onChange={(event) => setPriceDraft(event.target.value)} />
                 </label>
               ) : (
-                <p className="mt-2 text-sm">{task.priceBeforeVat === null ? "לא הוגדר מחיר" : formatIls(task.priceBeforeVat)}</p>
+                <p className="mt-2 text-sm">{task.priceBeforeVat === null ? t("work.noPrice") : formatIls(task.priceBeforeVat)}</p>
               )}
               {(() => {
                 const next = parseMoney(priceDraft);
@@ -252,18 +254,18 @@ export function TaskDetailDrawer({
                 };
                 return shown ? (
                   <div className="mt-2 space-y-1 text-sm text-slate-600">
-                    <p className="flex justify-between"><span>מע״מ</span><span>{formatIls(shown.vatAmount)}</span></p>
-                    <p className="flex justify-between"><span>מחיר כולל</span><span>{formatIls(shown.priceIncludingVat)}</span></p>
-                    <p className="flex justify-between"><span>שולם</span><span>{formatIls(task.paidAmount)}</span></p>
-                    <p className="flex justify-between"><span>יתרה</span><span>{formatIls(task.balanceDue)}</span></p>
+                    <p className="flex justify-between"><span>{t("work.vat")}</span><span>{formatIls(shown.vatAmount)}</span></p>
+                    <p className="flex justify-between"><span>{t("work.priceTotal")}</span><span>{formatIls(shown.priceIncludingVat)}</span></p>
+                    <p className="flex justify-between"><span>{t("work.paid")}</span><span>{formatIls(task.paidAmount)}</span></p>
+                    <p className="flex justify-between"><span>{t("work.balance")}</span><span>{formatIls(task.balanceDue)}</span></p>
                     <PaymentStatusBadge status={task.paymentStatus} />
                   </div>
                 ) : (
-                  <p className="mt-2 text-sm text-slate-400">לא הוגדר מחיר</p>
+                  <p className="mt-2 text-sm text-slate-400">{t("work.noPrice")}</p>
                 );
               })()}
               {isDoneTaskStatus(task.status) && (task.balanceDue ?? 0) > 0 ? (
-                <p className="mt-2 text-sm text-amber-700">המשימה הושלמה — נותרו {formatIls(task.balanceDue)} לתשלום</p>
+                <p className="mt-2 text-sm text-amber-700">{t("work.doneBalance", { amount: formatIls(task.balanceDue) })}</p>
               ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 {canSetPrice ? (
@@ -275,14 +277,14 @@ export function TaskDetailDrawer({
                       setBusy(false);
                       onChanged();
                     });
-                  }}>שמירת מחיר</GhostButton>
+                  }}>{t("work.savePrice")}</GhostButton>
                 ) : null}
                 {canReceivePayment && (task.balanceDue ?? 0) > 0 ? (
-                  <PrimaryButton onClick={() => setPayOpen(true)}>קבלת תשלום</PrimaryButton>
+                  <PrimaryButton onClick={() => setPayOpen(true)}>{t("work.receivePayment")}</PrimaryButton>
                 ) : null}
               </div>
               <div className="mt-4">
-                <p className="text-xs font-medium text-slate-500">היסטוריית תשלומים</p>
+                <p className="text-xs font-medium text-slate-500">{t("work.paymentHistory")}</p>
                 {payments.length ? payments.map((payment) => {
                   const allocated = payment.allocations.find((item) => item.taskId === task.id)?.amount ?? payment.amount;
                   const [year, month, day] = payment.paymentDate.split("-");
@@ -293,8 +295,8 @@ export function TaskDetailDrawer({
                       <p>{formatIls(allocated)}</p>
                       <p className="text-xs text-slate-500">
                         {labelOf(payment.paymentMethod)}
-                        {payment.reference ? ` · אסמכתא ${payment.reference}` : ""}
-                        {payment.status === "VOIDED" ? " · בוטל" : ""}
+                        {payment.reference ? ` · ${t("work.reference", { ref: payment.reference })}` : ""}
+                        {payment.status === "VOIDED" ? ` · ${t("work.voided")}` : ""}
                       </p>
                       {payment.createdByEmployeeId ? (
                         <p className="text-xs text-slate-500">{employeeName(employees, payment.createdByEmployeeId)}</p>
@@ -304,41 +306,41 @@ export function TaskDetailDrawer({
                           type="button"
                           className="mt-1 text-xs text-red-600"
                           onClick={() => {
-                            const reasonText = window.prompt("סיבת ביטול") ?? "";
+                            const reasonText = window.prompt(t("work.voidReason")) ?? "";
                             if (!reasonText.trim()) return;
                             void voidBusinessPayment({ businessId, paymentId: payment.id, reason: reasonText }).then(onChanged);
                           }}
                         >
-                          ביטול רישום
+                          {t("work.voidRecord")}
                         </button>
                       ) : null}
                     </div>
                   );
-                }) : <p className="mt-2 text-sm text-slate-400">אין תשלומים</p>}
-                <p className="mt-2 flex justify-between text-sm"><span>סה״כ שולם</span><span>{formatIls(task.paidAmount)}</span></p>
-                <p className="flex justify-between text-sm"><span>יתרה</span><span>{task.priceIncludingVat === null ? "—" : formatIls(task.balanceDue)}</span></p>
+                }) : <p className="mt-2 text-sm text-slate-400">{t("work.noPayments")}</p>}
+                <p className="mt-2 flex justify-between text-sm"><span>{t("work.totalPaid")}</span><span>{formatIls(task.paidAmount)}</span></p>
+                <p className="flex justify-between text-sm"><span>{t("work.balance")}</span><span>{task.priceIncludingVat === null ? "—" : formatIls(task.balanceDue)}</span></p>
               </div>
             </section>
           ) : null}
 
           {task.description ? (
             <section>
-              <p className="text-xs font-medium text-slate-500">תיאור המשימה</p>
+              <p className="text-xs font-medium text-slate-500">{t("work.taskDescription")}</p>
               <p className="mt-2 max-w-full whitespace-pre-wrap break-words text-sm leading-6 text-slate-700" dir="auto">{task.description}</p>
             </section>
           ) : null}
 
           {isPendingApproval(task.status) && canManage ? (
             <section className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
-              <p className="text-sm font-medium text-amber-900">ממתינה לאישור מנהל</p>
+              <p className="text-sm font-medium text-amber-900">{t("work.awaitingManager")}</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <PrimaryButton disabled={busy} onClick={() => void decide("approve")}>✓ אישור</PrimaryButton>
-                <GhostButton disabled={busy} onClick={() => setRejectOpen(true)}>✕ דחייה</GhostButton>
+                <PrimaryButton disabled={busy} onClick={() => void decide("approve")}>{t("work.approve")}</PrimaryButton>
+                <GhostButton disabled={busy} onClick={() => setRejectOpen(true)}>{t("work.reject")}</GhostButton>
               </div>
               {rejectOpen ? (
                 <div className="mt-3 space-y-2">
-                  <textarea className="h-20 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="סיבת דחייה" />
-                  <PrimaryButton disabled={busy} onClick={() => void decide("reject")}>אישור דחייה</PrimaryButton>
+                  <textarea className="h-20 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" value={reason} onChange={(event) => setReason(event.target.value)} placeholder={t("work.rejectReason")} />
+                  <PrimaryButton disabled={busy} onClick={() => void decide("reject")}>{t("work.confirmReject")}</PrimaryButton>
                 </div>
               ) : null}
             </section>
@@ -346,14 +348,14 @@ export function TaskDetailDrawer({
 
           {!isPendingApproval(task.status) && task.status !== "REJECTED" ? (
             <div className="flex flex-wrap gap-2">
-              {task.status !== "IN_PROGRESS" ? <GhostButton disabled={busy} onClick={() => void setStatus("IN_PROGRESS")}>בביצוע</GhostButton> : null}
-              {task.status !== "WAITING" ? <GhostButton disabled={busy} onClick={() => void setStatus("WAITING")}>בהמתנה</GhostButton> : null}
-              {task.status !== "COMPLETED" && task.status !== "DONE" ? <GhostButton disabled={busy} onClick={() => void setStatus("COMPLETED")}>הושלמה</GhostButton> : null}
+              {task.status !== "IN_PROGRESS" ? <GhostButton disabled={busy} onClick={() => void setStatus("IN_PROGRESS")}>{t("status.IN_PROGRESS")}</GhostButton> : null}
+              {task.status !== "WAITING" ? <GhostButton disabled={busy} onClick={() => void setStatus("WAITING")}>{t("status.WAITING")}</GhostButton> : null}
+              {task.status !== "COMPLETED" && task.status !== "DONE" ? <GhostButton disabled={busy} onClick={() => void setStatus("COMPLETED")}>{t("status.COMPLETED")}</GhostButton> : null}
             </div>
           ) : null}
 
           <section ref={chatRef}>
-            <p className="text-xs font-medium text-slate-500">שיחה / עדכונים</p>
+            <p className="text-xs font-medium text-slate-500">{t("work.chat")}</p>
             <div className="mt-3 space-y-3">
               {timeline.length ? timeline.map((item) => (
                 <div key={item.id} className={item.kind === "activity" ? "text-xs text-slate-500" : "rounded-2xl bg-slate-50 px-3 py-2"}>
@@ -367,7 +369,7 @@ export function TaskDetailDrawer({
                   <p className={item.kind === "comment" ? "mt-1 whitespace-pre-wrap break-words text-sm text-slate-800" : "mt-0.5"} dir="auto">{item.text}</p>
                 </div>
               )) : (
-                <p className="text-sm text-slate-400">אין פעילות עדיין</p>
+                <p className="text-sm text-slate-400">{t("work.noActivity")}</p>
               )}
             </div>
           </section>
@@ -389,7 +391,7 @@ export function TaskDetailDrawer({
               <textarea
                 value={body}
                 onChange={(event) => onBodyChange(event.target.value)}
-                placeholder="כתוב תגובה... השתמשו ב-@ לתיוג"
+                placeholder={t("work.commentPlaceholder")}
                 className="h-20 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#2563EB]"
               />
               <PrimaryButton disabled={busy || !body.trim()} onClick={() => void send()}>

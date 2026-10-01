@@ -6,7 +6,6 @@ import {
   CALENDAR_HOUR_START,
   MEETING_HOURS,
   PX_PER_HOUR,
-  WEEKDAY_LETTERS,
   addMinutesToTime,
   durationMinutes,
   minutesFromCalendarStart,
@@ -16,8 +15,8 @@ import {
 } from "@/lib/admin/meeting-time";
 import { employeeName } from "@/lib/admin/catalog";
 import type { CalendarEvent } from "@/lib/admin/calendar-events";
-import { colorClasses } from "@/lib/admin/palette";
-import { TASK_TYPE_LABELS } from "@/lib/admin/palette";
+import { useI18n } from "@/components/providers/i18n-provider";
+import { colorClasses, taskTypeLabel } from "@/lib/admin/palette";
 import type { Employee } from "@/types/employee";
 import type { Department, Project } from "@/types/department";
 import { departmentName, projectName } from "@/lib/admin/catalog";
@@ -64,6 +63,8 @@ export function MeetingTimeGrid({
   onSelect: (event: CalendarEvent) => void;
   onMove: (event: CalendarEvent, date: string, startTime: string, endTime: string) => void;
 }) {
+  const { t } = useI18n();
+  const weekLetters = [t("cal.sun"), t("cal.mon"), t("cal.tue"), t("cal.wed"), t("cal.thu"), t("cal.fri"), t("cal.sat")];
   const gridRef = useRef<HTMLDivElement>(null);
   const [clock, setClock] = useState(() => nowClock(timeZone));
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -156,7 +157,7 @@ export function MeetingTimeGrid({
             return (
               <div key={day} className={`border-s border-slate-100 px-2 py-3 text-center ${isToday ? "bg-sky-50" : ""}`}>
                 <p className={`text-xs ${isToday ? "font-semibold text-[var(--brand-primary)]" : "text-slate-500"}`}>
-                  {WEEKDAY_LETTERS[weekdayIndex(day)]}
+                  {weekLetters[weekdayIndex(day)]}
                 </p>
                 <p className={`mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-lg ${isToday ? "bg-[var(--brand-primary)] font-bold text-white" : "font-semibold text-slate-900"}`}>
                   {Number(day.slice(8))}
@@ -212,7 +213,7 @@ export function MeetingTimeGrid({
                 const tone = colorClasses(event.color);
                 const first = event.people[0] ? employeeName(employees, event.people[0]) : "";
                 const extra = Math.max(0, event.people.length - 1);
-                const typeLabel = TASK_TYPE_LABELS[event.type as keyof typeof TASK_TYPE_LABELS] ?? labelOf(event.type);
+                const typeLabel = taskTypeLabel(event.type) || labelOf(event.type);
                 return (
                   <article
                     key={`${event.kind}-${event.id}`}
@@ -244,18 +245,18 @@ export function MeetingTimeGrid({
                         type="button"
                         className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize"
                         onPointerDown={(pointer) => onBlockPointerDown(pointer, event, "resize")}
-                        aria-label="שינוי אורך"
+                        aria-label={t("meetings.resize")}
                       />
                     ) : null}
                     {hoverId === event.id ? (
                       <div className="absolute start-0 top-full z-30 mt-1 w-56 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-700 shadow-xl">
                         <p className="font-semibold text-slate-900">{event.title}</p>
                         <p className="mt-1" dir="ltr">{event.startTime}{event.endTime ? `–${event.endTime}` : ""}</p>
-                        <p>פרויקט: {projectName(projects, event.projectId)}</p>
-                        <p>מחלקה: {departmentName(departments, event.departmentId)}</p>
-                        <p>סוג: {typeLabel}</p>
-                        <p>משתתפים: {event.people.map((id) => employeeName(employees, id)).join(", ") || "—"}</p>
-                        <p>סטטוס: {labelOf(event.status)}</p>
+                        <p>{t("common.project")}: {projectName(projects, event.projectId)}</p>
+                        <p>{t("common.department")}: {departmentName(departments, event.departmentId)}</p>
+                        <p>{t("common.type")}: {typeLabel}</p>
+                        <p>{t("meetings.participants")}: {event.people.map((id) => employeeName(employees, id)).join(", ") || "—"}</p>
+                        <p>{t("common.status")}: {labelOf(event.status)}</p>
                       </div>
                     ) : null}
                   </article>

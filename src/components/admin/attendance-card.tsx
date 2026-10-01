@@ -18,11 +18,13 @@ export function AttendanceCard({
   employeeId,
   sessions,
   onChanged,
+  compact = false,
 }: {
   businessId: string;
   employeeId: string | null;
   sessions: WorkSession[];
   onChanged: () => Promise<void> | void;
+  compact?: boolean;
 }) {
   const { t } = useI18n();
   const open = openAttendanceFor(sessions, employeeId);
@@ -69,15 +71,70 @@ export function AttendanceCard({
 
   if (!employeeId) {
     return (
-      <section className="rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-        <h2 className="text-base font-semibold text-[#0F172A]">{t("attendance.workDay")}</h2>
-        <p className="mt-2 text-sm text-[#64748B]">{t("attendance.noEmployee")}</p>
+      <section className={`rounded-2xl border border-[#E2E8F0] bg-white ${compact ? "px-4 py-3" : "p-5"}`}>
+        <h2 className="text-sm font-semibold text-[#0F172A]">{t("attendance.workDay")}</h2>
+        <p className="mt-1 text-sm text-[#64748B]">{t("attendance.noEmployee")}</p>
+      </section>
+    );
+  }
+
+  if (compact) {
+    return (
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-[#0F172A]">{t("attendance.workDay")}</h2>
+          {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
+          {open ? (
+            <p className="mt-1 text-sm text-slate-600">
+              {t("work.start")}: <span className="tabular-nums font-medium text-[#0F172A]">{open.startTime || "—"}</span>
+              <span className="mx-2 text-slate-300">·</span>
+              {t("work.duration")}: <span className="tabular-nums font-medium text-[#0F172A]">{formatLiveDuration(open.startedAt, now)}</span>
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-[#64748B]">{t("attendance.notStarted")}</p>
+          )}
+        </div>
+        {open ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setConfirm(true)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#0F172A] px-3 text-sm font-medium text-white disabled:opacity-60"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            {t("attendance.clockOut")}
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void clockIn()}
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#2563EB] px-3 text-sm font-medium text-white disabled:opacity-60"
+          >
+            <LogIn className="h-3.5 w-3.5" />
+            {t("attendance.clockIn")}
+          </button>
+        )}
+        {confirm && open ? (
+          <Modal title={t("attendance.confirmTitle")} onClose={() => setConfirm(false)}>
+            <p className="text-sm text-slate-600">{t("attendance.confirmIn", { time: open.startTime || "—" })}</p>
+            <p className="mt-2 text-sm text-slate-600">
+              {t("attendance.confirmDuration", { time: formatHoursMinutes(sessionMinutes(open, now)) })}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <GhostButton onClick={() => setConfirm(false)}>{t("attendance.cancel")}</GhostButton>
+              <PrimaryButton disabled={busy} onClick={() => void clockOut()}>
+                {t("attendance.clockOut")}
+              </PrimaryButton>
+            </div>
+          </Modal>
+        ) : null}
       </section>
     );
   }
 
   return (
-    <section className="rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+    <section className="rounded-2xl border border-[#E2E8F0] bg-white p-5">
       <h2 className="text-base font-semibold text-[#0F172A]">{t("attendance.workDay")}</h2>
       {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
 

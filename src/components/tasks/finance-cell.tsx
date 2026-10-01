@@ -1,5 +1,7 @@
 "use client";
 
+import { useI18n } from "@/components/providers/i18n-provider";
+import { labelOf } from "@/lib/admin/labels";
 import { formatIls } from "@/lib/finance/money";
 import type { Task } from "@/types/task";
 
@@ -16,15 +18,16 @@ export function FinanceCell({
   onSetPrice?: () => void;
   onPay?: () => void;
 }) {
+  const { t } = useI18n();
   const priced = task.priceIncludingVat !== null;
 
   if (!priced) {
     if (!canSetPrice) {
-      return <span className="text-xs text-slate-400">לא הוגדר מחיר</span>;
+      return <span className="text-xs text-slate-400">{t("work.noPrice")}</span>;
     }
     return (
       <button type="button" onClick={onSetPrice} className="text-start text-sm font-medium text-[#2563EB] hover:underline">
-        + הגדרת סכום
+        + {t("work.setAmount")}
       </button>
     );
   }
@@ -41,11 +44,11 @@ export function FinanceCell({
         className="block text-start"
       >
         {unpaid ? (
-          <span className="text-xs font-medium text-rose-600">● לא שולם</span>
+          <span className="text-xs font-medium text-rose-600">● {labelOf("UNPAID")}</span>
         ) : partial ? (
-          <span className="text-xs font-medium text-amber-600">● יתרה {formatIls(task.balanceDue)}</span>
+          <span className="text-xs font-medium text-amber-600">● {t("work.balance")} {formatIls(task.balanceDue)}</span>
         ) : (
-          <span className="text-xs font-medium text-emerald-600">● שולם</span>
+          <span className="text-xs font-medium text-emerald-600">● {labelOf("PAID")}</span>
         )}
       </button>
     </div>

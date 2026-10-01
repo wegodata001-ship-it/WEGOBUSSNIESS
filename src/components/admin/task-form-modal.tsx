@@ -15,6 +15,7 @@ import type { Task, TaskWriteStatus } from "@/types/task";
 import type { TaskTemplate } from "@/types/task-template";
 import { labelOf } from "@/lib/admin/labels";
 import type { CalendarColor, TaskKind } from "@/lib/admin/palette";
+import { useI18n } from "@/components/providers/i18n-provider";
 
 export type TaskDraft = {
   id?: string;
@@ -36,6 +37,7 @@ export type TaskDraft = {
   templateId: string;
   saveToLibrary: boolean;
   freeText: boolean;
+  priceBeforeVat: string;
 };
 
 export function emptyTaskDraft(today: string, startTime = "09:00", endTime = "10:00"): TaskDraft {
@@ -58,6 +60,7 @@ export function emptyTaskDraft(today: string, startTime = "09:00", endTime = "10
     templateId: "",
     saveToLibrary: false,
     freeText: false,
+    priceBeforeVat: "",
   };
 }
 
@@ -82,6 +85,7 @@ export function draftFromTask(task: Task, today: string): TaskDraft {
     templateId: task.templateId ?? "",
     saveToLibrary: false,
     freeText: false,
+    priceBeforeVat: task.priceBeforeVat != null ? String(task.priceBeforeVat) : "",
   };
 }
 
@@ -107,6 +111,7 @@ export function taskDraftPayload(draft: TaskDraft) {
     status: draft.status,
     templateId: draft.templateId || null,
     saveToLibrary: draft.saveToLibrary,
+    ...(draft.priceBeforeVat.trim() ? { priceBeforeVat: Number(draft.priceBeforeVat) } : {}),
   };
 }
 
@@ -127,6 +132,7 @@ export function TaskFormModal({
   canEditTeam,
   canCreateProject,
   canCreateDepartment,
+  canSetPrice,
   onCatalogRefresh,
   error,
 }: {
@@ -146,9 +152,11 @@ export function TaskFormModal({
   canEditTeam: boolean;
   canCreateProject: boolean;
   canCreateDepartment: boolean;
+  canSetPrice?: boolean;
   onCatalogRefresh: () => Promise<void>;
   error?: string | null;
 }) {
+  const { t } = useI18n();
   const [quick, setQuick] = useState<"project" | "department" | null>(null);
   const [quickName, setQuickName] = useState("");
   const [quickClient, setQuickClient] = useState("");
@@ -244,7 +252,7 @@ export function TaskFormModal({
       setQuick(null);
     } catch (error) {
       const code = error instanceof Error ? error.message : "";
-      setQuickError(code === "DUPLICATE_PROJECT" || code === "DUPLICATE_DEPARTMENT" ? "שם זה כבר קיים בעסק" : "השמירה נכשלה");
+      setQuickError(code === "DUPLICATE_PROJECT" || code === "DUPLICATE_DEPARTMENT" ? t("work.duplicateName") : t("work.saveFailed"));
     } finally {
       setSavingQuick(false);
     }
@@ -252,12 +260,12 @@ export function TaskFormModal({
 
   return (
     <>
-      <Modal title={draft.id ? "עריכת משימה" : "משימה חדשה"} onClose={onClose}>
+      <Modal title={draft.id ? t("work.editTask") : t("work.newTaskFull")} onClose={onClose}>
         <div className="grid gap-4">
           {!replacing ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm text-slate-600">משימה נוכחית: <span className="font-medium text-slate-900">{draft.title || "—"}</span></p>
-              <GhostButton onClick={() => setReplacing(true)}>החלף משימה</GhostButton>
+              <p className="text-sm text-slate-600">{t("work.currentTask")}: <span className="font-medium text-slate-900">{draft.title || "—"}</span></p>
+              <GhostButton onClick={() => setReplacing(true)}>{t("work.replaceTask")}</GhostButton>
             </div>
           ) : (
             <TaskLibraryPicker
@@ -267,71 +275,76 @@ export function TaskFormModal({
               onFreeText={startFreeText}
             />
           )}
-          <Field label="שם המשימה *">
+          <Field label={`${t("docs.taskName")} *`}>
             <input className={inputClass} value={draft.title} onChange={(event) => onChange({ ...draft, title: event.target.value, templateId: draft.freeText ? "" : draft.templateId })} />
           </Field>
-          <Field label="תאריך">
+          <Field label={t("common.date")}>
             <DatePicker value={draft.startDate} onChange={(startDate) => onChange({ ...draft, startDate, dueDate: draft.dueDate || startDate })} />
           </Field>
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="שעת התחלה">
+            <Field label={t("work.startTime")}>
               <input className={inputClass} dir="ltr" value={draft.startTime} onChange={(event) => onChange({ ...draft, startTime: event.target.value })} />
             </Field>
-            <Field label="שעת סיום">
+            <Field label={t("work.endTime")}>
               <input className={inputClass} dir="ltr" value={draft.endTime} onChange={(event) => onChange({ ...draft, endTime: event.target.value })} />
             </Field>
           </div>
-          <Field label="משתתפים">
+          <Field label={t("work.participants")}>
             <EmployeeMultiSelect
               employees={employees}
               departments={departments}
               value={participants}
               disabled={Boolean(draft.id) && !canEditTeam}
-              placeholder="חפש והוסף עובד..."
+              placeholder={t("work.searchEmployee")}
               onChange={setParticipants}
             />
           </Field>
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="פרויקט">
+            <Field label={t("common.project")}>
               <ActionSelect
                 value={draft.projectId}
-                emptyLabel="בחר פרויקט"
+                emptyLabel={t("work.pickProject")}
                 options={projects.filter((item) => item.isActive || item.id === draft.projectId).map((item) => ({ id: item.id, label: item.name }))}
-                actionLabel="הוספת פרויקט חדש"
+                actionLabel={t("work.addProject")}
                 showAction={canCreateProject}
                 onChange={(projectId) => onChange({ ...draft, projectId })}
                 onAction={() => openQuick("project")}
               />
               {projectsError ? (
                 <p className="mt-1 text-sm text-red-600">
-                  {projectsError === "FORBIDDEN" ? "אין הרשאה לטעון פרויקטים" : "טעינת הפרויקטים נכשלה"}
+                  {projectsError === "FORBIDDEN" ? t("work.noProjectAccess") : t("work.projectsLoadFailed")}
                 </p>
               ) : !projects.some((item) => item.isActive || item.id === draft.projectId) ? (
-                <p className="mt-1 text-sm text-slate-500">אין פרויקטים זמינים</p>
+                <p className="mt-1 text-sm text-slate-500">{t("work.noProjectsAvailable")}</p>
               ) : null}
             </Field>
-            <Field label="מחלקה">
+            <Field label={t("common.department")}>
               <ActionSelect
                 value={draft.departmentId}
-                emptyLabel="בחר מחלקה"
+                emptyLabel={t("work.pickDepartment")}
                 options={departments.filter((item) => item.isActive || item.id === draft.departmentId).map((item) => ({ id: item.id, label: item.name }))}
-                actionLabel="הוספת מחלקה חדשה"
+                actionLabel={t("work.addDepartment")}
                 showAction={canCreateDepartment}
                 onChange={(departmentId) => onChange({ ...draft, departmentId })}
                 onAction={() => openQuick("department")}
               />
             </Field>
           </div>
-          <Field label="סוג משימה">
+          <Field label={t("work.taskType")}>
             <TaskTypePicker value={draft.taskType} onChange={(taskType: TaskKind) => onChange({ ...draft, taskType })} />
           </Field>
-          <Field label="צבע משימה">
+          <Field label={t("work.taskColor")}>
             <ColorPicker value={draft.color} onChange={(color) => onChange({ ...draft, color })} />
           </Field>
-          <Field label="עדיפות">
+          <Field label={t("common.priority")}>
             <PriorityPicker value={draft.priority} onChange={(priority) => onChange({ ...draft, priority })} />
           </Field>
-          <Field label="הערות">
+          {canSetPrice ? (
+            <Field label={t("work.priceOptional")}>
+              <input className={inputClass} inputMode="decimal" value={draft.priceBeforeVat} onChange={(event) => onChange({ ...draft, priceBeforeVat: event.target.value })} placeholder="₪" />
+            </Field>
+          ) : null}
+          <Field label={t("common.notes")}>
             <textarea className={`${inputClass} h-24 py-2`} value={draft.description} onChange={(event) => onChange({ ...draft, description: event.target.value })} />
           </Field>
           {draft.freeText ? (
@@ -341,29 +354,29 @@ export function TaskFormModal({
                 checked={draft.saveToLibrary}
                 onChange={(event) => onChange({ ...draft, saveToLibrary: event.target.checked })}
               />
-              שמור גם כמשימה קבועה במאגר
+              {t("work.saveToLibrary")}
             </label>
           ) : null}
         </div>
         {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
         <div className="mt-5 flex justify-end gap-2">
-          <GhostButton onClick={onClose}>ביטול</GhostButton>
-          <PrimaryButton disabled={busy || !draft.title.trim()} onClick={onSave}>{busy ? "שומר…" : "שמירת משימה"}</PrimaryButton>
+          <GhostButton onClick={onClose}>{t("common.cancel")}</GhostButton>
+          <PrimaryButton disabled={busy || !draft.title.trim()} onClick={onSave}>{busy ? t("work.saving") : t("work.saveTask")}</PrimaryButton>
         </div>
       </Modal>
 
       {quick ? (
-        <MiniModal title={quick === "project" ? "הוספת פרויקט חדש" : "מחלקה חדשה"} onClose={() => setQuick(null)}>
+        <MiniModal title={quick === "project" ? t("work.addProject") : t("settings.newDepartment")} onClose={() => setQuick(null)}>
           <div className="space-y-3">
-            <Field label={quick === "project" ? "שם הפרויקט *" : "שם מחלקה *"}>
+            <Field label={quick === "project" ? t("work.projectName") : t("work.departmentNameRequired")}>
               <input className={inputClass} value={quickName} onChange={(event) => setQuickName(event.target.value)} />
             </Field>
             {quick === "project" ? (
               <>
-                <Field label="לקוח">
+                <Field label={t("common.client")}>
                   <input className={inputClass} value={quickClient} onChange={(event) => setQuickClient(event.target.value)} />
                 </Field>
-                <Field label="מחלקה">
+                <Field label={t("common.department")}>
                   <select
                     className={inputClass}
                     value={quickDepartmentId}
@@ -372,36 +385,36 @@ export function TaskFormModal({
                       setQuickCategory("");
                     }}
                   >
-                    <option value="">בחירת מחלקה</option>
+                    <option value="">{t("settings.pickDepartment")}</option>
                     {departments.filter((item) => item.isActive).map((item) => (
                       <option key={item.id} value={item.id}>{item.name}</option>
                     ))}
                   </select>
                 </Field>
-                <Field label="קטגוריה *">
+                <Field label={`${t("common.category")} *`}>
                   <select className={inputClass} value={quickCategory} onChange={(event) => setQuickCategory(event.target.value)} disabled={!quickDepartmentId}>
-                    <option value="">{quickDepartmentId ? "בחירת קטגוריה" : "בחרו מחלקה תחילה"}</option>
+                    <option value="">{quickDepartmentId ? t("work.pickCategory") : t("work.pickDepartmentFirst")}</option>
                     {quickCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                   </select>
                 </Field>
-                <Field label="סטטוס">
+                <Field label={t("common.status")}>
                   <select className={inputClass} value={quickStatus} onChange={(event) => setQuickStatus(event.target.value)}>
                     {PROJECT_STATUSES.map((item) => <option key={item} value={item}>{labelOf(item)}</option>)}
                   </select>
                 </Field>
               </>
             ) : null}
-            <Field label="תיאור">
+            <Field label={t("common.description")}>
               <textarea className={`${inputClass} h-20 py-2`} value={quickDescription} onChange={(event) => setQuickDescription(event.target.value)} />
             </Field>
-            <Field label="צבע">
+            <Field label={t("common.color")}>
               <ColorPicker value={quickColor} onChange={setQuickColor} />
             </Field>
             {quickError ? <p className="text-sm text-red-600">{quickError}</p> : null}
             <div className="flex justify-end gap-2">
-              <GhostButton onClick={() => setQuick(null)}>ביטול</GhostButton>
+              <GhostButton onClick={() => setQuick(null)}>{t("common.cancel")}</GhostButton>
               <PrimaryButton disabled={savingQuick || !quickName.trim() || (quick === "project" && !quickCategory)} onClick={() => void saveQuick()}>
-                {quick === "project" ? "שמירת פרויקט" : "שמירת מחלקה"}
+                {quick === "project" ? t("work.saveProject") : t("work.saveDepartment")}
               </PrimaryButton>
             </div>
           </div>

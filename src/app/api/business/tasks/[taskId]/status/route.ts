@@ -17,6 +17,7 @@ export async function POST(
     businessId: resolved.actor!.businessId,
     taskId,
     status: typeof body.status === "string" ? body.status : "",
+    statusId: typeof body.statusId === "string" ? body.statusId : body.statusId === null ? null : undefined,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   return NextResponse.json({ ok: true, id: result.id });

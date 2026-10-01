@@ -5,6 +5,8 @@ import { useMemo, useState } from "react";
 import { DocPreview } from "@/components/admin/doc-preview";
 import { Field, GhostButton, Modal, PageHeader, PrimaryButton, inputClass } from "@/components/admin/ui";
 import { useBusinessContext } from "@/components/providers/business-context";
+import { useI18n } from "@/components/providers/i18n-provider";
+import { labelOf } from "@/lib/admin/labels";
 import { mutateBusiness } from "@/lib/admin/api";
 import { useBusinessCatalog } from "@/lib/admin/catalog";
 import { calculateDocumentTotals, emptyLine } from "@/lib/docs/totals";
@@ -13,6 +15,7 @@ import type { BusinessDocLine, BusinessDocumentRecord, DocPriceMode } from "@/ty
 
 export function DocumentBuilder({ documentId }: { documentId: string }) {
   const { business } = useBusinessContext();
+  const { t } = useI18n();
   const { data, loading, reload } = useBusinessCatalog(business?.id ?? null);
   const current = data.businessDocs.find((item) => item.id === documentId);
   const [draft, setDraft] = useState<BusinessDocumentRecord | null>(null);
@@ -30,8 +33,8 @@ export function DocumentBuilder({ documentId }: { documentId: string }) {
     [doc],
   );
 
-  if (loading) return <p className="text-sm text-slate-500">טוען מסמך…</p>;
-  if (!doc || !business) return <p className="text-sm text-slate-500">המסמך לא נמצא</p>;
+  if (loading) return <p className="text-sm text-slate-500">{t("common.loading")}</p>;
+  if (!doc || !business) return <p className="text-sm text-slate-500">{t("empty.board")}</p>;
 
   const clients = data.clients.filter((item) => {
     const q = clientQuery.trim().toLowerCase();
@@ -112,13 +115,13 @@ export function DocumentBuilder({ documentId }: { documentId: string }) {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={doc.title || "עריכת מסמך"}
-        subtitle={`${doc.number} · ${doc.status}${doc.frozen ? " · נעול לאחר חתימה" : ""}`}
+        title={doc.title || t("docs.edit")}
+        subtitle={`${doc.number} · ${labelOf(doc.status)}${doc.frozen ? ` · ${t("docs.locked")}` : ""}`}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link href="/documents" className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-3 text-sm">חזרה</Link>
+            <Link href="/documents" className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-3 text-sm">{t("common.close")}</Link>
             <Link href={`/documents/${doc.id}/print`} className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-3 text-sm">PDF</Link>
-            <PrimaryButton disabled={busy} onClick={() => void save()}>שמירת טיוטה</PrimaryButton>
+            <PrimaryButton disabled={busy} onClick={() => void save()}>{t("docs.saveDraft")}</PrimaryButton>
           </div>
         }
       />
@@ -126,15 +129,21 @@ export function DocumentBuilder({ documentId }: { documentId: string }) {
 
       <div className="grid gap-5 xl:grid-cols-2">
         <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
-          <Field label="כותרת"><input className={inputClass} value={doc.title} onChange={(event) => update({ title: event.target.value })} /></Field>
-          <Field label="תיאור / פתיח"><textarea className={`${inputClass} h-24 py-2`} value={doc.intro} onChange={(event) => update({ intro: event.target.value })} /></Field>
+          <Field label={t("docs.title")}><input className={inputClass} value={doc.title} onChange={(event) => update({ title: event.target.value })} /></Field>
+          <Field label={t("docs.language")}>
+            <select className={inputClass} value={doc.language === "ar" ? "ar" : "he"} onChange={(event) => update({ language: event.target.value === "ar" ? "ar" : "he" })}>
+              <option value="he">{t("docs.languageHe")}</option>
+              <option value="ar">{t("docs.languageAr")}</option>
+            </select>
+          </Field>
+          <Field label={t("docs.intro")}><textarea className={`${inputClass} h-24 py-2`} value={doc.intro} onChange={(event) => update({ intro: event.target.value })} /></Field>
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="תאריך"><input className={inputClass} value={doc.date} onChange={(event) => update({ date: event.target.value })} /></Field>
-            <Field label="תוקף (ימים)"><input className={inputClass} inputMode="numeric" value={String(doc.validDays)} onChange={(event) => update({ validDays: Number(event.target.value) || 0 })} /></Field>
+            <Field label={t("docs.date")}><input className={inputClass} value={doc.date} onChange={(event) => update({ date: event.target.value })} /></Field>
+            <Field label={t("docs.validDays")}><input className={inputClass} inputMode="numeric" value={String(doc.validDays)} onChange={(event) => update({ validDays: Number(event.target.value) || 0 })} /></Field>
           </div>
 
-          <Field label="לקוח">
-            <input className={inputClass} placeholder="חיפוש לקוח קיים..." value={clientQuery} onChange={(event) => setClientQuery(event.target.value)} />
+          <Field label={t("common.client")}>
+            <input className={inputClass} placeholder={t("docs.searchClient")} value={clientQuery} onChange={(event) => setClientQuery(event.target.value)} />
             <div className="mt-2 max-h-40 overflow-y-auto rounded-xl border border-slate-100">
               {clients.map((item) => (
                 <button

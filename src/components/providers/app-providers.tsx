@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
+import { AccessibilityWidget } from "@/components/a11y/accessibility-widget";
 import { AuthProvider, useAuth } from "@/components/providers/auth-provider";
+import { AccessibilityProvider } from "@/components/providers/a11y-provider";
 import { BusinessTheme } from "@/components/providers/business-theme";
 import { I18nProvider } from "@/components/providers/i18n-provider";
 import { DEFAULT_LOCALE } from "@/lib/env";
@@ -15,21 +17,13 @@ function LocaleBridge({ children }: { children: ReactNode }) {
       : DEFAULT_LOCALE,
   );
 
-  const dir = locale === "ar" || locale === "he" ? "rtl" : "ltr";
-  const [documentLocale, setDocumentLocale] = useState(() =>
-    resolveLocale(DEFAULT_LOCALE),
-  );
-
-  useEffect(() => {
-    document.documentElement.lang = locale;
-    document.documentElement.dir = dir;
-    setDocumentLocale(locale);
-  }, [dir, locale]);
-
   return (
-    <I18nProvider locale={documentLocale}>
-      {auth.status === "ready" ? <BusinessTheme business={auth.business} /> : null}
-      {children}
+    <I18nProvider locale={locale} persist={auth.status === "ready"}>
+      <AccessibilityProvider>
+        {auth.status === "ready" ? <BusinessTheme business={auth.business} /> : null}
+        {children}
+        <AccessibilityWidget />
+      </AccessibilityProvider>
     </I18nProvider>
   );
 }

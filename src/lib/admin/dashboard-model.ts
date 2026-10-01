@@ -1,4 +1,6 @@
 import { departmentName, employeeName, projectName, sessionHours, type BusinessCatalog } from "@/lib/admin/catalog";
+import { relativeTimeLabel } from "@/lib/admin/relative-time";
+import { getI18nLocale, translate } from "@/lib/i18n";
 import { computeProjectProgress } from "@/lib/admin/project-progress";
 import { buildSchedule } from "@/lib/admin/schedule";
 import { daysBetween, isOverdue, openSessions, taskIsActive } from "@/lib/admin/time";
@@ -116,7 +118,9 @@ function formatHours(minutes: number) {
 
 function overdueLabel(dueDate: string, today: string) {
   const days = Math.max(1, daysBetween(dueDate, today));
-  return days === 1 ? "באיחור ביום" : `באיחור ב-${days} ימים`;
+  return days === 1
+    ? translate(getI18nLocale(), "work.overdueStrip", { count: "1" })
+    : translate(getI18nLocale(), "work.overdueStrip", { count: String(days) });
 }
 
 function nowTime(timeZone: string) {
@@ -200,10 +204,10 @@ function buildAttention(
       kind: "overdue_task",
       title: task.title,
       meta: `${employeeName(data.employees, task.assigneeId)} · ${projectName(data.projects, task.projectId)}`,
-      deadline: task.dueDate ? overdueLabel(task.dueDate, today) : "באיחור",
-      badge: "באיחור",
+      deadline: task.dueDate ? overdueLabel(task.dueDate, today) : translate(getI18nLocale(), "status.OVERDUE"),
+      badge: translate(getI18nLocale(), "status.OVERDUE"),
       href: `/tasks?filter=overdue`,
-      action: "פתח משימה",
+      action: translate(getI18nLocale(), "work.openFull"),
     });
   }
 
@@ -213,10 +217,10 @@ function buildAttention(
       kind: "due_today",
       title: task.title,
       meta: `${employeeName(data.employees, task.assigneeId)} · ${projectName(data.projects, task.projectId)}`,
-      deadline: task.startTime ? `עד ${task.startTime}` : "דדליין היום",
-      badge: "היום",
+      deadline: task.startTime || translate(getI18nLocale(), "common.deadline"),
+      badge: translate(getI18nLocale(), "common.today"),
       href: `/tasks?filter=dueToday`,
-      action: "פתח משימה",
+      action: translate(getI18nLocale(), "work.openFull"),
     });
   }
 
@@ -225,11 +229,11 @@ function buildAttention(
       id: `approval-${task.id}`,
       kind: "pending_request",
       title: task.title,
-      meta: "משימה ממתינה לאישור",
-      deadline: "ממתינה לאישור",
-      badge: "לאישור",
+      meta: translate(getI18nLocale(), "status.PENDING_APPROVAL"),
+      deadline: translate(getI18nLocale(), "status.PENDING_APPROVAL"),
+      badge: translate(getI18nLocale(), "status.PENDING_APPROVAL"),
       href: "/tasks?tab=approval",
-      action: "פתח לאישור",
+      action: translate(getI18nLocale(), "work.openFull"),
     });
   }
 
@@ -239,10 +243,10 @@ function buildAttention(
       kind: "pending_request",
       title: request.title,
       meta: employeeName(data.employees, request.requestedByEmployeeId),
-      deadline: "ממתינה לאישור",
-      badge: "לאישור",
+      deadline: translate(getI18nLocale(), "status.PENDING_APPROVAL"),
+      badge: translate(getI18nLocale(), "status.PENDING_APPROVAL"),
       href: "/requests",
-      action: "פתח בקשה",
+      action: translate(getI18nLocale(), "common.open"),
     });
   }
 
@@ -251,11 +255,11 @@ function buildAttention(
       id: `meet-${meeting.id}`,
       kind: "upcoming_meeting",
       title: meeting.title,
-      meta: meeting.participantIds.map((id) => employeeName(data.employees, id)).filter((name) => name !== "לא משויך").join(" + ") || meeting.location || "פגישה",
-      deadline: meeting.startTime || "היום",
-      badge: "פגישה",
+      meta: meeting.participantIds.map((id) => employeeName(data.employees, id)).filter((name) => name !== translate(getI18nLocale(), "common.unassigned")).join(" + ") || meeting.location || translate(getI18nLocale(), "schedule.meeting"),
+      deadline: meeting.startTime || translate(getI18nLocale(), "common.today"),
+      badge: translate(getI18nLocale(), "schedule.meeting"),
       href: "/meetings",
-      action: "פתח יומן",
+      action: translate(getI18nLocale(), "common.open"),
     });
   }
 
@@ -268,10 +272,10 @@ function buildAttention(
       kind: "project_risk",
       title: project.name,
       meta: employeeName(data.employees, project.managerEmployeeId),
-      deadline: late ? `${late} משימות באיחור` : "תאריך יעד עבר",
-      badge: "בסיכון",
+      deadline: late ? translate(getI18nLocale(), "work.overdueStrip", { count: String(late) }) : translate(getI18nLocale(), "common.deadline"),
+      badge: translate(getI18nLocale(), "health.risk"),
       href: `/projects/${project.id}`,
-      action: "פתח פרויקט",
+      action: translate(getI18nLocale(), "common.open"),
     });
   }
 
@@ -412,15 +416,7 @@ function buildDepartments(data: BusinessCatalog, today: string, weekFrom: string
 }
 
 export function relativeTime(value: unknown) {
-  const started = toTimestamp(value);
-  if (!started) return "";
-  const minutes = Math.max(0, Math.round((Date.now() - started) / 60000));
-  if (minutes < 1) return "עכשיו";
-  if (minutes < 60) return `לפני ${minutes} דקות`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `לפני ${hours} שעות`;
-  const days = Math.round(hours / 24);
-  return days === 1 ? "אתמול" : `לפני ${days} ימים`;
+  return relativeTimeLabel(value);
 }
 
 export function shortDate(value: string | null) {
@@ -430,9 +426,9 @@ export function shortDate(value: string | null) {
 }
 
 export const TEAM_STATUS_LABEL: Record<TeamPresence, string> = {
-  working: "עובד עכשיו",
-  meeting: "בפגישה",
-  not_started: "טרם התחיל",
-  finished: "סיים להיום",
+  get working() { return translate(getI18nLocale(), "team.working"); },
+  get meeting() { return translate(getI18nLocale(), "team.break"); },
+  get not_started() { return translate(getI18nLocale(), "team.notStarted"); },
+  get finished() { return translate(getI18nLocale(), "team.finished"); },
 };
 

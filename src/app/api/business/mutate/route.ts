@@ -13,7 +13,7 @@ import { deleteMeetingDoc, upsertMeeting } from "@/lib/admin/meeting-write";
 import { syncProjectProgressFromTasks } from "@/lib/admin/project-progress-sync";
 import { taskCompletionPatch } from "@/lib/admin/task-completion";
 import { upsertTask } from "@/lib/admin/task-write";
-import { notifyEmployees } from "@/lib/admin/notify";
+import { notifyEmployees, notifyManagers, notifyUsers } from "@/lib/admin/notify";
 import { normalizeTaskTeam } from "@/lib/admin/task-team";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -164,8 +164,13 @@ export async function POST(request: Request) {
             businessId,
             employeeIds: notifyIds,
             title: `שויכת למשימה חדשה: ${title}`,
-            body: `שויכת למשימה חדשה: ${title}`,
-            href: "/tasks",
+            body: title,
+            href: `/tasks?taskId=${encodeURIComponent(id)}`,
+            type: "task.assigned",
+            entityType: "task",
+            entityId: id,
+            subject: "WEGO BIZ — משימה חדשה הוקצתה לך",
+            dedupeKey: `TASK_ASSIGNED:${id}:${notifyIds.join(",")}`,
           });
         }
       }
@@ -196,6 +201,8 @@ export async function POST(request: Request) {
         }
         categoryName = text(categorySnap.data()?.name) || categoryName;
       }
+      const existingProjectSnap = action === "updateProject" && id ? await db.doc(projectDocPath(businessId, id)).get() : null;
+      const previousManager = typeof existingProjectSnap?.data()?.managerEmployeeId === "string" ? existingProjectSnap.data()!.managerEmployeeId as string : "";
       const existingProjects = await db.collection(projectsPath(businessId)).get();
       const duplicate = existingProjects.docs.find((docSnap) =>
         String(docSnap.data().name ?? "").trim().toLowerCase() === name.toLowerCase() && docSnap.id !== id,
@@ -237,6 +244,37 @@ export async function POST(request: Request) {
         entityId: ref.id,
         message: `${action === "createProject" ? "נוצר" : "עודכן"} פרויקט: ${payload.name}`,
       });
+      const nextManager = payload.managerEmployeeId || "";
+      if (nextManager && nextManager !== previousManager) {
+        await notifyEmployees({
+          businessId,
+          employeeIds: [nextManager],
+          skipUserIds: [actor.uid],
+          title: `התווספת לפרויקט ${payload.name}`,
+          body: payload.name,
+          href: `/projects/${ref.id}`,
+          type: "project.added",
+          entityType: "project",
+          entityId: ref.id,
+          channels: { inApp: true, email: false },
+          dedupeKey: `PROJECT_ADDED:${ref.id}:${nextManager}`,
+        });
+      }
+      if (previousManager && previousManager !== nextManager) {
+        await notifyEmployees({
+          businessId,
+          employeeIds: [previousManager],
+          skipUserIds: [actor.uid],
+          title: `הוסרת מהפרויקט ${payload.name}`,
+          body: payload.name,
+          href: "/projects",
+          type: "project.removed",
+          entityType: "project",
+          entityId: ref.id,
+          channels: { inApp: true, email: false },
+          dedupeKey: `PROJECT_REMOVED:${ref.id}:${previousManager}`,
+        });
+      }
       return NextResponse.json({ ok: true, id: ref.id });
     }
 
@@ -318,6 +356,16 @@ export async function POST(request: Request) {
       if (!payload.title) return NextResponse.json({ error: "TITLE_REQUIRED" }, { status: 400 });
       const ref = db.collection(logisticsRequestsPath(businessId)).doc();
       await ref.set(payload);
+      await notifyManagers({
+        businessId,
+        skipUserIds: [actor.uid],
+        title: "בקשה חדשה ממתינה לטיפול",
+        body: payload.title,
+        href: "/requests",
+        type: "request.created",
+        entityType: "request",
+        entityId: ref.id,
+      });
       await writeActivity({ businessId, actorUserId: actor.uid, action, entityType: "request", entityId: ref.id, message: `נפתחה בקשה: ${payload.title}` });
       return NextResponse.json({ ok: true, id: ref.id });
     }
@@ -326,14 +374,34 @@ export async function POST(request: Request) {
       const denied = need("logistics.approve");
       if (denied) return denied;
       if (!id) return NextResponse.json({ error: "MISSING_ID" }, { status: 400 });
+      const requestSnap = await db.doc(logisticsRequestDocPath(businessId, id)).get();
+      const requestData = requestSnap.data() ?? {};
+      const nextStatus = text(data.status) || "PENDING";
       await db.doc(logisticsRequestDocPath(businessId, id)).set({
-        status: text(data.status) || "PENDING",
+        status: nextStatus,
         managerResponse: text(data.managerResponse),
         reviewedByUserId: actor.uid,
         handledBy: actor.uid,
         handledAt: now,
         updatedAt: now,
       }, { merge: true });
+      const requester = typeof requestData.requestedByUserId === "string" ? requestData.requestedByUserId : "";
+      const approved = nextStatus === "APPROVED" || nextStatus === "DONE";
+      if (requester) {
+        await notifyUsers({
+          businessId,
+          userIds: [requester],
+          skipUserIds: [actor.uid],
+          title: approved ? "הבקשה אושרה" : nextStatus === "REJECTED" ? "הבקשה נדחתה" : "הבקשה עודכנה",
+          body: text(requestData.title) || text(data.managerResponse),
+          href: "/requests",
+          type: "request.updated",
+          entityType: "request",
+          entityId: id,
+          channels: { inApp: true, email: true },
+          dedupeKey: `REQUEST_UPDATED:${id}:${nextStatus}`,
+        });
+      }
       await writeActivity({ businessId, actorUserId: actor.uid, action, entityType: "request", entityId: id, message: "עודכן טיפול בבקשה" });
       return NextResponse.json({ ok: true, id });
     }
@@ -486,6 +554,7 @@ export async function POST(request: Request) {
       }
       const businessPatch: Record<string, unknown> = { updatedAt: now };
       if (text(data.name)) businessPatch.name = text(data.name);
+      if (data.nameAr !== undefined) businessPatch.nameAr = text(data.nameAr);
       if (text(data.primaryColor)) businessPatch.primaryColor = text(data.primaryColor);
       if (text(data.secondaryColor)) businessPatch.secondaryColor = text(data.secondaryColor);
       if (text(data.language)) businessPatch.language = text(data.language);
@@ -507,6 +576,8 @@ export async function POST(request: Request) {
       if (data.address !== undefined) settingsPatch.address = text(data.address);
       if (data.website !== undefined) settingsPatch.website = text(data.website);
       if (data.about !== undefined) settingsPatch.about = text(data.about);
+      if (data.aboutAr !== undefined) settingsPatch.aboutAr = text(data.aboutAr);
+      if (data.nameAr !== undefined) settingsPatch.nameAr = text(data.nameAr);
       if (Array.isArray(data.services)) settingsPatch.services = normalizeBusinessServices(data.services);
       if (data.logoUrl !== undefined) {
         settingsPatch.logoUrl = nullable(data.logoUrl);

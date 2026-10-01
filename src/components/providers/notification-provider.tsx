@@ -35,8 +35,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 20000);
-    return () => window.clearInterval(timer);
+    const timer = window.setInterval(() => void refresh(), 8000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [refresh]);
 
   const markRead = useCallback(async (id: string) => {

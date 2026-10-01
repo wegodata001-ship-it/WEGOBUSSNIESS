@@ -93,6 +93,8 @@ export async function addTaskComment(input: {
       type: "task.mention",
       entityType: "task",
       entityId: input.taskId,
+      subject: "WEGO BIZ — הזכירו אותך במשימה",
+      channels: { inApp: true, email: true },
     });
   }
 
@@ -107,6 +109,7 @@ export async function addTaskComment(input: {
     type: "task.comment",
     entityType: "task",
     entityId: input.taskId,
+    channels: { inApp: true, email: false },
   });
 
   if (loaded.task.createdByUserId && loaded.task.createdByUserId !== input.actor.uid) {
@@ -120,6 +123,7 @@ export async function addTaskComment(input: {
       type: "task.comment",
       entityType: "task",
       entityId: input.taskId,
+      channels: { inApp: true, email: false },
     });
   }
 

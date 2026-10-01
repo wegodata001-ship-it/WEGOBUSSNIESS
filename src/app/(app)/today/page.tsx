@@ -1,7 +1,5 @@
-"use client";
-
-import { TodayView } from "@/components/admin/today-view";
+import { redirect } from "next/navigation";
 
 export default function TodayPage() {
-  return <TodayView />;
+  redirect("/dashboard");
 }

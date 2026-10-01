@@ -77,16 +77,41 @@ export async function decideBusinessTask(input: {
   return { ok: true, id: payload.id || input.id };
 }
 
+export async function saveTaskWork(input: {
+  businessId: string;
+  id: string;
+  data: {
+    scheduledDate?: string | null;
+    startTime?: string | null;
+    endTime?: string | null;
+    description?: string;
+    status?: string;
+  };
+}): Promise<BusinessMutationResult> {
+  const response = await fetch(`/api/business/tasks/${input.id}/work`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ businessId: input.businessId, data: input.data }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
+  if (!response.ok || payload.error) {
+    return { ok: false, error: payload.error || "NETWORK", status: response.status };
+  }
+  return { ok: true, id: payload.id || input.id };
+}
+
 export async function changeBusinessTaskStatus(input: {
   businessId: string;
   id: string;
   status: string;
+  statusId?: string | null;
 }): Promise<BusinessMutationResult> {
   const response = await fetch(`/api/business/tasks/${input.id}/status`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ businessId: input.businessId, status: input.status }),
+    body: JSON.stringify({ businessId: input.businessId, status: input.status, statusId: input.statusId }),
   });
   const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
   if (!response.ok || payload.error) {

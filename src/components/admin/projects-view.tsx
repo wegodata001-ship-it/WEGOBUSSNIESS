@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { FolderKanban, SlidersHorizontal, X } from "lucide-react";
 import { Field, GhostButton, Modal, PageHeader, PrimaryButton, StatusBadge, inputClass } from "@/components/admin/ui";
 import { useBusinessContext } from "@/components/providers/business-context";
+import { useI18n } from "@/components/providers/i18n-provider";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { mutateBusiness } from "@/lib/admin/api";
@@ -14,7 +15,6 @@ import {
   projectMatchesCategoryFilter,
   resolveProjectCategory,
   UNCATEGORIZED_FILTER,
-  UNCATEGORIZED_LABEL,
 } from "@/lib/admin/department-categories";
 import { employeeName, useBusinessCatalog } from "@/lib/admin/catalog";
 import { computeProjectProgress, normalizeProjectProgress } from "@/lib/admin/project-progress";
@@ -43,7 +43,10 @@ type ProjectDraft = {
 };
 
 export function ProjectsView() {
+  const { t, locale } = useI18n();
   const { business, permissions, membership } = useBusinessContext();
+  const sortLocale = locale === "ar" ? "ar" : "he";
+  const uncategorizedLabel = t("projects.uncategorized");
   const { data, loading, reload } = useBusinessCatalog(business?.id ?? null);
   const today = todayInTimeZone(business?.timezone);
   const canManage = permissions.includes("projects.manage") || membership?.role === "BUSINESS_OWNER";
@@ -98,8 +101,8 @@ export function ProjectsView() {
   }, [scoped]);
 
   const clients = useMemo(
-    () => [...new Set(scoped.map((item) => item.clientName.trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right, "he")),
-    [scoped],
+    () => [...new Set(scoped.map((item) => item.clientName.trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right, sortLocale)),
+    [scoped, sortLocale],
   );
 
   const rows = useMemo(() => {
@@ -125,7 +128,7 @@ export function ProjectsView() {
     return filtered.sort((left, right) => {
       const leftStats = statsById.get(left.id);
       const rightStats = statsById.get(right.id);
-      if (sort === "name") return left.name.localeCompare(right.name, "he");
+      if (sort === "name") return left.name.localeCompare(right.name, sortLocale);
       if (sort === "progressHigh") return (rightStats?.progress ?? 0) - (leftStats?.progress ?? 0);
       if (sort === "progressLow") return (leftStats?.progress ?? 0) - (rightStats?.progress ?? 0);
       if (sort === "openTasks") return (rightStats?.open ?? 0) - (leftStats?.open ?? 0);
@@ -134,13 +137,13 @@ export function ProjectsView() {
       const rightTime = toTimestamp(right.createdAt) || toTimestamp(right.startDate);
       return sort === "oldest" ? leftTime - rightTime : rightTime - leftTime;
     });
-  }, [category, client, data.departmentCategories, data.employees, departmentId, managerId, query, scoped, sort, statsById, status]);
+  }, [category, client, data.departmentCategories, data.employees, departmentId, managerId, query, scoped, sort, sortLocale, statsById, status]);
 
   const activeFilters = [
     category ? {
       key: "category",
       label: category === UNCATEGORIZED_FILTER
-        ? UNCATEGORIZED_LABEL
+        ? uncategorizedLabel
         : data.departmentCategories.find((item) => item.id === category)?.name ?? category,
       clear: () => setCategory(""),
     } : null,
@@ -190,10 +193,10 @@ export function ProjectsView() {
     } catch (error) {
       const code = error instanceof Error ? error.message : "";
       window.alert(
-        code === "DUPLICATE_PROJECT" ? "פרויקט בשם זה כבר קיים"
-          : code === "CATEGORY_REQUIRED" ? "יש לבחור קטגוריה"
-            : code === "CATEGORY_NOT_IN_DEPARTMENT" ? "הקטגוריה אינה שייכת למחלקה שנבחרה"
-              : "שמירת הפרויקט נכשלה",
+        code === "DUPLICATE_PROJECT" ? t("projects.duplicate")
+          : code === "CATEGORY_REQUIRED" ? t("projects.categoryNeeded")
+            : code === "CATEGORY_NOT_IN_DEPARTMENT" ? t("projects.categoryDepartmentMismatch")
+              : t("projects.saveFailed"),
       );
     } finally {
       setBusy(false);
@@ -208,8 +211,8 @@ export function ProjectsView() {
       await reload();
     } catch (error) {
       window.alert(error instanceof Error && error.message === "PROJECT_IN_USE"
-        ? "לא ניתן למחוק פרויקט שמקושר למשימות, פגישות או מסמכים. אפשר להעביר לארכיון."
-        : "הפעולה נכשלה");
+        ? t("projects.inUse")
+        : t("common.failed"));
     } finally {
       setBusy(false);
     }
@@ -233,46 +236,46 @@ export function ProjectsView() {
     });
   }
 
-  if (loading) return <Spinner label="טוען פרויקטים…" />;
+  if (loading) return <Spinner label={t("common.loading")} />;
 
   const filterControls = (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Field label="לקוח">
+      <Field label={t("common.client")}>
         <select className={inputClass} value={client} onChange={(event) => setClient(event.target.value)}>
-          <option value="">הכל</option>
+          <option value="">{t("common.all")}</option>
           {clients.map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
       </Field>
-      <Field label="עובד אחראי">
+      <Field label={t("projects.responsible")}>
         <select className={inputClass} value={managerId} onChange={(event) => setManagerId(event.target.value)}>
-          <option value="">הכל</option>
+          <option value="">{t("common.all")}</option>
           {data.employees.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}
         </select>
       </Field>
-      <Field label="סטטוס">
+      <Field label={t("common.status")}>
         <select className={inputClass} value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="">הכל</option>
+          <option value="">{t("common.all")}</option>
           {PROJECT_STATUSES.map((item) => <option key={item} value={item}>{labelOf(item)}</option>)}
-          <option value="ARCHIVED">ארכיון</option>
+          <option value="ARCHIVED">{t("common.archive")}</option>
         </select>
       </Field>
       {data.departments.length ? (
-        <Field label="מחלקה">
+        <Field label={t("common.department")}>
           <select className={inputClass} value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
-            <option value="">הכל</option>
+            <option value="">{t("common.all")}</option>
             {data.departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
         </Field>
       ) : null}
-      <Field label="מיון לפי">
+      <Field label={t("projects.sortBy")}>
         <select className={inputClass} value={sort} onChange={(event) => setSort(event.target.value as SortId)}>
-          <option value="newest">חדש ביותר</option>
-          <option value="oldest">ישן ביותר</option>
-          <option value="name">שם א׳–ת׳</option>
-          <option value="progressHigh">התקדמות גבוהה</option>
-          <option value="progressLow">התקדמות נמוכה</option>
-          <option value="openTasks">הכי הרבה משימות פתוחות</option>
-          <option value="overdueTasks">הכי הרבה משימות באיחור</option>
+          <option value="newest">{t("projects.sortNewest")}</option>
+          <option value="oldest">{t("projects.sortOldest")}</option>
+          <option value="name">{t("projects.sortName")}</option>
+          <option value="progressHigh">{t("projects.sortProgressHigh")}</option>
+          <option value="progressLow">{t("projects.sortProgressLow")}</option>
+          <option value="openTasks">{t("projects.sortOpenTasks")}</option>
+          <option value="overdueTasks">{t("projects.sortOverdueTasks")}</option>
         </select>
       </Field>
     </div>
@@ -281,15 +284,15 @@ export function ProjectsView() {
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">
       <PageHeader
-        title="כרטסת פרויקט"
-        subtitle="כל הפרויקטים, הלקוחות וההתקדמות במקום אחד"
+        title={t("projects.cardTitle")}
+        subtitle={t("projects.subtitle")}
         actions={
           <div className="flex flex-wrap gap-2">
             <label className="flex min-h-11 items-center gap-2 text-sm text-slate-600">
               <input type="checkbox" checked={showArchive} onChange={(event) => setShowArchive(event.target.checked)} />
-              הצג ארכיון
+              {t("projects.showArchive")}
             </label>
-            {canManage ? <PrimaryButton onClick={() => openDraft()}>+ פרויקט חדש</PrimaryButton> : null}
+            {canManage ? <PrimaryButton onClick={() => openDraft()}>{t("projects.new")}</PrimaryButton> : null}
           </div>
         }
       />
@@ -300,23 +303,23 @@ export function ProjectsView() {
             className={`${inputClass} min-h-11 sm:max-w-xs`}
             value={category}
             onChange={(event) => setCategory(event.target.value)}
-            aria-label="סינון לפי קטגוריה"
+            aria-label={t("projects.filterCategory")}
           >
-            <option value="">כל הקטגוריות</option>
+            <option value="">{t("projects.allCategories")}</option>
             {managedProjectCategories(data.departmentCategories, { includeInactive: true }).map((item) => (
               <option key={item.id} value={item.id}>{item.name}</option>
             ))}
-            <option value={UNCATEGORIZED_FILTER}>{UNCATEGORIZED_LABEL}</option>
+            <option value={UNCATEGORIZED_FILTER}>{uncategorizedLabel}</option>
           </select>
           <input
             className={`${inputClass} min-h-11 flex-1`}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="חיפוש פרויקט..."
+            placeholder={t("projects.search")}
           />
           <GhostButton onClick={() => setFiltersOpen(true)}>
-            <span className="inline-flex items-center gap-2 md:hidden"><SlidersHorizontal className="h-4 w-4" /> סינון</span>
-            <span className="hidden md:inline">סינון מתקדם</span>
+            <span className="inline-flex items-center gap-2 md:hidden"><SlidersHorizontal className="h-4 w-4" /> {t("projects.filter")}</span>
+            <span className="hidden md:inline">{t("projects.filterAdvanced")}</span>
           </GhostButton>
         </div>
 
@@ -326,7 +329,7 @@ export function ProjectsView() {
             onClick={() => setCategory("")}
             className={`min-h-11 shrink-0 rounded-full border px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 ${!category ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700"}`}
           >
-            הכל {scoped.length}
+            {t("common.all")} {scoped.length}
           </button>
           {managedProjectCategories(data.departmentCategories, { includeInactive: true }).map((item) => {
             const styles = categoryStyles(item.color);
@@ -352,24 +355,26 @@ export function ProjectsView() {
             onClick={() => setCategory(category === UNCATEGORIZED_FILTER ? "" : UNCATEGORIZED_FILTER)}
             className={`min-h-11 shrink-0 rounded-full border px-3 text-sm font-medium ${category === UNCATEGORIZED_FILTER ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700"}`}
           >
-            {UNCATEGORIZED_LABEL} {categoryCounts.uncategorized}
+            {uncategorizedLabel} {categoryCounts.uncategorized}
           </button>
         </div>
 
         <div className="hidden md:block">{filterControls}</div>
 
         <p className="text-sm text-slate-500">
-          {activeFilters.length ? `מציג ${rows.length} מתוך ${scoped.length} פרויקטים` : `${scoped.length} פרויקטים`}
+          {activeFilters.length
+            ? t("projects.showing", { shown: String(rows.length), total: String(scoped.length) })
+            : t("projects.count", { count: String(scoped.length) })}
         </p>
         {activeFilters.length ? (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-slate-500">מסננים פעילים:</span>
+            <span className="text-xs text-slate-500">{t("projects.activeFilters")}</span>
             {activeFilters.map((item) => (
               <button key={item.key} type="button" onClick={item.clear} className="inline-flex min-h-9 items-center gap-1 rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-700">
                 {item.label} <X className="h-3.5 w-3.5" />
               </button>
             ))}
-            <GhostButton onClick={clearFilters}>נקה הכל</GhostButton>
+            <GhostButton onClick={clearFilters}>{t("projects.clearAll")}</GhostButton>
           </div>
         ) : null}
       </div>
@@ -392,10 +397,10 @@ export function ProjectsView() {
                     <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: styles.badge, color: styles.badgeText }}>
                         {resolved.name}
                       </span>
-                    <StatusBadge value={archived ? "ARCHIVED" : project.status} label={archived ? "ארכיון" : labelOf(project.status)} />
+                    <StatusBadge value={archived ? "ARCHIVED" : project.status} label={archived ? t("common.archive") : labelOf(project.status)} />
                   </div>
                   <h2 className="mt-3 text-lg font-semibold text-slate-900">{project.name}</h2>
-                  <p className="mt-1 text-sm text-slate-500">קטגוריה: {resolved.name}</p>
+                  <p className="mt-1 text-sm text-slate-500">{t("projects.categoryLine", { name: resolved.name })}</p>
                   {[project.clientName, project.location, project.projectNumber].filter(Boolean).length ? (
                     <p className="mt-1 text-xs text-slate-500">{[project.clientName, project.location, project.projectNumber].filter(Boolean).join(" · ")}</p>
                   ) : null}
@@ -405,14 +410,19 @@ export function ProjectsView() {
                     </div>
                     <p className="mt-2 text-sm font-medium text-slate-700">{stats.progress}%</p>
                     <p className="mt-1 text-xs text-slate-500">
-                      {stats.total} משימות · {stats.done} הושלמו · {stats.open} פתוחות · {stats.late} באיחור
+                      {t("projects.taskStats", {
+                        total: String(stats.total),
+                        done: String(stats.done),
+                        open: String(stats.open),
+                        late: String(stats.late),
+                      })}
                     </p>
                   </div>
-                  <p className="mt-3 text-xs text-slate-500">מנהל: {employeeName(data.employees, project.managerEmployeeId)}</p>
+                  <p className="mt-3 text-xs text-slate-500">{t("projects.manager", { name: employeeName(data.employees, project.managerEmployeeId) })}</p>
                 </Link>
                 {canManage ? (
                   <div className="mt-4 flex flex-wrap gap-1">
-                    <GhostButton onClick={() => openDraft(project)}>עריכה</GhostButton>
+                    <GhostButton onClick={() => openDraft(project)}>{t("common.edit")}</GhostButton>
                     <select
                       className="h-10 rounded-xl border border-slate-200 bg-white px-2 text-xs"
                       value={project.status}
@@ -437,9 +447,9 @@ export function ProjectsView() {
                       {PROJECT_STATUSES.map((item) => <option key={item} value={item}>{labelOf(item)}</option>)}
                     </select>
                     <GhostButton disabled={busy} onClick={() => void act(project.isActive ? "archiveProject" : "restoreProject", project)}>
-                      {project.isActive ? "ארכיון" : "שחזור"}
+                      {project.isActive ? t("common.archive") : t("projects.restore")}
                     </GhostButton>
-                    <GhostButton disabled={busy} onClick={() => void act("deleteProject", project)}>מחיקה</GhostButton>
+                    <GhostButton disabled={busy} onClick={() => void act("deleteProject", project)}>{t("common.delete")}</GhostButton>
                   </div>
                 ) : null}
               </article>
@@ -447,47 +457,47 @@ export function ProjectsView() {
           })}
         </div>
       ) : scoped.length ? (
-        <EmptyState icon={FolderKanban} title="לא נמצאו פרויקטים המתאימים לסינון." action={<PrimaryButton onClick={clearFilters}>נקה מסננים</PrimaryButton>} />
+        <EmptyState icon={FolderKanban} title={t("projects.noMatch")} action={<PrimaryButton onClick={clearFilters}>{t("projects.clearFilters")}</PrimaryButton>} />
       ) : (
-        <EmptyState icon={FolderKanban} title="אין פרויקטים עדיין" action={canManage ? <PrimaryButton onClick={() => openDraft()}>+ יצירת פרויקט</PrimaryButton> : undefined} />
+        <EmptyState icon={FolderKanban} title={t("work.noProjects")} action={canManage ? <PrimaryButton onClick={() => openDraft()}>{t("projects.create")}</PrimaryButton> : undefined} />
       )}
 
       {filtersOpen ? (
         <div className="fixed inset-0 z-50 bg-slate-900/40 md:bg-slate-900/30">
-          <button type="button" className="absolute inset-0" aria-label="סגירה" onClick={() => setFiltersOpen(false)} />
+          <button type="button" className="absolute inset-0" aria-label={t("common.close")} onClick={() => setFiltersOpen(false)} />
           <div className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl md:inset-auto md:end-6 md:top-24 md:w-[420px] md:rounded-2xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">סינון</h2>
-              <button type="button" onClick={() => setFiltersOpen(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-50" aria-label="סגירה"><X className="h-5 w-5" /></button>
+              <h2 className="text-lg font-semibold">{t("projects.filter")}</h2>
+              <button type="button" onClick={() => setFiltersOpen(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-50" aria-label={t("common.close")}><X className="h-5 w-5" /></button>
             </div>
             {filterControls}
             <div className="mt-5 flex gap-2">
-              <GhostButton onClick={clearFilters}>נקה מסננים</GhostButton>
-              <PrimaryButton onClick={() => setFiltersOpen(false)}>הצג תוצאות</PrimaryButton>
+              <GhostButton onClick={clearFilters}>{t("projects.clearFilters")}</GhostButton>
+              <PrimaryButton onClick={() => setFiltersOpen(false)}>{t("projects.showResults")}</PrimaryButton>
             </div>
           </div>
         </div>
       ) : null}
 
       {draft ? (
-        <Modal title={draft.id ? "עריכת פרויקט" : "פרויקט חדש"} onClose={() => setDraft(null)}>
+        <Modal title={draft.id ? t("projects.edit") : t("projects.new")} onClose={() => setDraft(null)}>
           <div className="grid gap-3">
-            <Field label="שם פרויקט"><input className={inputClass} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></Field>
-            <Field label="לקוח"><input className={inputClass} value={draft.clientName} onChange={(event) => setDraft({ ...draft, clientName: event.target.value })} /></Field>
-            <Field label="תיאור"><textarea className={`${inputClass} h-24 py-2`} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></Field>
-            <Field label="מחלקה">
+            <Field label={t("projects.name")}><input className={inputClass} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></Field>
+            <Field label={t("common.client")}><input className={inputClass} value={draft.clientName} onChange={(event) => setDraft({ ...draft, clientName: event.target.value })} /></Field>
+            <Field label={t("common.description")}><textarea className={`${inputClass} h-24 py-2`} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></Field>
+            <Field label={t("common.department")}>
               <select
                 className={inputClass}
                 value={draft.departmentId}
                 onChange={(event) => setDraft({ ...draft, departmentId: event.target.value })}
               >
-                <option value="">בחירת מחלקה</option>
+                <option value="">{t("projects.pickDepartment")}</option>
                 {data.departments.filter((item) => item.isActive || item.id === draft.departmentId).map((item) => (
                   <option key={item.id} value={item.id}>{item.name}</option>
                 ))}
               </select>
             </Field>
-            <Field label="קטגוריה *">
+            <Field label={t("projects.categoryRequired")}>
               <select
                 className={inputClass}
                 value={draft.categoryId}
@@ -514,32 +524,32 @@ export function ProjectsView() {
                   }
                 }}
               >
-                <option value="">{draft.id ? UNCATEGORIZED_LABEL : "בחר קטגוריה"}</option>
+                <option value="">{draft.id ? uncategorizedLabel : t("projects.pickCategory")}</option>
                 {draftCategories.map((item) => <option key={item.id} value={item.id}>● {item.name}</option>)}
               </select>
             </Field>
             {draftCategories.length === 0 ? (
-              <p className="text-xs text-amber-700">אין קטגוריות. הוסיפו קטגוריה בהגדרות ושליטה → קטגוריות.</p>
+              <p className="text-xs text-amber-700">{t("projects.noCategories")}</p>
             ) : null}
             {draft.categoryId ? (
               <p className="text-xs" style={{ color: categoryStyles(data.departmentCategories.find((item) => item.id === draft.categoryId)?.color).badgeText }}>
                 ● {data.departmentCategories.find((item) => item.id === draft.categoryId)?.name}
               </p>
             ) : null}
-            <Field label="מנהל פרויקט">
+            <Field label={t("projects.managerLabel")}>
               <select className={inputClass} value={draft.managerEmployeeId} onChange={(event) => setDraft({ ...draft, managerEmployeeId: event.target.value })}>
-                <option value="">ללא</option>
+                <option value="">{t("projects.none")}</option>
                 {data.employees.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}
               </select>
             </Field>
-            <Field label="סטטוס">
+            <Field label={t("common.status")}>
               <select className={inputClass} value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}>
                 {PROJECT_STATUSES.map((item) => <option key={item} value={item}>{labelOf(item)}</option>)}
               </select>
             </Field>
             <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-slate-700">אחוז התקדמות</p>
+                <p className="text-sm font-medium text-slate-700">{t("projects.progressPct")}</p>
                 <p className="text-sm font-semibold text-slate-900">{draft.progress}%</p>
               </div>
               <input
@@ -550,7 +560,7 @@ export function ProjectsView() {
                 onChange={(event) => setDraft({ ...draft, progress: normalizeProjectProgress(event.target.value) })}
                 className="mt-3 h-11 w-full accent-[var(--brand-primary)]"
                 dir="ltr"
-                aria-label="אחוז התקדמות"
+                aria-label={t("projects.progressPct")}
               />
               <div className="mt-2 flex items-center justify-center gap-2">
                 <input
@@ -574,15 +584,15 @@ export function ProjectsView() {
                 ))}
               </div>
             </div>
-            <Field label="מיקום"><input className={inputClass} value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} /></Field>
-            <Field label="מספר פרויקט"><input className={inputClass} value={draft.projectNumber} onChange={(event) => setDraft({ ...draft, projectNumber: event.target.value })} /></Field>
+            <Field label={t("common.location")}><input className={inputClass} value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} /></Field>
+            <Field label={t("projects.number")}><input className={inputClass} value={draft.projectNumber} onChange={(event) => setDraft({ ...draft, projectNumber: event.target.value })} /></Field>
             <div className="grid gap-3 md:grid-cols-2">
-              <Field label="התחלה"><input className={inputClass} value={draft.startDate} onChange={(event) => setDraft({ ...draft, startDate: event.target.value })} /></Field>
-              <Field label="Deadline"><input className={inputClass} value={draft.dueDate} onChange={(event) => setDraft({ ...draft, dueDate: event.target.value })} /></Field>
+              <Field label={t("common.start")}><input className={inputClass} value={draft.startDate} onChange={(event) => setDraft({ ...draft, startDate: event.target.value })} /></Field>
+              <Field label={t("common.deadline")}><input className={inputClass} value={draft.dueDate} onChange={(event) => setDraft({ ...draft, dueDate: event.target.value })} /></Field>
             </div>
             <div className="flex justify-end gap-2">
-              <GhostButton onClick={() => setDraft(null)}>ביטול</GhostButton>
-              <PrimaryButton disabled={busy || !draft.name.trim() || (!draft.id && !draft.categoryId)} onClick={() => void save()}>שמירה</PrimaryButton>
+              <GhostButton onClick={() => setDraft(null)}>{t("common.cancel")}</GhostButton>
+              <PrimaryButton disabled={busy || !draft.name.trim() || (!draft.id && !draft.categoryId)} onClick={() => void save()}>{t("common.save")}</PrimaryButton>
             </div>
           </div>
         </Modal>

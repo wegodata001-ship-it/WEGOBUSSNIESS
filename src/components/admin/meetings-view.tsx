@@ -16,15 +16,12 @@ import { employeeName, projectName, useBusinessCatalog } from "@/lib/admin/catal
 import { CALENDAR_COLOR_META, asCalendarColor, colorByIndex } from "@/lib/admin/palette";
 import {
   formatDateDisplay,
-  formatMonthTitle,
   meetingParticipants,
   monthCells,
-  rangeTitle,
   shiftMeetingRange,
   shiftMonth,
   threeDayDates,
   weekDates,
-  WEEKDAY_LETTERS,
   addMinutesToTime,
 } from "@/lib/admin/meeting-time";
 import { isDateOnly, isTimeOnly, todayInTimeZone } from "@/lib/dates/format";
@@ -35,8 +32,39 @@ import type { Task } from "@/types/task";
 
 type CalendarView = "month" | "week" | "day" | "three" | "agenda";
 
+function dateLocale(locale: string) {
+  return locale === "ar" ? "ar-IL-u-nu-latn" : "he-IL-u-nu-latn";
+}
+
+function formatLocaleDate(dateOnly: string, locale: string, options: Intl.DateTimeFormatOptions) {
+  if (!isDateOnly(dateOnly)) return "";
+  const [year, month, day] = dateOnly.split("-").map(Number);
+  return new Intl.DateTimeFormat(dateLocale(locale), { timeZone: "UTC", ...options })
+    .format(new Date(Date.UTC(year, month - 1, day, 12)));
+}
+
+function localeRangeTitle(view: CalendarView, anchor: string, locale: string) {
+  if (view === "day") {
+    return formatLocaleDate(anchor, locale, { weekday: "long", day: "numeric", month: "long" });
+  }
+  if (view === "week") {
+    const days = weekDates(anchor);
+    const start = days[0]!;
+    const end = days[6]!;
+    if (start.slice(0, 7) === end.slice(0, 7)) {
+      return `${Number(start.slice(8))}–${Number(end.slice(8))} ${formatLocaleDate(start, locale, { month: "long", year: "numeric" })}`;
+    }
+    return `${formatDateDisplay(start)} – ${formatDateDisplay(end)}`;
+  }
+  if (view === "three") {
+    const days = threeDayDates(anchor);
+    return `${formatDateDisplay(days[0]!)} – ${formatDateDisplay(days[2]!)}`;
+  }
+  return formatLocaleDate(anchor, locale, { month: "long", year: "numeric" });
+}
+
 export function MeetingsView() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { user, business, membership, permissions } = useBusinessContext();
   const { data, loading, reload } = useBusinessCatalog(business?.id ?? null);
   const today = todayInTimeZone(business?.timezone);
@@ -129,7 +157,7 @@ export function MeetingsView() {
     }
   }, [canCreate, currentEmployeeId, loading, openedFromQuery, searchParams, today]);
 
-  if (loading || !ready) return <Spinner label="טוען יומן פגישות…" />;
+  if (loading || !ready) return <Spinner label={t("common.loading")} />;
 
   function openCreate(date = anchor, startTime = "10:00") {
     setQuick(null);
@@ -287,40 +315,40 @@ export function MeetingsView() {
   }
 
   const desktopViews: Array<{ id: CalendarView; label: string }> = [
-    { id: "month", label: "חודש" },
-    { id: "week", label: "שבוע" },
-    { id: "day", label: "יום" },
-    { id: "agenda", label: "סדר יום" },
+    { id: "month", label: t("common.month") },
+    { id: "week", label: t("common.week") },
+    { id: "day", label: t("meetings.day") },
+    { id: "agenda", label: t("meetings.agenda") },
   ];
   const mobileViews: Array<{ id: CalendarView; label: string }> = [
-    { id: "day", label: "יום" },
-    { id: "three", label: "3 ימים" },
-    { id: "agenda", label: "סדר יום" },
+    { id: "day", label: t("meetings.day") },
+    { id: "three", label: t("meetings.threeDays") },
+    { id: "agenda", label: t("meetings.agenda") },
   ];
 
   return (
     <div className="-mx-1 flex h-[calc(100vh-7.25rem)] flex-col gap-3 md:-mx-0">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">פגישות</h1>
-          <p className="text-sm text-slate-500">יומן עבודה של העסק</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{t("nav.meetings")}</h1>
+          <p className="text-sm text-slate-500">{t("meetings.calendarSubtitle")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {canCreateTask ? <GhostButton onClick={() => openTaskCreate()}>+ משימה חדשה</GhostButton> : null}
-          {canCreate ? <PrimaryButton onClick={() => openCreate()}>+ פגישה חדשה</PrimaryButton> : null}
+          {canCreateTask ? <GhostButton onClick={() => openTaskCreate()}>{t("meetings.newTask")}</GhostButton> : null}
+          {canCreate ? <PrimaryButton onClick={() => openCreate()}>{t("work.newMeeting")}</PrimaryButton> : null}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
-          <GhostButton onClick={() => setAnchor(today)}>היום</GhostButton>
-          <button type="button" className="rounded-lg p-2 hover:bg-slate-50" onClick={() => setAnchor(shiftMeetingRange(view, anchor, -1))} aria-label="הקודם">
+          <GhostButton onClick={() => setAnchor(today)}>{t("common.today")}</GhostButton>
+          <button type="button" className="rounded-lg p-2 hover:bg-slate-50" onClick={() => setAnchor(shiftMeetingRange(view, anchor, -1))} aria-label={t("meetings.prev")}>
             <ChevronRight className="h-4 w-4" />
           </button>
-          <button type="button" className="rounded-lg p-2 hover:bg-slate-50" onClick={() => setAnchor(shiftMeetingRange(view, anchor, 1))} aria-label="הבא">
+          <button type="button" className="rounded-lg p-2 hover:bg-slate-50" onClick={() => setAnchor(shiftMeetingRange(view, anchor, 1))} aria-label={t("meetings.next")}>
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <p className="min-w-40 text-sm font-semibold text-slate-900">{rangeTitle(view, anchor)}</p>
+          <p className="min-w-40 text-sm font-semibold text-slate-900">{localeRangeTitle(view, anchor, locale)}</p>
         </div>
         <div className="flex flex-wrap gap-1">
           {(isMobile ? mobileViews : desktopViews).map((item) => (
@@ -350,10 +378,10 @@ export function MeetingsView() {
           <div className="mt-4 space-y-3 text-sm">
             <label className="flex items-center gap-2 font-medium">
               <input type="checkbox" checked={myOnly} onChange={(event) => setMyOnly(event.target.checked)} />
-              היומן שלי
+              {t("meetings.myCalendar")}
             </label>
             <div>
-              <p className="mb-1 text-xs font-semibold text-slate-500">עובדים</p>
+              <p className="mb-1 text-xs font-semibold text-slate-500">{t("work.employee")}</p>
               {data.employees.map((employee, index) => (
                 <label key={employee.id} className="flex items-center gap-2 py-0.5">
                   <input
@@ -367,7 +395,7 @@ export function MeetingsView() {
               ))}
             </div>
             <div>
-              <p className="mb-1 text-xs font-semibold text-slate-500">פרויקטים</p>
+              <p className="mb-1 text-xs font-semibold text-slate-500">{t("nav.projects")}</p>
               {data.projects.map((project) => (
                 <label key={project.id} className="flex items-center gap-2 py-0.5">
                   <input
@@ -390,12 +418,12 @@ export function MeetingsView() {
               setMyOnly(value === "mine");
               setEmployeeFilter(value === "mine" ? "" : value);
             }}>
-              <option value="">כל העובדים</option>
-              <option value="mine">היומן שלי</option>
+              <option value="">{t("meetings.allEmployees")}</option>
+              <option value="mine">{t("meetings.myCalendar")}</option>
               {data.employees.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}
             </select>
             <select className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
-              <option value="">כל הפרויקטים</option>
+              <option value="">{t("meetings.allProjects")}</option>
               {data.projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </div>
@@ -405,12 +433,12 @@ export function MeetingsView() {
               setMyOnly(value === "mine");
               setEmployeeFilter(value === "mine" ? "" : value);
             }}>
-              <option value="">כל העובדים</option>
-              <option value="mine">היומן שלי</option>
+              <option value="">{t("meetings.allEmployees")}</option>
+              <option value="mine">{t("meetings.myCalendar")}</option>
               {data.employees.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}
             </select>
             <select className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
-              <option value="">כל הפרויקטים</option>
+              <option value="">{t("meetings.allProjects")}</option>
               {data.projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </div>
@@ -456,7 +484,7 @@ export function MeetingsView() {
           type="button"
           onClick={() => canCreate ? openCreate() : canCreateTask ? openTaskCreate() : undefined}
           className="fixed bottom-5 end-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--brand-primary)] text-white shadow-lg lg:hidden"
-          aria-label="משימה חדשה"
+          aria-label={t("create.task")}
         >
           <Plus className="h-6 w-6" />
         </button>
@@ -578,20 +606,22 @@ function MiniCalendar({
   onSelect: (date: string) => void;
   onMonth: (direction: -1 | 1) => void;
 }) {
+  const { t, locale } = useI18n();
+  const weekLetters = [t("cal.sun"), t("cal.mon"), t("cal.tue"), t("cal.wed"), t("cal.thu"), t("cal.fri"), t("cal.sat")];
   const cells = monthCells(anchor);
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <button type="button" onClick={() => onMonth(-1)} className="rounded-lg p-1 hover:bg-slate-50" aria-label="חודש קודם">
+        <button type="button" onClick={() => onMonth(-1)} className="rounded-lg p-1 hover:bg-slate-50" aria-label={t("meetings.prevMonth")}>
           <ChevronRight className="h-4 w-4" />
         </button>
-        <p className="text-sm font-semibold">{formatMonthTitle(anchor)}</p>
-        <button type="button" onClick={() => onMonth(1)} className="rounded-lg p-1 hover:bg-slate-50" aria-label="חודש הבא">
+        <p className="text-sm font-semibold">{formatLocaleDate(anchor, locale, { month: "long", year: "numeric" })}</p>
+        <button type="button" onClick={() => onMonth(1)} className="rounded-lg p-1 hover:bg-slate-50" aria-label={t("meetings.nextMonth")}>
           <ChevronLeft className="h-4 w-4" />
         </button>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-slate-400">
-        {WEEKDAY_LETTERS.map((day) => <span key={day}>{day.replace("׳", "")}</span>)}
+        {weekLetters.map((day) => <span key={day}>{day}</span>)}
         {cells.map((cell, index) => (
           <button
             key={cell ?? `e-${index}`}
@@ -635,6 +665,7 @@ function TaskQuickView({
   onComplete: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useI18n();
   const people = [task.assigneeId, ...task.collaboratorIds].filter((id): id is string => Boolean(id));
   return (
     <Modal title={task.title} onClose={onClose}>
@@ -644,16 +675,16 @@ function TaskQuickView({
           {" · "}
           {task.startDate || task.scheduledDate || "—"}
         </p>
-        <p>פרויקט: {projectName(projects, task.projectId)}</p>
-        <p>משתתפים: {people.map((id) => employeeName(employees, id)).join(", ") || "—"}</p>
-        <p className="leading-6 text-slate-600">{task.description || "אין תיאור"}</p>
+        <p>{t("common.project")}: {projectName(projects, task.projectId)}</p>
+        <p>{t("meetings.participants")}: {people.map((id) => employeeName(employees, id)).join(", ") || "—"}</p>
+        <p className="leading-6 text-slate-600">{task.description || t("meetings.noDescription")}</p>
       </div>
       <div className="mt-5 flex flex-wrap justify-end gap-2">
-        <GhostButton onClick={onEdit}>עריכה</GhostButton>
+        <GhostButton onClick={onEdit}>{t("common.edit")}</GhostButton>
         {canManage ? (
           <>
-            <GhostButton disabled={busy} onClick={onComplete}>סיום משימה</GhostButton>
-            <GhostButton disabled={busy} onClick={onDelete}>מחיקה</GhostButton>
+            <GhostButton disabled={busy} onClick={onComplete}>{t("meetings.completeTask")}</GhostButton>
+            <GhostButton disabled={busy} onClick={onDelete}>{t("common.delete")}</GhostButton>
           </>
         ) : null}
       </div>
@@ -674,10 +705,12 @@ function MonthGrid({
   onDay: (date: string) => void;
   onSelect: (event: CalendarEvent) => void;
 }) {
+  const { t } = useI18n();
+  const weekLetters = [t("cal.sun"), t("cal.mon"), t("cal.tue"), t("cal.wed"), t("cal.thu"), t("cal.fri"), t("cal.sat")];
   const cells = monthCells(anchor);
   return (
     <div className="grid min-h-0 flex-1 grid-cols-7 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      {WEEKDAY_LETTERS.map((day) => (
+      {weekLetters.map((day) => (
         <div key={day} className="border-b border-s border-slate-100 bg-slate-50 px-2 py-2 text-center text-xs font-medium text-slate-500">
           {day}
         </div>
@@ -706,7 +739,7 @@ function MonthGrid({
                   ))}
                   {extra > 0 ? (
                     <button type="button" onClick={() => onDay(cell)} className="text-[11px] text-slate-500">
-                      +{extra} פגישות נוספות
+                      {t("meetings.moreMeetings", { count: String(extra) })}
                     </button>
                   ) : null}
                 </div>
@@ -730,6 +763,7 @@ function AgendaList({
   projects: Project[];
   onSelect: (event: CalendarEvent) => void;
 }) {
+  const { t } = useI18n();
   const groups = [...events]
     .filter((item) => isDateOnly(item.date))
     .sort((left, right) => `${left.date}${left.startTime}`.localeCompare(`${right.date}${right.startTime}`))
@@ -757,12 +791,12 @@ function AgendaList({
                   <p className="text-xs text-slate-500">
                     <span dir="ltr">{event.startTime}{event.endTime ? `–${event.endTime}` : ""}</span>
                     {" · "}
-                    {event.location || (event.kind === "task" ? "משימה" : "פגישה")}
+                    {event.location || (event.kind === "task" ? t("work.task") : t("schedule.meeting"))}
                     {" · "}
                     {projectName(projects, event.projectId)}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {event.people.map((id) => employeeName(employees, id)).join(", ") || "ללא משתתפים"}
+                    {event.people.map((id) => employeeName(employees, id)).join(", ") || t("meetings.noParticipants")}
                   </p>
                 </div>
               </button>
@@ -770,7 +804,7 @@ function AgendaList({
           </div>
         </section>
       )) : (
-        <p className="py-10 text-center text-sm text-slate-500">אין פגישות בטווח שנבחר</p>
+        <p className="py-10 text-center text-sm text-slate-500">{t("meetings.emptyRange")}</p>
       )}
     </div>
   );

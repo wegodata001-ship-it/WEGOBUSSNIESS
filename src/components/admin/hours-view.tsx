@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Clock3 } from "lucide-react";
 import { DatePicker, PageHeader, PrimaryButton, inputClass } from "@/components/admin/ui";
 import { useBusinessContext } from "@/components/providers/business-context";
+import { useI18n } from "@/components/providers/i18n-provider";
 import { EmptyState } from "@/components/ui/empty-state";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { SectionCard } from "@/components/ui/section-card";
@@ -16,6 +17,7 @@ function csvEscape(value: string) {
 }
 
 export function HoursView() {
+  const { t } = useI18n();
   const { business } = useBusinessContext();
   const { data, loading } = useBusinessCatalog(business?.id ?? null);
   const today = todayInTimeZone(business?.timezone);
@@ -37,12 +39,12 @@ export function HoursView() {
     return true;
   }), [data.sessions, data.tasks, departmentId, employeeId, from, projectId, to]);
 
-  if (loading) return <Spinner label="טוען שעות…" />;
+  if (loading) return <Spinner label={t("hours.loading")} />;
 
   const selected = employeeId ? filtered.filter((item) => item.employeeId === employeeId) : filtered;
 
   function exportCsv() {
-    const lines = [["תאריך", "עובד", "פרויקט", "משימה", "התחלה", "סיום", "משך"]].concat(
+    const lines = [[t("common.date"), t("common.employee"), t("common.project"), t("docs.taskName"), t("common.start"), t("common.end"), t("hours.duration")]].concat(
       selected.map((session) => {
         const task = data.tasks.find((item) => item.id === session.taskId);
         return [
@@ -68,46 +70,46 @@ export function HoursView() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="דוחות שעות"
-        subtitle="סיכום יומי, שבועי וחודשי לפי עובד, מחלקה ופרויקט"
+        title={t("nav.hours")}
+        subtitle={t("hours.subtitle")}
         actions={
           <>
-            <PrimaryButton onClick={exportCsv}>ייצוא CSV</PrimaryButton>
-            <PrimaryButton onClick={() => window.print()}>ייצוא PDF</PrimaryButton>
+            <PrimaryButton onClick={exportCsv}>{t("hours.exportCsv")}</PrimaryButton>
+            <PrimaryButton onClick={() => window.print()}>{t("hours.exportPdf")}</PrimaryButton>
           </>
         }
       />
       <div className="grid gap-4 sm:grid-cols-3">
-        <KpiCard label="סה״כ שעות היום" value={sessionHours(data.sessions.filter((item) => item.date === today))} icon={Clock3} />
-        <KpiCard label="השבוע" value={sessionHours(data.sessions.filter((item) => item.date >= weekStart && item.date <= today))} icon={Clock3} />
-        <KpiCard label="החודש" value={sessionHours(data.sessions.filter((item) => item.date.startsWith(month)))} icon={Clock3} />
+        <KpiCard label={t("hours.todayTotal")} value={sessionHours(data.sessions.filter((item) => item.date === today))} icon={Clock3} />
+        <KpiCard label={t("attendance.week")} value={sessionHours(data.sessions.filter((item) => item.date >= weekStart && item.date <= today))} icon={Clock3} />
+        <KpiCard label={t("attendance.month")} value={sessionHours(data.sessions.filter((item) => item.date.startsWith(month)))} icon={Clock3} />
       </div>
       <div className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-3 md:grid-cols-5">
         <DatePicker value={from} onChange={setFrom} />
         <DatePicker value={to} onChange={setTo} />
         <select className={inputClass} value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
-          <option value="">כל העובדים</option>
+          <option value="">{t("meetings.allEmployees")}</option>
           {data.employees.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}
         </select>
         <select className={inputClass} value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
-          <option value="">כל המחלקות</option>
+          <option value="">{t("hours.allDepartments")}</option>
           {data.departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
         <select className={inputClass} value={projectId} onChange={(event) => setProjectId(event.target.value)}>
-          <option value="">כל הפרויקטים</option>
+          <option value="">{t("meetings.allProjects")}</option>
           {data.projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
       </div>
 
-      <SectionCard title="סיכום לפי עובד">
+      <SectionCard title={t("hours.summaryByEmployee")}>
         {data.employees.length ? (
           <table className="min-w-full text-sm">
             <thead className="text-xs text-slate-500">
               <tr>
-                <th className="py-2 text-start">עובד</th>
-                <th className="py-2 text-start">שעות רגילות</th>
-                <th className="py-2 text-start">שעות פעילות</th>
-                <th className="py-2 text-start">מספר משימות</th>
+                <th className="py-2 text-start">{t("common.employee")}</th>
+                <th className="py-2 text-start">{t("hours.regularHours")}</th>
+                <th className="py-2 text-start">{t("hours.activeHours")}</th>
+                <th className="py-2 text-start">{t("hours.taskCount")}</th>
               </tr>
             </thead>
             <tbody>
@@ -125,16 +127,16 @@ export function HoursView() {
               })}
             </tbody>
           </table>
-        ) : <EmptyState icon={Clock3} title="אין דיווחי שעות להצגה" />}
+        ) : <EmptyState icon={Clock3} title={t("empty.hours")} />}
       </SectionCard>
 
-      <SectionCard title="פירוט">
+      <SectionCard title={t("hours.details")}>
         {selected.length ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="text-xs text-slate-500">
                 <tr>
-                  {["תאריך", "פרויקט", "משימה", "התחלה", "סיום", "משך"].map((item) => <th key={item} className="py-2 text-start">{item}</th>)}
+                  {[t("common.date"), t("common.project"), t("docs.taskName"), t("common.start"), t("common.end"), t("hours.duration")].map((item) => <th key={item} className="py-2 text-start">{item}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -146,7 +148,7 @@ export function HoursView() {
                       <td className="py-2">{projectName(data.projects, task?.projectId)}</td>
                       <td className="py-2">{task?.title ?? "—"}</td>
                       <td className="py-2">{session.startTime}</td>
-                      <td className="py-2">{session.endTime ?? "פתוח"}</td>
+                      <td className="py-2">{session.endTime ?? t("hours.open")}</td>
                       <td className="py-2">{session.durationMinutes ?? "—"}</td>
                     </tr>
                   );
@@ -154,7 +156,7 @@ export function HoursView() {
               </tbody>
             </table>
           </div>
-        ) : <EmptyState icon={Clock3} title="אין דיווחי שעות בטווח שנבחר" />}
+        ) : <EmptyState icon={Clock3} title={t("hours.emptyRange")} />}
       </SectionCard>
     </div>
   );

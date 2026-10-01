@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Truck } from "lucide-react";
 import { Field, GhostButton, Modal, PageHeader, PrimaryButton, StatusBadge, inputClass } from "@/components/admin/ui";
 import { useBusinessContext } from "@/components/providers/business-context";
+import { useI18n } from "@/components/providers/i18n-provider";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { mutateBusiness } from "@/lib/admin/api";
@@ -13,6 +14,7 @@ import { todayInTimeZone } from "@/lib/dates/format";
 import { REQUEST_TYPES, type LogisticsRequest } from "@/types/logistics";
 
 export function RequestsView() {
+  const { t } = useI18n();
   const { business } = useBusinessContext();
   const { data, loading, reload } = useBusinessCatalog(business?.id ?? null);
   const today = todayInTimeZone(business?.timezone);
@@ -25,7 +27,7 @@ export function RequestsView() {
   const [busy, setBusy] = useState(false);
   const [response, setResponse] = useState<Record<string, string>>({});
 
-  if (loading) return <Spinner label="טוען בקשות…" />;
+  if (loading) return <Spinner label={t("requests.loading")} />;
 
   async function create() {
     if (!business?.id || !title.trim()) return;
@@ -63,13 +65,13 @@ export function RequestsView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="בקשות משרד / לוגיסטיקה" subtitle="פתיחה, אישור, דחייה והשלמה של בקשות העובדים" actions={<PrimaryButton onClick={() => setOpen(true)}>+ בקשה חדשה</PrimaryButton>} />
+      <PageHeader title={t("nav.requests")} subtitle={t("requests.subtitle")} actions={<PrimaryButton onClick={() => setOpen(true)}>+ {t("requests.new")}</PrimaryButton>} />
       {data.requests.length ? (
         <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>
-                {["עובד", "סוג", "פירוט", "תאריך", "סכום", "סטטוס", "מענה", "פעולות"].map((item) => (
+                {[t("common.employee"), t("common.type"), t("requests.details"), t("common.date"), t("common.amount"), t("common.status"), t("requests.response"), t("common.actions")].map((item) => (
                   <th key={item} className="px-3 py-3 text-start">{item}</th>
                 ))}
               </tr>
@@ -87,14 +89,14 @@ export function RequestsView() {
                   <td className="px-3 py-3">{item.amount ?? "—"}</td>
                   <td className="px-3 py-3"><StatusBadge value={item.status} label={labelOf(item.status)} /></td>
                   <td className="px-3 py-3">
-                    <input className={inputClass} placeholder="מענה מנהל" value={response[item.id] ?? item.managerResponse} onChange={(event) => setResponse((current) => ({ ...current, [item.id]: event.target.value }))} />
+                    <input className={inputClass} placeholder={t("requests.managerResponse")} value={response[item.id] ?? item.managerResponse} onChange={(event) => setResponse((current) => ({ ...current, [item.id]: event.target.value }))} />
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex flex-wrap gap-1">
-                      <GhostButton disabled={busy} onClick={() => void handle(item, "APPROVED")}>אישור</GhostButton>
-                      <GhostButton disabled={busy} onClick={() => void handle(item, "REJECTED")}>דחייה</GhostButton>
-                      <GhostButton disabled={busy} onClick={() => void handle(item, "NEED_INFO")}>בקש מידע</GhostButton>
-                      <GhostButton disabled={busy} onClick={() => void handle(item, "FULFILLED")}>הושלם</GhostButton>
+                      <GhostButton disabled={busy} onClick={() => void handle(item, "APPROVED")}>{labelOf("APPROVED")}</GhostButton>
+                      <GhostButton disabled={busy} onClick={() => void handle(item, "REJECTED")}>{labelOf("REJECTED")}</GhostButton>
+                      <GhostButton disabled={busy} onClick={() => void handle(item, "NEED_INFO")}>{t("requests.needInfo")}</GhostButton>
+                      <GhostButton disabled={busy} onClick={() => void handle(item, "FULFILLED")}>{labelOf("FULFILLED")}</GhostButton>
                     </div>
                   </td>
                 </tr>
@@ -103,24 +105,24 @@ export function RequestsView() {
           </table>
         </div>
       ) : (
-        <EmptyState icon={Truck} title="אין בקשות ממתינות לטיפול" action={<PrimaryButton onClick={() => setOpen(true)}>+ בקשה חדשה</PrimaryButton>} />
+        <EmptyState icon={Truck} title={t("empty.requests")} action={<PrimaryButton onClick={() => setOpen(true)}>+ {t("requests.new")}</PrimaryButton>} />
       )}
 
       {open ? (
-        <Modal title="בקשה חדשה" onClose={() => setOpen(false)}>
+        <Modal title={t("requests.new")} onClose={() => setOpen(false)}>
           <div className="grid gap-3">
-            <Field label="סוג">
+            <Field label={t("common.type")}>
               <select className={inputClass} value={type} onChange={(event) => setType(event.target.value)}>
                 {REQUEST_TYPES.map((item) => <option key={item} value={item}>{labelOf(item)}</option>)}
               </select>
             </Field>
-            <Field label="כותרת"><input className={inputClass} value={title} onChange={(event) => setTitle(event.target.value)} /></Field>
-            <Field label="פירוט"><textarea className={`${inputClass} h-24 py-2`} value={details} onChange={(event) => setDetails(event.target.value)} /></Field>
-            <Field label="תאריך"><input className={inputClass} value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></Field>
-            <Field label="סכום אם רלוונטי"><input className={inputClass} value={amount} onChange={(event) => setAmount(event.target.value)} /></Field>
+            <Field label={t("docs.title")}><input className={inputClass} value={title} onChange={(event) => setTitle(event.target.value)} /></Field>
+            <Field label={t("requests.details")}><textarea className={`${inputClass} h-24 py-2`} value={details} onChange={(event) => setDetails(event.target.value)} /></Field>
+            <Field label={t("common.date")}><input className={inputClass} value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></Field>
+            <Field label={t("requests.amountOptional")}><input className={inputClass} value={amount} onChange={(event) => setAmount(event.target.value)} /></Field>
             <div className="flex justify-end gap-2">
-              <GhostButton onClick={() => setOpen(false)}>ביטול</GhostButton>
-              <PrimaryButton disabled={busy} onClick={() => void create()}>שליחה</PrimaryButton>
+              <GhostButton onClick={() => setOpen(false)}>{t("common.cancel")}</GhostButton>
+              <PrimaryButton disabled={busy} onClick={() => void create()}>{t("common.send")}</PrimaryButton>
             </div>
           </div>
         </Modal>

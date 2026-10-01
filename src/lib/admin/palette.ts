@@ -1,3 +1,5 @@
+import { getI18nLocale, translate, type MessageKey } from "@/lib/i18n";
+
 export const CALENDAR_COLORS = ["BLUE", "GREEN", "PURPLE", "ORANGE", "RED", "PINK", "YELLOW", "CYAN"] as const;
 export type CalendarColor = (typeof CALENDAR_COLORS)[number];
 
@@ -25,6 +27,12 @@ export const TASK_TYPE_LABELS: Record<TaskKind, string> = {
   MANAGEMENT: "ניהול",
   OTHER: "אחר",
 };
+
+export function taskTypeLabel(kind: string | null | undefined) {
+  const key = `taskType.${kind || "GENERAL"}` as MessageKey;
+  const translated = translate(getI18nLocale(), key);
+  return translated !== key ? translated : TASK_TYPE_LABELS[(kind as TaskKind) || "GENERAL"] ?? kind ?? "";
+}
 
 export const PRIORITY_CHIPS = [
   { id: "LOW", label: "נמוכה", dot: "bg-slate-400" },

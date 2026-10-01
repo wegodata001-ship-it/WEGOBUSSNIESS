@@ -3,6 +3,7 @@
 import { BarChart3 } from "lucide-react";
 import { PageHeader } from "@/components/admin/ui";
 import { useBusinessContext } from "@/components/providers/business-context";
+import { useI18n } from "@/components/providers/i18n-provider";
 import { EmptyState } from "@/components/ui/empty-state";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { SectionCard } from "@/components/ui/section-card";
@@ -14,8 +15,9 @@ import { todayInTimeZone } from "@/lib/dates/format";
 import { CheckSquare, Clock3, FolderKanban, Users } from "lucide-react";
 
 function Bars({ items }: { items: { label: string; value: number }[] }) {
+  const { t } = useI18n();
   const max = Math.max(1, ...items.map((item) => item.value));
-  if (!items.length) return <EmptyState icon={BarChart3} title="אין נתונים לגרף זה" />;
+  if (!items.length) return <EmptyState icon={BarChart3} title={t("bi.noChart")} />;
   return (
     <div className="space-y-2">
       {items.map((item) => (
@@ -34,12 +36,13 @@ function Bars({ items }: { items: { label: string; value: number }[] }) {
 }
 
 export function BiView() {
+  const { t } = useI18n();
   const { business } = useBusinessContext();
   const { data, loading } = useBusinessCatalog(business?.id ?? null);
   const today = todayInTimeZone(business?.timezone);
   const month = today.slice(0, 7);
 
-  if (loading) return <Spinner label="טוען בינה עסקית…" />;
+  if (loading) return <Spinner label={t("bi.loading")} />;
 
   const monthSessions = data.sessions.filter((item) => item.date.startsWith(month));
   const done = data.tasks.filter((task) => task.status === "DONE" || task.status === "COMPLETED");
@@ -79,38 +82,38 @@ export function BiView() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="בינה עסקית" subtitle="שעות, השלמות וביצועים לפי עובד, מחלקה ופרויקט" />
+      <PageHeader title={t("nav.bi")} subtitle={t("bi.subtitle")} />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <KpiCard label="סה״כ שעות החודש" value={sessionHours(monthSessions)} icon={Clock3} />
-        <KpiCard label="משימות שהושלמו" value={done.length} icon={CheckSquare} tone="success" />
-        <KpiCard label="משימות באיחור" value={late.length} icon={BarChart3} tone="danger" />
-        <KpiCard label="אחוז השלמה" value={`${completion}%`} icon={CheckSquare} />
-        <KpiCard label="עובדים פעילים" value={data.employees.filter((item) => item.status === "ACTIVE").length} icon={Users} />
-        <KpiCard label="פרויקטים פעילים" value={data.projects.filter((item) => item.status === "ACTIVE").length} icon={FolderKanban} />
+        <KpiCard label={t("attendance.monthHours")} value={sessionHours(monthSessions)} icon={Clock3} />
+        <KpiCard label={t("bi.doneTasks")} value={done.length} icon={CheckSquare} tone="success" />
+        <KpiCard label={t("dashboard.overdueTasks")} value={late.length} icon={BarChart3} tone="danger" />
+        <KpiCard label={t("bi.completionRate")} value={`${completion}%`} icon={CheckSquare} />
+        <KpiCard label={t("dashboard.activeEmployees")} value={data.employees.filter((item) => item.status === "ACTIVE").length} icon={Users} />
+        <KpiCard label={t("bi.activeProjects")} value={data.projects.filter((item) => item.status === "ACTIVE").length} icon={FolderKanban} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
-        <SectionCard title="שעות לפי עובד"><Bars items={hoursByEmployee} /></SectionCard>
-        <SectionCard title="שעות לפי מחלקה"><Bars items={hoursByDept} /></SectionCard>
-        <SectionCard title="שעות לפי פרויקט"><Bars items={hoursByProject} /></SectionCard>
-        <SectionCard title="משימות לפי סטטוס"><Bars items={byStatus} /></SectionCard>
-        <SectionCard title="משימות לפי עדיפות"><Bars items={byPriority} /></SectionCard>
-        <SectionCard title="Completion trend">
-          <p className="text-sm text-slate-500">הושלמו {done.length} מתוך {data.tasks.length} משימות. פעילות נוכחית: {active.length}.</p>
+        <SectionCard title={t("bi.hoursByEmployee")}><Bars items={hoursByEmployee} /></SectionCard>
+        <SectionCard title={t("bi.hoursByDept")}><Bars items={hoursByDept} /></SectionCard>
+        <SectionCard title={t("bi.hoursByProject")}><Bars items={hoursByProject} /></SectionCard>
+        <SectionCard title={t("bi.tasksByStatus")}><Bars items={byStatus} /></SectionCard>
+        <SectionCard title={t("bi.tasksByPriority")}><Bars items={byPriority} /></SectionCard>
+        <SectionCard title={t("bi.trend")}>
+          <p className="text-sm text-slate-500">{t("bi.trendText", { done: String(done.length), total: String(data.tasks.length), active: String(active.length) })}</p>
         </SectionCard>
       </div>
 
-      <SectionCard title="טבלת ביצועים">
+      <SectionCard title={t("bi.performance")}>
         {data.employees.length ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="text-xs text-slate-500">
                 <tr>
-                  <th className="py-2 text-start font-medium">עובד</th>
-                  <th className="py-2 text-start font-medium">מחלקה</th>
-                  <th className="py-2 text-start font-medium">שעות</th>
-                  <th className="py-2 text-start font-medium">הושלמו</th>
-                  <th className="py-2 text-start font-medium">פתוחות</th>
+                  <th className="py-2 text-start font-medium">{t("common.employee")}</th>
+                  <th className="py-2 text-start font-medium">{t("common.department")}</th>
+                  <th className="py-2 text-start font-medium">{t("common.hours")}</th>
+                  <th className="py-2 text-start font-medium">{t("bi.doneCol")}</th>
+                  <th className="py-2 text-start font-medium">{t("bi.openCol")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -129,7 +132,7 @@ export function BiView() {
               </tbody>
             </table>
           </div>
-        ) : <EmptyState icon={Users} title="אין עובדים להצגה" />}
+        ) : <EmptyState icon={Users} title={t("empty.employees")} />}
       </SectionCard>
     </div>
   );

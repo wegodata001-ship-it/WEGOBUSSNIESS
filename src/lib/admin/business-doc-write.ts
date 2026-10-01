@@ -63,6 +63,7 @@ function payloadFrom(data: Record<string, unknown>, current: Partial<BusinessDoc
   const totals = calculateDocumentTotals({ lines, discount, discountType, vatRate: rate, vatInclusive });
   const next = {
     title: text(data.title) || current.title || "",
+    language: data.language === "ar" || current.language === "ar" ? "ar" as const : "he" as const,
     intro: data.intro !== undefined ? text(data.intro) : current.intro || "",
     date: text(data.date) || current.date || todayInTimeZone(),
     validDays: typeof data.validDays === "number" ? data.validDays : current.validDays ?? 14,

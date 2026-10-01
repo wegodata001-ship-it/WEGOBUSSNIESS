@@ -1,5 +1,7 @@
 import { notifyEmployees, notifyManagers, notifyUnpaidOnComplete, notifyUsers, taskHref } from "@/lib/admin/notify";
-import { remainingBalance } from "@/lib/finance/vat";
+import { canSetTaskPrice } from "@/lib/finance/access";
+import { parseMoney } from "@/lib/finance/money";
+import { calculateTaskPrice, DEFAULT_BUSINESS_VAT_RATE, paymentStatusFor, remainingBalance } from "@/lib/finance/vat";
 import { writeTaskActivity } from "@/lib/admin/task-activity";
 import { canChangeWorkStatus } from "@/lib/admin/task-access";
 import { normalizeTaskTeam, taskParticipantIds } from "@/lib/admin/task-team";
@@ -172,11 +174,25 @@ export async function upsertTask(input: {
     endTime: timeOrNull(data.endTime),
     color: text(data.color) || "BLUE",
     taskType: text(data.taskType) || text(data.type) || "GENERAL",
+    statusId: nullable(data.statusId) ?? (typeof existing.statusId === "string" ? existing.statusId : status),
     templateId,
     createdByEmployeeId: isUpdate
       ? (typeof existing.createdByEmployeeId === "string" ? existing.createdByEmployeeId : actor.employeeId)
       : actor.employeeId,
     updatedAt: now,
+    ...(canSetTaskPrice(actor) && data.priceBeforeVat !== undefined ? (() => {
+      const price = parseMoney(data.priceBeforeVat);
+      if (price === null || price < 0) return {};
+      const vatRate = typeof existing.vatRate === "number" ? existing.vatRate : DEFAULT_BUSINESS_VAT_RATE;
+      const calc = calculateTaskPrice(price, vatRate);
+      const paidAmount = typeof existing.paidAmount === "number" ? existing.paidAmount : 0;
+      return {
+        ...calc,
+        paidAmount,
+        balanceDue: remainingBalance(calc.priceIncludingVat, paidAmount),
+        paymentStatus: paymentStatusFor(paidAmount, calc.priceIncludingVat),
+      };
+    })() : {}),
   };
 
   const ref = isUpdate
@@ -213,17 +229,43 @@ export async function upsertTask(input: {
   const removedIds = [...previousIds].filter((id) => !participantIds.includes(id));
   const href = taskHref(ref.id);
 
+  const projectName = projectId
+    ? text((await db.doc(projectDocPath(businessId, projectId)).get()).data()?.name)
+    : "";
+  const taskRows = [
+    { label: "משימה", value: title },
+    { label: "פרויקט", value: projectName },
+    { label: "דדליין", value: dateOrNull(data.dueDate) || dateOrNull(data.scheduledDate) || "" },
+    { label: "שעה", value: timeOrNull(data.startTime) || "" },
+    { label: "עדיפות", value: text(data.priority) || "NORMAL" },
+  ];
+
   if (!isUpdate && canManageTasks(actor)) {
     await notifyEmployees({
       businessId,
       employeeIds: participantIds,
       skipUserIds: [actor.uid],
-      title: `הוקצתה לך משימה חדשה`,
+      title: "הוקצתה לך משימה חדשה",
       body: title,
       href,
       type: "task.assigned",
       entityType: "task",
       entityId: ref.id,
+      subject: "WEGO BIZ — משימה חדשה הוקצתה לך",
+      rows: taskRows,
+      dedupeKey: `TASK_ASSIGNED:${ref.id}:${participantIds.join(",")}`,
+    });
+    await notifyManagers({
+      businessId,
+      skipUserIds: [actor.uid],
+      title: "משימה חדשה נוצרה",
+      body: title,
+      href,
+      type: "task.created",
+      entityType: "task",
+      entityId: ref.id,
+      rows: taskRows,
+      dedupeKey: `TASK_CREATED:${ref.id}`,
     });
     await writeTaskActivity({
       businessId,
@@ -266,12 +308,15 @@ export async function upsertTask(input: {
         businessId,
         employeeIds: addedIds,
         skipUserIds: [actor.uid],
-        title: `צורפת למשימה`,
+        title: "משימה חדשה הוקצתה לך",
         body: title,
         href,
-        type: "task.added",
+        type: "task.assigned",
         entityType: "task",
         entityId: ref.id,
+        subject: "WEGO BIZ — משימה חדשה הוקצתה לך",
+        rows: taskRows,
+        dedupeKey: `TASK_ASSIGNED:${ref.id}:${addedIds.join(",")}`,
       });
     }
     if (removedIds.length) {
@@ -279,12 +324,33 @@ export async function upsertTask(input: {
         businessId,
         employeeIds: removedIds,
         skipUserIds: [actor.uid],
-        title: `הוסרת ממשימה`,
+        title: "המשימה הוסרה מהעבודה שלך",
         body: title,
         href,
         type: "task.removed",
         entityType: "task",
         entityId: ref.id,
+        dedupeKey: `TASK_REMOVED:${ref.id}:${removedIds.join(",")}`,
+      });
+    }
+    const significant = dateOrNull(data.dueDate) !== (typeof existing.dueDate === "string" ? existing.dueDate : null)
+      || timeOrNull(data.startTime) !== (typeof existing.startTime === "string" ? existing.startTime : null)
+      || projectId !== (typeof existing.projectId === "string" ? existing.projectId : null)
+      || (text(data.priority) || "NORMAL") !== (text(existing.priority) || "NORMAL");
+    const remaining = participantIds.filter((id) => !addedIds.includes(id));
+    if (significant && remaining.length && canManageTasks(actor)) {
+      await notifyEmployees({
+        businessId,
+        employeeIds: remaining,
+        skipUserIds: [actor.uid],
+        title: "המשימה שלך עודכנה",
+        body: title,
+        href,
+        type: "task.updated",
+        entityType: "task",
+        entityId: ref.id,
+        rows: taskRows,
+        dedupeKey: `TASK_UPDATED:${ref.id}:${now.toISOString().slice(0, 13)}`,
       });
     }
     await writeTaskActivity({
@@ -359,6 +425,8 @@ export async function decideTask(input: {
       type: "task.approved",
       entityType: "task",
       entityId: input.taskId,
+      channels: { inApp: true, email: false },
+      dedupeKey: `TASK_APPROVED:${input.taskId}`,
     });
     if (creatorUserId && creatorUserId !== input.actor.uid) {
       await notifyUsers({
@@ -371,6 +439,7 @@ export async function decideTask(input: {
         type: "task.approved",
         entityType: "task",
         entityId: input.taskId,
+        channels: { inApp: true, email: false },
       });
     }
   } else {
@@ -396,12 +465,14 @@ export async function decideTask(input: {
         businessId: input.businessId,
         userIds: [creatorUserId],
         skipUserIds: [input.actor.uid],
-        title: "המשימה נדחתה",
-        body: title,
+        title: "המשימה הוחזרה לתיקון",
+        body: text(input.reason) ? `${title}\n${text(input.reason)}` : title,
         href: taskHref(input.taskId),
         type: "task.rejected",
         entityType: "task",
         entityId: input.taskId,
+        channels: { inApp: true, email: true },
+        dedupeKey: `TASK_REJECTED:${input.taskId}`,
       });
     }
   }
@@ -416,6 +487,7 @@ export async function changeTaskWorkStatus(input: {
   businessId: string;
   taskId: string;
   status: string;
+  statusId?: string | null;
 }): Promise<TaskWriteResult> {
   const db = getAdminDb();
   const ref = db.doc(taskDocPath(input.businessId, input.taskId));
@@ -437,6 +509,9 @@ export async function changeTaskWorkStatus(input: {
   if (!canManageTasks(input.actor) && !EMPLOYEE_STATUSES.has(next)) {
     return { ok: false, error: "FORBIDDEN", status: 403 };
   }
+  if (next === "CANCELLED" && !canManageTasks(input.actor)) {
+    return { ok: false, error: "FORBIDDEN", status: 403 };
+  }
   const now = new Date();
   const completion = taskCompletionPatch({
     previousStatus: text(existing.status),
@@ -444,10 +519,26 @@ export async function changeTaskWorkStatus(input: {
     actorUserId: input.actor.uid,
     now,
   });
-  await ref.set({ ...completion, updatedAt: now }, { merge: true });
+  await ref.set({
+    ...completion,
+    statusId: input.statusId === undefined ? (typeof existing.statusId === "string" ? existing.statusId : next) : (input.statusId || next),
+    updatedAt: now,
+  }, { merge: true });
   await syncProjectProgressFromTasks(input.businessId, typeof existing.projectId === "string" ? existing.projectId : null);
   const wasDone = isCompletedTaskStatus(text(existing.status));
   if (!wasDone && isCompletedTaskStatus(next)) {
+    await notifyManagers({
+      businessId: input.businessId,
+      skipUserIds: [input.actor.uid],
+      title: `✓ הושלמה: ${text(existing.title)}`,
+      body: text(existing.title),
+      href: taskHref(input.taskId),
+      type: "task.completed",
+      entityType: "task",
+      entityId: input.taskId,
+      channels: { inApp: true, email: false },
+      dedupeKey: `TASK_COMPLETED:${input.taskId}`,
+    });
     const priceIncludingVat = typeof existing.priceIncludingVat === "number" ? existing.priceIncludingVat : null;
     const paidAmount = typeof existing.paidAmount === "number" ? existing.paidAmount : 0;
     await notifyUnpaidOnComplete({
@@ -465,6 +556,68 @@ export async function changeTaskWorkStatus(input: {
     actorEmployeeId: input.actor.employeeId,
     type: "status",
     message: `שינה/תה סטטוס ל"${next === "COMPLETED" ? "הושלמה" : next === "IN_PROGRESS" ? "בביצוע" : next === "WAITING" ? "בהמתנה" : "לביצוע"}"`,
+  });
+  return { ok: true, id: input.taskId };
+}
+
+export async function updateTaskWork(input: {
+  actor: ServerActor;
+  businessId: string;
+  taskId: string;
+  data: {
+    scheduledDate?: string | null;
+    startTime?: string | null;
+    endTime?: string | null;
+    description?: string;
+    status?: string;
+  };
+}): Promise<TaskWriteResult> {
+  const db = getAdminDb();
+  const ref = db.doc(taskDocPath(input.businessId, input.taskId));
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: false, error: "NOT_FOUND", status: 404 };
+  const existing = snap.data() ?? {};
+  if (!canChangeWorkStatus(input.actor, {
+    createdByUserId: text(existing.createdByUserId),
+    assigneeId: typeof existing.assigneeId === "string" ? existing.assigneeId : null,
+    collaboratorIds: Array.isArray(existing.collaboratorIds) ? existing.collaboratorIds : [],
+    participantIds: Array.isArray(existing.participantIds) ? existing.participantIds : [],
+  })) {
+    return { ok: false, error: "FORBIDDEN", status: 403 };
+  }
+  if (isPendingApproval(text(existing.status) as TaskStatus) || text(existing.status) === "REJECTED") {
+    return { ok: false, error: "FORBIDDEN", status: 403 };
+  }
+
+  const patch: Record<string, unknown> = { updatedAt: new Date() };
+  if (input.data.scheduledDate !== undefined) patch.scheduledDate = dateOrNull(input.data.scheduledDate);
+  if (input.data.startTime !== undefined) patch.startTime = timeOrNull(input.data.startTime);
+  if (input.data.endTime !== undefined) patch.endTime = timeOrNull(input.data.endTime);
+  if (input.data.description !== undefined) patch.description = text(input.data.description);
+  if (input.data.status) {
+    const next = canonicalTaskStatus(input.data.status);
+    if (!canManageTasks(input.actor) && !EMPLOYEE_STATUSES.has(next)) {
+      return { ok: false, error: "FORBIDDEN", status: 403 };
+    }
+    Object.assign(patch, taskCompletionPatch({
+      previousStatus: text(existing.status),
+      nextStatus: next,
+      actorUserId: input.actor.uid,
+      now: new Date(),
+    }));
+  }
+
+  await ref.set(patch, { merge: true });
+  if (input.data.status) {
+    await syncProjectProgressFromTasks(input.businessId, typeof existing.projectId === "string" ? existing.projectId : null);
+  }
+  await writeTaskActivity({
+    businessId: input.businessId,
+    taskId: input.taskId,
+    actorUserId: input.actor.uid,
+    actorEmployeeId: input.actor.employeeId,
+    type: input.data.status ? "status" : "update",
+    message: input.data.scheduledDate ? `העביר/ה משימה ל-${input.data.scheduledDate}` : "עדכן/ה את יום העבודה",
   });
   return { ok: true, id: input.taskId };
 }

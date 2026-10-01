@@ -47,7 +47,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar onOpenMenu={() => setMenuOpen(true)} onLogout={() => void handleLogout()} />
-          <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-6 pb-24 md:px-6 lg:px-8 lg:pb-6">{children}</main>
+          <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-4 pb-24 md:px-6 lg:px-8 lg:py-5">{children}</main>
           <MobileNav onMore={() => setMenuOpen(true)} />
         </div>
       </div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarRange, Home, MoreHorizontal, Plus, Sun } from "lucide-react";
+import { CalendarRange, ClipboardList, Home, MoreHorizontal, Plus } from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { useBusinessContext } from "@/components/providers/business-context";
@@ -16,7 +16,7 @@ export function MobileNav({ onMore }: { onMore: () => void }) {
 
   const items = [
     { href: "/dashboard", label: t("nav.home"), icon: Home },
-    { href: "/today", label: t("nav.today"), icon: Sun },
+    { href: "/tasks", label: t("nav.tasks"), icon: ClipboardList },
     { href: "/meetings", label: t("nav.meetings"), icon: CalendarRange },
   ];
 
@@ -51,7 +51,7 @@ export function MobileNav({ onMore }: { onMore: () => void }) {
             const Icon = item.icon;
             const active = pathname === item.href;
             return (
-              <Link key={item.href} href={item.href} className={`flex flex-col items-center gap-1 py-1 text-[11px] ${active ? "text-[#2563EB]" : "text-[#64748B]"}`}>
+              <Link key={item.href} href={item.href} className={`flex flex-col items-center gap-1 py-1 text-xs ${active ? "text-[#2563EB]" : "text-[#475569]"}`}>
                 <Icon className="h-5 w-5" />
                 {item.label}
               </Link>
@@ -69,13 +69,13 @@ export function MobileNav({ onMore }: { onMore: () => void }) {
             const Icon = item.icon;
             const active = pathname === item.href;
             return (
-              <Link key={item.href} href={item.href} className={`flex flex-col items-center gap-1 py-1 text-[11px] ${active ? "text-[#2563EB]" : "text-[#64748B]"}`}>
+              <Link key={item.href} href={item.href} className={`flex flex-col items-center gap-1 py-1 text-xs ${active ? "text-[#2563EB]" : "text-[#475569]"}`}>
                 <Icon className="h-5 w-5" />
                 {item.label}
               </Link>
             );
           })}
-          <button type="button" onClick={onMore} className="flex flex-col items-center gap-1 py-1 text-[11px] text-[#64748B]">
+          <button type="button" onClick={onMore} className="flex flex-col items-center gap-1 py-1 text-xs text-[#475569]">
             <MoreHorizontal className="h-5 w-5" />
             {t("nav.more")}
           </button>

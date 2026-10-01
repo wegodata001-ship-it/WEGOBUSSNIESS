@@ -3,6 +3,7 @@ import type { BusinessStatus, Locale } from "@/types/roles";
 export type Business = {
   id: string;
   name: string;
+  nameAr?: string;
   slug: string;
   logoUrl: string | null;
   primaryColor: string;

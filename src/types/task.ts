@@ -66,6 +66,7 @@ export type Task = {
   title: string;
   description: string;
   status: TaskStatus;
+  statusId: string | null;
   priority: TaskPriority;
   color: string;
   taskType: string;

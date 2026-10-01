@@ -14,6 +14,7 @@ export const businessCollections = {
   workSessions: "workSessions",
   logisticsRequests: "logisticsRequests",
   notifications: "notifications",
+  notificationDeliveries: "notificationDeliveries",
   activityLogs: "activityLogs",
   settings: "settings",
   documents: "documents",
@@ -25,6 +26,8 @@ export const businessCollections = {
   termsTemplates: "termsTemplates",
   serviceItems: "serviceItems",
   taskTemplates: "taskTemplates",
+  taskStatuses: "taskStatuses",
+  movements: "movements",
 } as const;
 
 export function userDocPath(userId: string) {
@@ -135,6 +138,18 @@ export function notificationDocPath(businessId: string, notificationId: string) 
   return `${notificationsPath(businessId)}/${notificationId}`;
 }
 
+export function notificationDeliveriesPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.notificationDeliveries);
+}
+
+export function notificationDeliveryDocPath(businessId: string, deliveryId: string) {
+  return `${notificationDeliveriesPath(businessId)}/${deliveryId}`;
+}
+
+export function businessNotificationSettingsPath(businessId: string) {
+  return businessSettingsDocPath(businessId, "notifications");
+}
+
 export function activityLogsPath(businessId: string) {
   return businessScopedPath(businessId, businessCollections.activityLogs);
 }
@@ -197,4 +212,20 @@ export function taskTemplatesPath(businessId: string) {
 
 export function paymentAllocationsPath(businessId: string) {
   return businessScopedPath(businessId, businessCollections.paymentAllocations);
+}
+
+export function taskStatusesPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.taskStatuses);
+}
+
+export function taskStatusDocPath(businessId: string, statusId: string) {
+  return `${taskStatusesPath(businessId)}/${statusId}`;
+}
+
+export function movementsPath(businessId: string) {
+  return businessScopedPath(businessId, businessCollections.movements);
+}
+
+export function movementDocPath(businessId: string, movementId: string) {
+  return `${movementsPath(businessId)}/${movementId}`;
 }

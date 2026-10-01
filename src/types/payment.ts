@@ -5,6 +5,7 @@ export const PAYMENT_METHODS = [
   "CASH",
   "CREDIT_CARD",
   "BANK_TRANSFER",
+  "BIT",
   "CHECK",
   "OTHER",
 ] as const;

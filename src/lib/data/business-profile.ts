@@ -26,6 +26,8 @@ export function normalizeBusinessServices(value: unknown): BusinessService[] {
       id: typeof record.id === "string" && record.id.trim() ? record.id.trim() : `svc-${index + 1}`,
       name,
       description: typeof record.description === "string" ? record.description.trim() : "",
+      nameAr: typeof record.nameAr === "string" ? record.nameAr.trim() : "",
+      descriptionAr: typeof record.descriptionAr === "string" ? record.descriptionAr.trim() : "",
       order,
       active: record.active !== false,
     });

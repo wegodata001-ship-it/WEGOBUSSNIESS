@@ -4,6 +4,7 @@ import { AlertCircle, ArrowLeft, Eye, EyeOff, LoaderCircle, Lock, Mail, ShieldCh
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { useI18n } from "@/components/providers/i18n-provider";
 import type { SessionBlockReason } from "@/types/session";
 
@@ -75,6 +76,9 @@ export function LoginForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
+      <div className="flex justify-end">
+        <LanguageSwitcher compact />
+      </div>
       {error ? (
         <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm leading-5 text-red-700">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />

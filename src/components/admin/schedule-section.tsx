@@ -5,6 +5,7 @@ import {
   MeetingFormModal,
   MeetingQuickView,
   draftFromMeeting,
+  emptyMeetingDraft,
   type MeetingDraft,
 } from "@/components/admin/meeting-modals";
 import { useI18n } from "@/components/providers/i18n-provider";
@@ -35,6 +36,7 @@ export function ScheduleSection({
   employeeId,
   canManageMeetings,
   onReload,
+  compact = false,
 }: {
   title?: string;
   data: BusinessCatalog;
@@ -43,6 +45,7 @@ export function ScheduleSection({
   employeeId?: string | null;
   canManageMeetings: boolean;
   onReload: () => Promise<void> | void;
+  compact?: boolean;
 }) {
   const { t } = useI18n();
   const [range, setRange] = useState<ScheduleRange>("today");
@@ -120,11 +123,11 @@ export function ScheduleSection({
   ];
 
   return (
-    <section id="home-schedule" className="rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <section id="home-schedule" className={`rounded-2xl border border-[#E2E8F0] bg-white ${compact ? "p-4" : "p-5"}`}>
+      <div className={`mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between ${compact ? "mb-3" : "mb-4"}`}>
         <div>
-          <h2 className="text-base font-semibold text-[#0F172A]">{title || t("schedule.title")}</h2>
-          <p className="mt-1 text-sm text-[#64748B]">{t("schedule.subtitle")}</p>
+          <h2 className="text-lg font-semibold text-[#0F172A]">{title || t("schedule.title")}</h2>
+          {compact ? null : <p className="mt-1 text-sm text-[#64748B]">{t("schedule.subtitle")}</p>}
         </div>
         <div className="flex gap-1 rounded-xl bg-[#F5F7FB] p-1">
           {tabs.map((item) => (
@@ -141,7 +144,7 @@ export function ScheduleSection({
       </div>
 
       {items.length ? (
-        <ol className="relative space-y-4 border-s border-slate-200 ps-5">
+        <ol className={`relative border-s border-slate-200 ps-5 ${compact ? "space-y-2" : "space-y-4"}`}>
           {items.map((item) => {
             const tone = SCHEDULE_TONE[item.kind];
             return (
@@ -170,7 +173,18 @@ export function ScheduleSection({
           })}
         </ol>
       ) : (
-        <p className="py-3 text-sm text-[#64748B]">{t("schedule.empty")}</p>
+        <div className={compact ? "py-2" : "py-3"}>
+          <p className="text-sm text-[#64748B]">{range === "today" ? t("work.noEventsToday") : t("schedule.empty")}</p>
+          {compact && canManageMeetings ? (
+            <button
+              type="button"
+              onClick={() => setDraft(emptyMeetingDraft(today))}
+              className="mt-2 inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-[#2563EB]"
+            >
+              {t("work.newMeeting")}
+            </button>
+          ) : null}
+        </div>
       )}
 
       {quick ? (

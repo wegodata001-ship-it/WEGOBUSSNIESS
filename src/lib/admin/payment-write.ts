@@ -1,4 +1,5 @@
 import { writeActivity } from "@/lib/admin/activity";
+import { createMoneyMovement, voidMoneyMovementByPayment } from "@/lib/admin/movement-write";
 import { writeTaskActivity } from "@/lib/admin/task-activity";
 import { canReceiveTaskPayment, canSetTaskPrice, canVoidTaskPayment } from "@/lib/finance/access";
 import { allocateByTaskOrder, allocationsTotal } from "@/lib/finance/allocate";
@@ -7,7 +8,7 @@ import { calculateTaskPrice, DEFAULT_BUSINESS_VAT_RATE, normalizeVatRate, paymen
 import type { ServerActor } from "@/lib/auth/server-actor";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toTask } from "@/lib/firebase/converters";
-import { businessSettingsDocPath, paymentAllocationsPath, paymentDocPath, paymentsPath, taskDocPath } from "@/lib/firebase/paths";
+import { businessSettingsDocPath, paymentAllocationsPath, paymentDocPath, paymentsPath, projectDocPath, taskDocPath } from "@/lib/firebase/paths";
 import { isDateOnly } from "@/lib/dates/format";
 import { PAYMENT_METHODS, type PaymentMethod } from "@/types/payment";
 
@@ -197,6 +198,37 @@ export async function receiveTaskPayment(input: {
     message: `נרשמה קבלת תשלום עבור ${allocations.length} משימות`,
   });
 
+  const { notifyManagers } = await import("@/lib/admin/notify");
+  await notifyManagers({
+    businessId: input.businessId,
+    skipUserIds: [input.actor.uid],
+    title: "תשלום התקבל",
+    body: `התקבל תשלום בסך ${amount.toLocaleString("he-IL")} ₪`,
+    href: "/movements",
+    type: "payment.received",
+    entityType: "payment",
+    entityId: paymentRef.id,
+    dedupeKey: `PAYMENT_RECEIVED:${paymentRef.id}`,
+  });
+
+  const first = priced[0];
+  const projectSnap = first?.projectId ? await db.doc(projectDocPath(input.businessId, first.projectId)).get() : null;
+  const projectData = projectSnap?.data();
+  await createMoneyMovement({
+    actor: input.actor,
+    businessId: input.businessId,
+    type: "INCOME",
+    amount,
+    date: paymentDate,
+    clientName: typeof projectData?.clientName === "string" ? projectData.clientName : "",
+    projectId: first?.projectId ?? null,
+    taskIds: allocations.map((item) => item.taskId),
+    paymentId: paymentRef.id,
+    paymentMethod: method,
+    description: priced.map((task) => task.title).join(", "),
+    note: typeof input.notes === "string" ? input.notes : "",
+  });
+
   return { ok: true as const, id: paymentRef.id, allocations };
 }
 
@@ -260,5 +292,6 @@ export async function voidTaskPayment(input: {
     entityId: input.paymentId,
     message: input.reason?.trim() || "בוטל תשלום",
   });
+  await voidMoneyMovementByPayment({ businessId: input.businessId, paymentId: input.paymentId });
   return { ok: true as const, id: input.paymentId };
 }

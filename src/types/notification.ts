@@ -38,6 +38,8 @@ export type BusinessService = {
   id: string;
   name: string;
   description: string;
+  nameAr?: string;
+  descriptionAr?: string;
   order: number;
   active: boolean;
 };
@@ -56,6 +58,8 @@ export type BusinessSettings = {
   address: string;
   website: string;
   about: string;
+  aboutAr?: string;
+  nameAr?: string;
   services: BusinessService[];
   logoUrl: string | null;
   logoStoragePath: string | null;
