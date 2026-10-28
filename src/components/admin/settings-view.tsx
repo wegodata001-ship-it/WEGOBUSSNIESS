@@ -116,9 +116,11 @@ export function SettingsControlView() {
   const [deptName, setDeptName] = useState("");
   const [deptColor, setDeptColor] = useState<CalendarColor>("BLUE");
   const [categoryDrafts, setCategoryDrafts] = useState<Record<string, string>>({});
+  const [categoryColorDrafts, setCategoryColorDrafts] = useState<Record<string, string>>({});
   const [openCategory, setOpenCategory] = useState(false);
   const [catName, setCatName] = useState("");
   const [catDept, setCatDept] = useState("");
+  const [catColor, setCatColor] = useState("#64748b");
   const [reassign, setReassign] = useState<{ id: string; name: string; count: number; moveTo: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -245,7 +247,7 @@ export function SettingsControlView() {
       await mutateBusiness({
         businessId: business.id,
         action: "createDepartmentCategory",
-        data: { name, departmentId: department.id, color: departmentColorHex(department.color), isActive: true },
+        data: { name, departmentId: department.id, color: categoryColorDrafts[department.id] || departmentColorHex(department.color), isActive: true },
       });
       setCategoryDrafts((current) => ({ ...current, [department.id]: "" }));
       await reload();
@@ -264,11 +266,12 @@ export function SettingsControlView() {
       await mutateBusiness({
         businessId: business.id,
         action: "createDepartmentCategory",
-        data: { name: catName.trim(), departmentId: catDept, color: departmentColorHex(department?.color), isActive: true },
+        data: { name: catName.trim(), departmentId: catDept, color: catColor || departmentColorHex(department?.color), isActive: true },
       });
       setOpenCategory(false);
       setCatName("");
       setCatDept("");
+      setCatColor("#64748b");
       await reload();
     } catch (caught) {
       window.alert(mutationMessage(caught instanceof Error ? caught.message : "", t));
@@ -490,7 +493,24 @@ export function SettingsControlView() {
                   <div className="grid gap-2">
                     {categories.map((category) => (
                       <div key={category.id} className="flex flex-col gap-2 rounded-xl bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-sm">{category.name}</p>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            aria-label={t("common.color")}
+                            className="h-8 w-8 cursor-pointer rounded border border-slate-200 bg-white p-0"
+                            value={category.color?.startsWith("#") ? category.color : "#64748b"}
+                            onChange={(event) => {
+                              if (!business?.id) return;
+                              void mutateBusiness({
+                                businessId: business.id,
+                                action: "updateDepartmentCategory",
+                                id: category.id,
+                                data: { name: category.name, departmentId: item.id, isActive: category.isActive, color: event.target.value },
+                              }).then(reload);
+                            }}
+                          />
+                          <p className="text-sm">{category.name}</p>
+                        </div>
                         <div className="flex flex-wrap gap-1">
                           <StatusBadge value={category.isActive ? "ACTIVE" : "INACTIVE"} label={category.isActive ? t("common.active") : t("common.inactive")} />
                           <GhostButton onClick={() => {
@@ -516,12 +536,19 @@ export function SettingsControlView() {
                         </div>
                       </div>
                     ))}
-                    <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                       <input
                         className={inputClass}
                         placeholder={t("settings.categoryNamePrompt")}
                         value={categoryDrafts[item.id] ?? ""}
                         onChange={(event) => setCategoryDrafts((current) => ({ ...current, [item.id]: event.target.value }))}
+                      />
+                      <input
+                        type="color"
+                        aria-label={t("common.color")}
+                        className="h-11 w-11 cursor-pointer rounded-xl border border-slate-200 bg-white p-1"
+                        value={categoryColorDrafts[item.id] || departmentColorHex(item.color)}
+                        onChange={(event) => setCategoryColorDrafts((current) => ({ ...current, [item.id]: event.target.value }))}
                       />
                       <PrimaryButton disabled={busy} onClick={() => void addCategory(item)}>{t("settings.addCategory")}</PrimaryButton>
                     </div>
@@ -544,11 +571,28 @@ export function SettingsControlView() {
                   const used = data.projects.filter((item) => item.categoryId === category.id).length;
                   return (
                     <div key={category.id} className="flex flex-col gap-2 rounded-2xl border border-slate-100 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="font-medium">{category.name}</p>
-                        <p className="text-xs text-slate-500">
-                          {departmentName(data.departments, category.departmentId)} · {t("settings.projectCount", { count: String(used) })} · {category.isActive ? t("common.active") : t("common.inactive")}
-                        </p>
+                      <div className="flex items-start gap-2">
+                        <input
+                          type="color"
+                          aria-label={t("common.color")}
+                          className="mt-0.5 h-8 w-8 cursor-pointer rounded border border-slate-200 bg-white p-0"
+                          value={category.color?.startsWith("#") ? category.color : "#64748b"}
+                          onChange={(event) => {
+                            if (!business?.id) return;
+                            void mutateBusiness({
+                              businessId: business.id,
+                              action: "updateDepartmentCategory",
+                              id: category.id,
+                              data: { name: category.name, departmentId: category.departmentId, isActive: category.isActive, color: event.target.value },
+                            }).then(reload);
+                          }}
+                        />
+                        <div>
+                          <p className="font-medium">{category.name}</p>
+                          <p className="text-xs text-slate-500">
+                            {departmentName(data.departments, category.departmentId)} · {t("settings.projectCount", { count: String(used) })} · {category.isActive ? t("common.active") : t("common.inactive")}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-1">
                         <GhostButton onClick={() => {
@@ -819,6 +863,15 @@ export function SettingsControlView() {
                   <option key={item.id} value={item.id}>{item.name}</option>
                 ))}
               </select>
+            </Field>
+            <Field label={t("common.color")}>
+              <input
+                type="color"
+                aria-label={t("common.color")}
+                className="h-11 w-16 cursor-pointer rounded-xl border border-slate-200 bg-white p-1"
+                value={catColor}
+                onChange={(event) => setCatColor(event.target.value)}
+              />
             </Field>
             <div className="flex justify-end gap-2">
               <GhostButton onClick={() => setOpenCategory(false)}>{t("common.cancel")}</GhostButton>

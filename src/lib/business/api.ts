@@ -137,6 +137,9 @@ export async function postTaskComment(input: {
   taskId: string;
   body: string;
   mentions: string[];
+  attachments?: Array<{ id?: string | null; name: string; url?: string | null }>;
+  linkUrl?: string | null;
+  linkTitle?: string | null;
 }): Promise<BusinessMutationResult> {
   const response = await fetch(`/api/business/tasks/${input.taskId}/thread`, {
     method: "POST",
@@ -146,6 +149,9 @@ export async function postTaskComment(input: {
       businessId: input.businessId,
       body: input.body,
       mentions: input.mentions,
+      attachments: input.attachments ?? [],
+      linkUrl: input.linkUrl ?? null,
+      linkTitle: input.linkTitle ?? null,
     }),
   });
   const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
@@ -153,6 +159,187 @@ export async function postTaskComment(input: {
     return { ok: false, error: payload.error || "NETWORK", status: response.status };
   }
   return { ok: true, id: payload.id || "" };
+}
+
+export async function editTaskComment(input: {
+  businessId: string;
+  taskId: string;
+  commentId: string;
+  body: string;
+}): Promise<BusinessMutationResult> {
+  const response = await fetch(`/api/business/tasks/${input.taskId}/thread`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      businessId: input.businessId,
+      commentId: input.commentId,
+      body: input.body,
+    }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
+  if (!response.ok || payload.error) {
+    return { ok: false, error: payload.error || "NETWORK", status: response.status };
+  }
+  return { ok: true, id: payload.id || input.commentId };
+}
+
+export async function deleteTaskComment(input: {
+  businessId: string;
+  taskId: string;
+  commentId: string;
+}): Promise<BusinessMutationResult> {
+  const response = await fetch(
+    `/api/business/tasks/${input.taskId}/thread?businessId=${encodeURIComponent(input.businessId)}&commentId=${encodeURIComponent(input.commentId)}`,
+    { method: "DELETE", credentials: "include" },
+  );
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
+  if (!response.ok || payload.error) {
+    return { ok: false, error: payload.error || "NETWORK", status: response.status };
+  }
+  return { ok: true, id: payload.id || input.commentId };
+}
+
+export async function markTaskThreadRead(businessId: string, taskId: string) {
+  const response = await fetch(`/api/business/tasks/${taskId}/thread`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ businessId, markRead: true }),
+  });
+  return response.ok;
+}
+
+export async function fetchTaskAttachments(businessId: string, taskId: string) {
+  const response = await fetch(
+    `/api/business/tasks/${taskId}/attachments?businessId=${encodeURIComponent(businessId)}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.error) return { ok: false as const, attachments: [] };
+  return { ok: true as const, attachments: payload.attachments ?? [] };
+}
+
+export async function uploadTaskAttachments(input: {
+  businessId: string;
+  taskId: string;
+  files: File[];
+}) {
+  const form = new FormData();
+  form.set("businessId", input.businessId);
+  for (const file of input.files) form.append("file", file);
+  const response = await fetch(`/api/business/tasks/${input.taskId}/attachments`, {
+    method: "POST",
+    credentials: "include",
+    body: form,
+  });
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; ids?: string[]; id?: string; error?: string };
+  if (!response.ok || payload.error) {
+    return { ok: false as const, error: payload.error || "NETWORK", ids: [] as string[] };
+  }
+  return { ok: true as const, ids: payload.ids ?? (payload.id ? [payload.id] : []) };
+}
+
+export async function renameTaskAttachment(input: {
+  businessId: string;
+  taskId: string;
+  attachmentId: string;
+  name: string;
+}): Promise<BusinessMutationResult> {
+  const response = await fetch(`/api/business/tasks/${input.taskId}/attachments/${input.attachmentId}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ businessId: input.businessId, name: input.name }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
+  if (!response.ok || payload.error) {
+    return { ok: false, error: payload.error || "NETWORK", status: response.status };
+  }
+  return { ok: true, id: payload.id || input.attachmentId };
+}
+
+export async function deleteTaskAttachment(input: {
+  businessId: string;
+  taskId: string;
+  attachmentId: string;
+}): Promise<BusinessMutationResult> {
+  const response = await fetch(
+    `/api/business/tasks/${input.taskId}/attachments/${input.attachmentId}?businessId=${encodeURIComponent(input.businessId)}`,
+    { method: "DELETE", credentials: "include" },
+  );
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
+  if (!response.ok || payload.error) {
+    return { ok: false, error: payload.error || "NETWORK", status: response.status };
+  }
+  return { ok: true, id: payload.id || input.attachmentId };
+}
+
+export async function fetchTaskAttachmentUrl(businessId: string, taskId: string, attachmentId: string) {
+  const response = await fetch(
+    `/api/business/tasks/${taskId}/attachments/${attachmentId}?businessId=${encodeURIComponent(businessId)}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.error) return { ok: false as const, url: "", name: "", contentType: "" };
+  return { ok: true as const, url: payload.url as string, name: String(payload.name ?? ""), contentType: String(payload.contentType ?? "") };
+}
+
+export async function fetchTaskLinks(businessId: string, taskId: string) {
+  const response = await fetch(
+    `/api/business/tasks/${taskId}/links?businessId=${encodeURIComponent(businessId)}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.error) return { ok: false as const, links: [] };
+  return { ok: true as const, links: payload.links ?? [] };
+}
+
+export async function saveTaskLink(input: {
+  businessId: string;
+  taskId: string;
+  linkId?: string;
+  title: string;
+  url: string;
+  description?: string;
+}): Promise<BusinessMutationResult> {
+  const response = await fetch(
+    input.linkId
+      ? `/api/business/tasks/${input.taskId}/links/${input.linkId}`
+      : `/api/business/tasks/${input.taskId}/links`,
+    {
+      method: input.linkId ? "PATCH" : "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        businessId: input.businessId,
+        title: input.title,
+        url: input.url,
+        description: input.description ?? "",
+      }),
+    },
+  );
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
+  if (!response.ok || payload.error) {
+    return { ok: false, error: payload.error || "NETWORK", status: response.status };
+  }
+  return { ok: true, id: payload.id || input.linkId || "" };
+}
+
+export async function deleteTaskLink(input: {
+  businessId: string;
+  taskId: string;
+  linkId: string;
+}): Promise<BusinessMutationResult> {
+  const response = await fetch(
+    `/api/business/tasks/${input.taskId}/links/${input.linkId}?businessId=${encodeURIComponent(input.businessId)}`,
+    { method: "DELETE", credentials: "include" },
+  );
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
+  if (!response.ok || payload.error) {
+    return { ok: false, error: payload.error || "NETWORK", status: response.status };
+  }
+  return { ok: true, id: payload.id || input.linkId };
 }
 
 export async function markNotifications(businessId: string, input: { id?: string; all?: boolean }) {

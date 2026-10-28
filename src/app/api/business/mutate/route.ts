@@ -13,6 +13,7 @@ import { deleteMeetingDoc, upsertMeeting } from "@/lib/admin/meeting-write";
 import { syncProjectProgressFromTasks } from "@/lib/admin/project-progress-sync";
 import { taskCompletionPatch } from "@/lib/admin/task-completion";
 import { upsertTask } from "@/lib/admin/task-write";
+import { cleanupTaskSubtree } from "@/lib/admin/task-assets";
 import { notifyEmployees, notifyManagers, notifyUsers } from "@/lib/admin/notify";
 import { normalizeTaskTeam } from "@/lib/admin/task-team";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
@@ -125,6 +126,7 @@ export async function POST(request: Request) {
       const ref = db.doc(taskDocPath(businessId, id));
       if (action === "deleteTask") {
         const existing = (await ref.get()).data() ?? {};
+        await cleanupTaskSubtree(businessId, id);
         await ref.delete();
         await syncProjectProgressFromTasks(businessId, typeof existing.projectId === "string" ? existing.projectId : null);
         await writeActivity({ businessId, actorUserId: actor.uid, action, entityType: "task", entityId: id, message: "משימה נמחקה" });

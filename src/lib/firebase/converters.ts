@@ -26,7 +26,7 @@ import type { PaymentMethod, PaymentRecord, PaymentRecordStatus, TaskPaymentStat
 import { PAYMENT_METHODS, PAYMENT_RECORD_STATUSES, TASK_PAYMENT_STATUSES } from "@/types/payment";
 import type { MoneyMovement, MovementStatus, MovementType } from "@/types/movement";
 import { MOVEMENT_STATUSES, MOVEMENT_TYPES } from "@/types/movement";
-import type { Task, TaskActivity, TaskComment, TaskPriority, TaskStatus } from "@/types/task";
+import type { Task, TaskActivity, TaskAttachment, TaskComment, TaskLink, TaskPriority, TaskStatus } from "@/types/task";
 import type { TaskStatusDefinition, TaskStatusType } from "@/types/task-status";
 import { TASK_STATUS_TYPES } from "@/types/task-status";
 import type { TaskTemplate } from "@/types/task-template";
@@ -305,6 +305,7 @@ export function toTaskComment(id: string, data: DocumentData): TaskComment {
       .map((item) => ({
         name: typeof item.name === "string" ? item.name : "",
         url: typeof item.url === "string" ? item.url : null,
+        id: typeof item.id === "string" ? item.id : null,
       }))
       .filter((item) => item.name)
     : [];
@@ -317,8 +318,46 @@ export function toTaskComment(id: string, data: DocumentData): TaskComment {
     body: asString(data.body),
     mentions: asStringArray(data.mentions),
     attachments,
+    linkUrl: asNullableString(data.linkUrl),
+    linkTitle: asNullableString(data.linkTitle),
+    editedAt: toDate(data.editedAt),
+    deletedAt: toDate(data.deletedAt),
     legacyId: asNullableString(data.legacyId),
     legacyAuthorEmail: asNullableString(data.legacyAuthorEmail),
+    createdAt: toDate(data.createdAt),
+    updatedAt: toDate(data.updatedAt),
+  };
+}
+
+export function toTaskAttachment(id: string, data: DocumentData): TaskAttachment {
+  return {
+    id,
+    businessId: asString(data.businessId),
+    taskId: asString(data.taskId),
+    projectId: asNullableString(data.projectId),
+    name: asString(data.name) || asString(data.fileName),
+    fileName: asString(data.fileName) || asString(data.name),
+    contentType: asString(data.contentType, "application/octet-stream"),
+    size: asNumber(data.size, 0) ?? 0,
+    storagePath: asString(data.storagePath),
+    uploadedByUserId: asString(data.uploadedByUserId),
+    uploadedByEmployeeId: asNullableString(data.uploadedByEmployeeId),
+    createdAt: toDate(data.createdAt),
+    updatedAt: toDate(data.updatedAt),
+  };
+}
+
+export function toTaskLink(id: string, data: DocumentData): TaskLink {
+  return {
+    id,
+    businessId: asString(data.businessId),
+    taskId: asString(data.taskId),
+    projectId: asNullableString(data.projectId),
+    title: asString(data.title),
+    url: asString(data.url),
+    description: asString(data.description),
+    createdByUserId: asString(data.createdByUserId),
+    createdByEmployeeId: asNullableString(data.createdByEmployeeId),
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };

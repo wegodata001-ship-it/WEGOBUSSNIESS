@@ -126,7 +126,14 @@ export async function GET(request: Request) {
   }
 
   if (kind === "departmentCategories") {
-    if (!actorCan(actor, "departments.view") && !actorCan(actor, "projects.view") && !actor.isSuperAdmin) {
+    const canReadCategories = actor.isSuperAdmin
+      || actor.isOwnerOrManager
+      || actorCan(actor, "departments.view")
+      || actorCan(actor, "projects.view")
+      || actorCan(actor, "projects.manage")
+      || actorCan(actor, "tasks.create")
+      || actorCan(actor, "tasks.edit");
+    if (!canReadCategories) {
       return NextResponse.json({ data: [] });
     }
     const snap = await db.collection(departmentCategoriesPath(businessId)).get();

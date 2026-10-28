@@ -59,6 +59,7 @@ export type BusinessCatalog = {
   taskStatuses: TaskStatusDefinition[];
   movements: MoneyMovement[];
   projectsError: string | null;
+  categoriesError: string | null;
 };
 
 const EMPTY: BusinessCatalog = {
@@ -101,6 +102,7 @@ const EMPTY: BusinessCatalog = {
   taskStatuses: [],
   movements: [],
   projectsError: null,
+  categoriesError: null,
 };
 
 export function useBusinessCatalog(businessId: string | null) {
@@ -160,6 +162,7 @@ export function useBusinessCatalog(businessId: string | null) {
       taskStatuses: taskStatuses.data,
       movements: movements.data,
       projectsError: projects.error ?? null,
+      categoriesError: departmentCategories.error ?? null,
     });
     setLoading(false);
   }, [businessId]);

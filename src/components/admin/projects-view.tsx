@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { FolderKanban, SlidersHorizontal, X } from "lucide-react";
+import { CategoryPicker } from "@/components/admin/category-picker";
 import { Field, GhostButton, Modal, PageHeader, PrimaryButton, StatusBadge, inputClass } from "@/components/admin/ui";
 import { useBusinessContext } from "@/components/providers/business-context";
 import { useI18n } from "@/components/providers/i18n-provider";
@@ -498,11 +499,14 @@ export function ProjectsView() {
               </select>
             </Field>
             <Field label={t("projects.categoryRequired")}>
-              <select
-                className={inputClass}
+              <CategoryPicker
                 value={draft.categoryId}
-                onChange={(event) => {
-                  const categoryId = event.target.value;
+                categories={draftCategories}
+                required={!draft.id}
+                loading={loading}
+                error={data.categoriesError ? (data.categoriesError === "FORBIDDEN" ? t("work.noProjectAccess") : t("projects.categoriesLoadFailed")) : null}
+                placeholder={draft.id ? uncategorizedLabel : t("projects.pickCategory")}
+                onChange={(categoryId) => {
                   setDraft({ ...draft, categoryId });
                   const current = data.projects.find((item) => item.id === draft.id);
                   if (current && categoryId) {
@@ -523,19 +527,8 @@ export function ProjectsView() {
                     });
                   }
                 }}
-              >
-                <option value="">{draft.id ? uncategorizedLabel : t("projects.pickCategory")}</option>
-                {draftCategories.map((item) => <option key={item.id} value={item.id}>● {item.name}</option>)}
-              </select>
+              />
             </Field>
-            {draftCategories.length === 0 ? (
-              <p className="text-xs text-amber-700">{t("projects.noCategories")}</p>
-            ) : null}
-            {draft.categoryId ? (
-              <p className="text-xs" style={{ color: categoryStyles(data.departmentCategories.find((item) => item.id === draft.categoryId)?.color).badgeText }}>
-                ● {data.departmentCategories.find((item) => item.id === draft.categoryId)?.name}
-              </p>
-            ) : null}
             <Field label={t("projects.managerLabel")}>
               <select className={inputClass} value={draft.managerEmployeeId} onChange={(event) => setDraft({ ...draft, managerEmployeeId: event.target.value })}>
                 <option value="">{t("projects.none")}</option>

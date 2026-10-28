@@ -134,6 +134,26 @@ service cloud.firestore {
           allow create: if canAccessBusiness(businessId);
           allow update, delete: if false;
         }
+
+        match /attachments/{attachmentId} {
+          allow read: if canAccessBusiness(businessId);
+          allow write: if false;
+        }
+
+        match /links/{linkId} {
+          allow read: if canAccessBusiness(businessId);
+          allow write: if false;
+        }
+
+        match /activity/{activityId} {
+          allow read: if canAccessBusiness(businessId);
+          allow write: if false;
+        }
+
+        match /reads/{userId} {
+          allow read: if canAccessBusiness(businessId);
+          allow write: if false;
+        }
       }
 
       match /meetings/{meetingId} {

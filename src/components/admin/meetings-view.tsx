@@ -523,6 +523,7 @@ export function MeetingsView() {
           departmentCategories={data.departmentCategories}
           projects={data.projects}
           projectsError={data.projectsError}
+          categoriesError={data.categoriesError}
           taskTemplates={data.taskTemplates}
           libraryTasks={data.tasks}
           canEditTeam={canEditTask}

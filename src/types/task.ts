@@ -127,9 +127,43 @@ export type TaskComment = {
   authorEmployeeId: string | null;
   body: string;
   mentions: string[];
-  attachments: Array<{ name: string; url?: string | null }>;
+  attachments: Array<{ name: string; url?: string | null; id?: string | null }>;
+  linkUrl: string | null;
+  linkTitle: string | null;
+  editedAt: Date | null;
+  deletedAt: Date | null;
   legacyId: string | null;
   legacyAuthorEmail: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+};
+
+export type TaskAttachment = {
+  id: string;
+  businessId: string;
+  taskId: string;
+  projectId: string | null;
+  name: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  storagePath: string;
+  uploadedByUserId: string;
+  uploadedByEmployeeId: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+};
+
+export type TaskLink = {
+  id: string;
+  businessId: string;
+  taskId: string;
+  projectId: string | null;
+  title: string;
+  url: string;
+  description: string;
+  createdByUserId: string;
+  createdByEmployeeId: string | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 };

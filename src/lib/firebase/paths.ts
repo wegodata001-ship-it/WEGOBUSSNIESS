@@ -106,6 +106,26 @@ export function taskActivityPath(businessId: string, taskId: string) {
   return `${taskDocPath(businessId, taskId)}/activity`;
 }
 
+export function taskAttachmentsPath(businessId: string, taskId: string) {
+  return `${taskDocPath(businessId, taskId)}/attachments`;
+}
+
+export function taskAttachmentDocPath(businessId: string, taskId: string, attachmentId: string) {
+  return `${taskAttachmentsPath(businessId, taskId)}/${attachmentId}`;
+}
+
+export function taskLinksPath(businessId: string, taskId: string) {
+  return `${taskDocPath(businessId, taskId)}/links`;
+}
+
+export function taskLinkDocPath(businessId: string, taskId: string, linkId: string) {
+  return `${taskLinksPath(businessId, taskId)}/${linkId}`;
+}
+
+export function taskReadDocPath(businessId: string, taskId: string, userId: string) {
+  return `${taskDocPath(businessId, taskId)}/reads/${userId}`;
+}
+
 export function meetingsPath(businessId: string) {
   return businessScopedPath(businessId, businessCollections.meetings);
 }

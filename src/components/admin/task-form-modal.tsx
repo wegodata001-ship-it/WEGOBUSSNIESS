@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CategoryPicker } from "@/components/admin/category-picker";
 import { ActionSelect, MiniModal } from "@/components/admin/action-select";
 import { ColorPicker, PriorityPicker, TaskTypePicker } from "@/components/admin/form-chips";
 import { EmployeeMultiSelect } from "@/components/admin/employee-multi-select";
 import { TaskLibraryPicker } from "@/components/admin/task-library-picker";
 import { DatePicker, Field, GhostButton, Modal, PrimaryButton, inputClass } from "@/components/admin/ui";
 import { mutateBusiness } from "@/lib/admin/api";
-import { categoriesForDepartment } from "@/lib/admin/department-categories";
+import { managedProjectCategories } from "@/lib/admin/department-categories";
 import { mergeTaskLibrary, type TaskLibraryItem } from "@/lib/admin/task-library";
 import { PROJECT_STATUSES, type Department, type DepartmentCategory, type Project } from "@/types/department";
 import type { Employee } from "@/types/employee";
@@ -127,6 +128,7 @@ export function TaskFormModal({
   departmentCategories = [],
   projects,
   projectsError,
+  categoriesError,
   taskTemplates = [],
   libraryTasks = [],
   canEditTeam,
@@ -147,6 +149,7 @@ export function TaskFormModal({
   departmentCategories?: DepartmentCategory[];
   projects: Project[];
   projectsError?: string | null;
+  categoriesError?: string | null;
   taskTemplates?: TaskTemplate[];
   libraryTasks?: Task[];
   canEditTeam: boolean;
@@ -168,7 +171,7 @@ export function TaskFormModal({
   const [quickError, setQuickError] = useState("");
   const [savingQuick, setSavingQuick] = useState(false);
   const [replacing, setReplacing] = useState(!draft.id);
-  const quickCategories = categoriesForDepartment(departmentCategories, quickDepartmentId);
+  const quickCategories = managedProjectCategories(departmentCategories, { includeId: quickCategory });
   const libraryItems = useMemo(() => mergeTaskLibrary(taskTemplates, libraryTasks), [libraryTasks, taskTemplates]);
 
   function applyLibraryItem(item: TaskLibraryItem) {
@@ -392,10 +395,13 @@ export function TaskFormModal({
                   </select>
                 </Field>
                 <Field label={`${t("common.category")} *`}>
-                  <select className={inputClass} value={quickCategory} onChange={(event) => setQuickCategory(event.target.value)} disabled={!quickDepartmentId}>
-                    <option value="">{quickDepartmentId ? t("work.pickCategory") : t("work.pickDepartmentFirst")}</option>
-                    {quickCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                  </select>
+                  <CategoryPicker
+                    value={quickCategory}
+                    categories={quickCategories}
+                    required
+                    error={categoriesError ? (categoriesError === "FORBIDDEN" ? t("work.noProjectAccess") : t("work.categoriesLoadFailed")) : null}
+                    onChange={setQuickCategory}
+                  />
                 </Field>
                 <Field label={t("common.status")}>
                   <select className={inputClass} value={quickStatus} onChange={(event) => setQuickStatus(event.target.value)}>
