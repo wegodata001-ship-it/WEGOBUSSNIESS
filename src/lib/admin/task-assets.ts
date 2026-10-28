@@ -3,7 +3,8 @@ import { canAccessTaskChat, taskParticipantIds } from "@/lib/admin/task-access";
 import { writeTaskActivity } from "@/lib/admin/task-activity";
 import { loadTaskForActor } from "@/lib/admin/task-thread";
 import { actorCan, type ServerActor } from "@/lib/auth/server-actor";
-import { getAdminDb, getAdminStorage } from "@/lib/firebase/admin";
+import { getAdminDb } from "@/lib/firebase/admin";
+import { classifyStorageError, getAdminBucket, safeStorageLog } from "@/lib/firebase/admin-storage";
 import { toTaskAttachment, toTaskLink } from "@/lib/firebase/converters";
 import { isAllowedTaskFile, parseHttpsUrl, safeFileName } from "@/lib/admin/task-file-rules";
 import {
@@ -28,6 +29,29 @@ function canManageAsset(actor: ServerActor, uploadedByUserId: string) {
     || actorCan(actor, "tasks.edit")
     || actorCan(actor, "tasks.delete")
     || actor.uid === uploadedByUserId;
+}
+
+function isUploadedFile(value: unknown): value is File {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as { name?: unknown; size?: unknown; arrayBuffer?: unknown };
+  return typeof candidate.name === "string"
+    && typeof candidate.size === "number"
+    && candidate.size > 0
+    && typeof candidate.arrayBuffer === "function";
+}
+
+async function fileToBuffer(file: File) {
+  if (typeof file.arrayBuffer === "function") {
+    return Buffer.from(await file.arrayBuffer());
+  }
+  return Buffer.from(await new Response(file).arrayBuffer());
+}
+
+function storageFailure(error: unknown, requestId: string, stage: string) {
+  const kind = classifyStorageError(error);
+  const message = error instanceof Error ? error.name : "Error";
+  safeStorageLog(stage, { requestId, errorType: kind, errorName: message });
+  return { ok: false as const, error: kind, status: kind === "STORAGE_FORBIDDEN" ? 403 : 500 };
 }
 
 async function notifyTaskFile(input: {
@@ -86,11 +110,20 @@ export async function uploadTaskAttachment(input: {
   taskId: string;
   file: File;
   name?: string;
+  requestId?: string;
 }) {
+  const requestId = input.requestId || "no-request-id";
   const loaded = await loadTaskForActor(input.actor, input.businessId, input.taskId);
-  if ("error" in loaded) return { ok: false as const, error: loaded.error, status: loaded.error === "NOT_FOUND" ? 404 : 403 };
+  if ("error" in loaded) {
+    safeStorageLog("task_not_loaded", { requestId, errorType: loaded.error });
+    return { ok: false as const, error: loaded.error, status: loaded.error === "NOT_FOUND" ? 404 : 403 };
+  }
   if (!canAccessTaskChat(input.actor, loaded.task)) {
+    safeStorageLog("task_forbidden", { requestId, errorType: "FORBIDDEN" });
     return { ok: false as const, error: "FORBIDDEN" as const, status: 403 };
+  }
+  if (!isUploadedFile(input.file)) {
+    return { ok: false as const, error: "FILE_REQUIRED" as const, status: 400 };
   }
   const allowed = isAllowedTaskFile(input.file);
   if (!allowed.ok) return { ok: false as const, error: allowed.error, status: 400 };
@@ -99,45 +132,79 @@ export async function uploadTaskAttachment(input: {
   const ref = db.collection(taskAttachmentsPath(input.businessId, input.taskId)).doc();
   const fileName = safeFileName(input.file.name);
   const storagePath = `businesses/${input.businessId}/tasks/${input.taskId}/attachments/${ref.id}/${fileName}`;
-  const buffer = Buffer.from(await input.file.arrayBuffer());
-  await getAdminStorage().bucket().file(storagePath).save(buffer, {
-    contentType: input.file.type || "application/octet-stream",
-    resumable: false,
-  });
+  let buffer: Buffer;
+  try {
+    buffer = await fileToBuffer(input.file);
+  } catch (error) {
+    return storageFailure(error, requestId, "read_file");
+  }
+
+  try {
+    await getAdminBucket().file(storagePath).save(buffer, {
+      contentType: input.file.type || "application/octet-stream",
+      resumable: false,
+    });
+  } catch (error) {
+    return storageFailure(error, requestId, "storage_save");
+  }
+
   const now = new Date();
   const displayName = text(input.name) || input.file.name;
-  await ref.set({
-    businessId: input.businessId,
-    taskId: input.taskId,
-    projectId: loaded.task.projectId ?? null,
-    name: displayName,
-    fileName: input.file.name,
-    contentType: input.file.type || "application/octet-stream",
-    size: input.file.size,
-    storagePath,
-    uploadedByUserId: input.actor.uid,
-    uploadedByEmployeeId: input.actor.employeeId,
-    createdAt: now,
-    updatedAt: now,
-  });
-  await writeTaskActivity({
-    businessId: input.businessId,
-    taskId: input.taskId,
-    actorUserId: input.actor.uid,
-    actorEmployeeId: input.actor.employeeId,
-    type: "file",
-    message: `הועלה קובץ: ${displayName}`,
-  });
-  await notifyTaskFile({
-    actor: input.actor,
-    businessId: input.businessId,
-    taskId: input.taskId,
-    title: loaded.task.title,
-    createdByUserId: loaded.task.createdByUserId,
-    participantIds: taskParticipantIds(loaded.task),
-    fileName: displayName,
-    attachmentId: ref.id,
-  });
+  try {
+    await ref.set({
+      businessId: input.businessId,
+      taskId: input.taskId,
+      projectId: loaded.task.projectId ?? null,
+      name: displayName,
+      fileName: input.file.name,
+      contentType: input.file.type || "application/octet-stream",
+      size: input.file.size,
+      storagePath,
+      uploadedByUserId: input.actor.uid,
+      uploadedByEmployeeId: input.actor.employeeId,
+      createdAt: now,
+      updatedAt: now,
+    });
+  } catch (error) {
+    await getAdminBucket().file(storagePath).delete({ ignoreNotFound: true }).catch(() => undefined);
+    return storageFailure(error, requestId, "firestore_metadata");
+  }
+
+  try {
+    await writeTaskActivity({
+      businessId: input.businessId,
+      taskId: input.taskId,
+      actorUserId: input.actor.uid,
+      actorEmployeeId: input.actor.employeeId,
+      type: "file",
+      message: `הועלה קובץ: ${displayName}`,
+    });
+  } catch (error) {
+    safeStorageLog("activity_failed", {
+      requestId,
+      errorType: error instanceof Error ? error.name : "Error",
+    });
+  }
+
+  try {
+    await notifyTaskFile({
+      actor: input.actor,
+      businessId: input.businessId,
+      taskId: input.taskId,
+      title: loaded.task.title,
+      createdByUserId: loaded.task.createdByUserId,
+      participantIds: taskParticipantIds(loaded.task),
+      fileName: displayName,
+      attachmentId: ref.id,
+    });
+  } catch (error) {
+    safeStorageLog("notify_failed", {
+      requestId,
+      errorType: error instanceof Error ? error.name : "Error",
+    });
+  }
+
+  safeStorageLog("upload_ok", { requestId, attachmentId: ref.id });
   return { ok: true as const, id: ref.id };
 }
 
@@ -178,7 +245,7 @@ export async function deleteTaskAttachment(input: {
   }
   const storagePath = String(snap.data()?.storagePath ?? "");
   if (storagePath) {
-    await getAdminStorage().bucket().file(storagePath).delete({ ignoreNotFound: true });
+    await getAdminBucket().file(storagePath).delete({ ignoreNotFound: true });
   }
   await ref.delete();
   await writeTaskActivity({
@@ -204,11 +271,15 @@ export async function signedTaskAttachmentUrl(input: {
   if (!snap.exists) return { ok: false as const, error: "NOT_FOUND" as const, status: 404 };
   const storagePath = String(snap.data()?.storagePath ?? "");
   if (!storagePath) return { ok: false as const, error: "NO_FILE" as const, status: 404 };
-  const [signed] = await getAdminStorage().bucket().file(storagePath).getSignedUrl({
-    action: "read",
-    expires: Date.now() + 1000 * 60 * 15,
-  });
-  return { ok: true as const, url: signed, name: snap.data()?.fileName ?? snap.data()?.name, contentType: snap.data()?.contentType };
+  try {
+    const [signed] = await getAdminBucket().file(storagePath).getSignedUrl({
+      action: "read",
+      expires: Date.now() + 1000 * 60 * 15,
+    });
+    return { ok: true as const, url: signed, name: snap.data()?.fileName ?? snap.data()?.name, contentType: snap.data()?.contentType };
+  } catch (error) {
+    return storageFailure(error, "signed-url", "signed_url");
+  }
 }
 
 export async function listTaskLinks(actor: ServerActor, businessId: string, taskId: string) {
@@ -302,7 +373,7 @@ export async function cleanupTaskSubtree(businessId: string, taskId: string) {
     db.collection(taskCommentsPath(businessId, taskId)).get(),
     db.collection(taskActivityPath(businessId, taskId)).get(),
   ]);
-  const bucket = getAdminStorage().bucket();
+  const bucket = getAdminBucket();
   await Promise.all(attachments.docs.map(async (docSnap) => {
     const storagePath = String(docSnap.data().storagePath ?? "");
     if (storagePath) await bucket.file(storagePath).delete({ ignoreNotFound: true });

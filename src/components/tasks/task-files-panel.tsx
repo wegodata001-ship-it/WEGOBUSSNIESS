@@ -5,6 +5,7 @@ import { Download, ExternalLink, FileText, Link2, Pencil, Trash2, Upload } from 
 import { Field, GhostButton, PrimaryButton, inputClass } from "@/components/admin/ui";
 import { employeeName } from "@/lib/admin/catalog";
 import { canPreviewFile, formatBytes, linkService } from "@/lib/admin/task-link-meta";
+import { taskFileErrorKey } from "@/lib/admin/task-file-rules";
 import { dateTimeLabel } from "@/lib/admin/relative-time";
 import {
   deleteTaskAttachment,
@@ -40,6 +41,7 @@ export function TaskFilesPanel({
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [failedFiles, setFailedFiles] = useState<File[]>([]);
   const [preview, setPreview] = useState<{ url: string; name: string; contentType: string } | null>(null);
   const [linkDraft, setLinkDraft] = useState<{ id?: string; title: string; url: string; description: string } | null>(null);
 
@@ -48,13 +50,24 @@ export function TaskFilesPanel({
     if (!list.length || !canChat) return;
     setBusy(true);
     setError("");
-    const result = await uploadTaskAttachments({ businessId, taskId, files: list });
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.error === "FILE_TOO_LARGE" ? t("work.fileTooLarge") : result.error === "FILE_TYPE" ? t("work.fileTypeDenied") : t("work.uploadFailed"));
-      return;
+    const stillFailed: File[] = [];
+    let lastError = "";
+    let saved = 0;
+    for (const file of list) {
+      const result = await uploadTaskAttachments({ businessId, taskId, files: [file] });
+      if (!result.ok) {
+        stillFailed.push(file);
+        lastError = t(taskFileErrorKey(result.error));
+      } else {
+        saved += 1;
+      }
     }
-    onChanged();
+    setBusy(false);
+    setFailedFiles(stillFailed);
+    if (stillFailed.length) {
+      setError(saved ? `${t("work.partialUpload")} ${lastError}` : lastError);
+    }
+    if (saved) onChanged();
   }
 
   async function openFile(item: TaskAttachment) {
@@ -107,7 +120,14 @@ export function TaskFilesPanel({
             {t("work.dropFiles")}
           </button>
         ) : null}
-        {error ? <p className="mt-2 text-sm text-rose-600">{error}</p> : null}
+        {error ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <p className="text-sm text-rose-600">{error}</p>
+            {failedFiles.length ? (
+              <GhostButton disabled={busy} onClick={() => void upload(failedFiles)}>{t("work.retryFile")}</GhostButton>
+            ) : null}
+          </div>
+        ) : null}
         <div className="mt-3 grid gap-2">
           {attachments.length ? attachments.map((item) => (
             <article key={item.id} className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between">

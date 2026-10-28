@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { Download, FileSpreadsheet, FileText, Image as ImageIcon, Link2, Paperclip, Pencil, Trash2, Upload } from "lucide-react";
 import { Field, GhostButton, PrimaryButton, inputClass } from "@/components/admin/ui";
 import { canPreviewFile, formatBytes, linkService } from "@/lib/admin/task-link-meta";
-import { fileExtension, isAllowedTaskFile, parseHttpsUrl, TASK_FILE_ACCEPT } from "@/lib/admin/task-file-rules";
+import { fileExtension, isAllowedTaskFile, parseHttpsUrl, TASK_FILE_ACCEPT, taskFileErrorKey } from "@/lib/admin/task-file-rules";
 import {
   deleteTaskAttachment,
   deleteTaskLink,
@@ -77,7 +77,10 @@ export function TaskFormAssets({
     for (const file of Array.from(list)) {
       const allowed = isAllowedTaskFile(file);
       if (!allowed.ok) {
-        lastError = allowed.error === "FILE_TOO_LARGE" ? t("work.fileTooLarge") : t("work.fileTypeDenied");
+        lastError = t(taskFileErrorKey(allowed.error));
+        continue;
+      }
+      if (next.some((item) => item.name === file.name && item.size === file.size && item.status !== "failed")) {
         continue;
       }
       next.push({
@@ -113,7 +116,7 @@ export function TaskFormAssets({
       if (!taskId) return;
       const result = await deleteTaskAttachment({ businessId, taskId, attachmentId: item.attachmentId });
       if (!result.ok) {
-        setError(t("work.uploadFailed"));
+        setError(t("work.deleteFailed"));
         return;
       }
     }
@@ -126,7 +129,7 @@ export function TaskFormAssets({
       if (!taskId) return;
       const result = await deleteTaskLink({ businessId, taskId, linkId: item.linkId });
       if (!result.ok) {
-        setError(t("work.uploadFailed"));
+        setError(t("work.deleteFailed"));
         return;
       }
     }
@@ -205,11 +208,27 @@ export function TaskFormAssets({
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-slate-800">{item.name}</p>
                 <p className="text-[11px] text-slate-500">
-                  {formatBytes(item.size)} · {item.status === "pending" ? t("work.filePending") : item.status === "uploading" ? t("work.fileUploading") : item.status === "failed" ? t("work.fileFailed") : t("work.fileReady")}
+                  {formatBytes(item.size)} · {item.status === "pending" ? t("work.filePending") : item.status === "uploading" ? t("work.fileUploading") : item.status === "failed" ? (item.error ? t(taskFileErrorKey(item.error)) : t("work.fileFailed")) : t("work.fileReady")}
                 </p>
               </div>
             </div>
             <div className="flex shrink-0 gap-1">
+              {item.status === "failed" && item.file ? (
+                <GhostButton onClick={() => {
+                  const next = files.map((file) => file.key === item.key ? { ...file, status: "pending" as const, error: undefined } : file);
+                  onFilesChange(next);
+                  if (!taskId) return;
+                  void persistTaskFormAssets({
+                    businessId,
+                    taskId,
+                    files: next,
+                    links: [],
+                    onFilesChange,
+                  }).then((result) => {
+                    if (!result.ok) setError(result.files.find((file) => file.key === item.key)?.error ? t(taskFileErrorKey(result.files.find((file) => file.key === item.key)?.error)) : t("work.partialUpload"));
+                  });
+                }}>{t("work.retryFile")}</GhostButton>
+              ) : null}
               {item.status === "ready" || item.file ? (
                 <GhostButton onClick={() => void openSaved(item)}><Download className="h-4 w-4" /></GhostButton>
               ) : null}
@@ -313,7 +332,7 @@ export async function persistTaskFormAssets(input: {
   let failed = 0;
   for (let index = 0; index < nextFiles.length; index += 1) {
     const item = nextFiles[index];
-    if (item.status === "ready" || !item.file) continue;
+    if (item.status === "ready" || item.attachmentId || !item.file) continue;
     nextFiles[index] = { ...item, status: "uploading" };
     input.onFilesChange([...nextFiles]);
     const result = await uploadTaskAttachments({ businessId: input.businessId, taskId: input.taskId, files: [item.file] });

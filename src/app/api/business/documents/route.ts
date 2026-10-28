@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { writeActivity } from "@/lib/admin/activity";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
-import { getAdminDb, getAdminStorage } from "@/lib/firebase/admin";
+import { getAdminDb } from "@/lib/firebase/admin";
+import { getAdminBucket } from "@/lib/firebase/admin-storage";
 import { documentDocPath, documentsPath } from "@/lib/firebase/paths";
 
 function safeName(name: string) {
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
   const fileName = safeName(file.name);
   const storagePath = `businesses/${businessId}/documents/${ref.id}/${fileName}`;
   const buffer = Buffer.from(await file.arrayBuffer());
-  const bucket = getAdminStorage().bucket();
+  const bucket = getAdminBucket();
   await bucket.file(storagePath).save(buffer, {
     contentType: file.type || "application/octet-stream",
     resumable: false,
@@ -85,7 +86,7 @@ export async function DELETE(request: Request) {
   if (!snap.exists) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   const storagePath = String(snap.data()?.storagePath ?? "");
   if (storagePath) {
-    await getAdminStorage().bucket().file(storagePath).delete({ ignoreNotFound: true });
+    await getAdminBucket().file(storagePath).delete({ ignoreNotFound: true });
   }
   await db.doc(documentDocPath(businessId, id)).delete();
   return NextResponse.json({ ok: true });
@@ -108,7 +109,7 @@ export async function GET(request: Request) {
   if (!snap.exists) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   const storagePath = String(snap.data()?.storagePath ?? "");
   if (!storagePath) return NextResponse.json({ error: "NO_FILE" }, { status: 404 });
-  const [signed] = await getAdminStorage().bucket().file(storagePath).getSignedUrl({
+  const [signed] = await getAdminBucket().file(storagePath).getSignedUrl({
     action: "read",
     expires: Date.now() + 1000 * 60 * 15,
   });

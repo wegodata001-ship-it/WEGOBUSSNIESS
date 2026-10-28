@@ -53,3 +53,33 @@ export function parseHttpsUrl(value: unknown) {
 export function safeFileName(name: string) {
   return name.replace(/[^\w.\u0590-\u05ff\u0600-\u06ff-]+/g, "-").slice(0, 80) || "file";
 }
+
+export type TaskFileMessageKey =
+  | "work.uploadPermissionDenied"
+  | "work.fileTooLarge"
+  | "work.fileTypeDenied"
+  | "work.uploadNetworkFailed"
+  | "work.uploadStorageFailed"
+  | "work.uploadFailed"
+  | "work.deleteFailed";
+
+export function taskFileErrorKey(error?: string): TaskFileMessageKey {
+  switch (error) {
+    case "FORBIDDEN":
+    case "AUTH_REQUIRED":
+    case "STORAGE_FORBIDDEN":
+      return "work.uploadPermissionDenied";
+    case "FILE_TOO_LARGE":
+      return "work.fileTooLarge";
+    case "FILE_TYPE":
+      return "work.fileTypeDenied";
+    case "NETWORK":
+      return "work.uploadNetworkFailed";
+    case "STORAGE_FAILED":
+    case "STORAGE_NOT_CONFIGURED":
+    case "STORAGE_NOT_FOUND":
+      return "work.uploadStorageFailed";
+    default:
+      return "work.uploadFailed";
+  }
+}

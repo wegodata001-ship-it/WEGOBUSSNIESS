@@ -7,6 +7,7 @@ import { GhostButton, PrimaryButton, StatusBadge, inputClass } from "@/component
 import { departmentName, employeeName, projectName } from "@/lib/admin/catalog";
 import { labelOf } from "@/lib/admin/labels";
 import { dateTimeLabel, relativeTimeLabel } from "@/lib/admin/relative-time";
+import { taskFileErrorKey } from "@/lib/admin/task-file-rules";
 import { taskParticipantIds } from "@/lib/admin/task-team";
 import { PaymentModal } from "@/components/tasks/payment-modal";
 import { PaymentStatusBadge } from "@/components/tasks/payment-status-badge";
@@ -86,6 +87,7 @@ export function TaskDetailDrawer({
   const [chatFiles, setChatFiles] = useState<File[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [chatError, setChatError] = useState("");
   const [rejectOpen, setRejectOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [priceDraft, setPriceDraft] = useState(task.priceBeforeVat === null ? "" : String(task.priceBeforeVat));
@@ -171,10 +173,24 @@ export function TaskDetailDrawer({
       const name = employeeName(employees, id);
       return body.includes(`@${name}`);
     });
-    let uploaded: Array<{ id: string; name: string }> = [];
+    const uploaded: Array<{ id: string; name: string }> = [];
+    const leftover: File[] = [];
+    setChatError("");
     if (chatFiles.length) {
-      const result = await uploadTaskAttachments({ businessId, taskId: task.id, files: chatFiles });
-      if (result.ok) uploaded = result.ids.map((id, index) => ({ id, name: chatFiles[index]?.name ?? "file" }));
+      for (const file of chatFiles) {
+        const uploadedFile = await uploadTaskAttachments({ businessId, taskId: task.id, files: [file] });
+        if (uploadedFile.ok && uploadedFile.ids[0]) {
+          uploaded.push({ id: uploadedFile.ids[0], name: file.name });
+        } else {
+          leftover.push(file);
+          setChatError(t(taskFileErrorKey(uploadedFile.error)));
+        }
+      }
+      setChatFiles(leftover);
+    }
+    if (!editingId && !body.trim() && !uploaded.length && !chatLink.trim()) {
+      setBusy(false);
+      return;
     }
     const result = editingId
       ? await editTaskComment({ businessId, taskId: task.id, commentId: editingId, body: body.trim() })
@@ -191,7 +207,7 @@ export function TaskDetailDrawer({
     if (!result.ok) return;
     setBody("");
     setMentions([]);
-    setChatFiles([]);
+    setChatFiles(leftover);
     setChatLink("");
     setEditingId(null);
     const thread = await fetchTaskThread(businessId, task.id);
@@ -501,6 +517,7 @@ export function TaskDetailDrawer({
                       ))}
                     </div>
                   ) : null}
+                  {chatError ? <p className="mb-2 text-xs text-rose-600">{chatError}</p> : null}
                   {chatFiles.length ? <p className="mb-2 text-xs text-slate-500">{chatFiles.map((file) => file.name).join(", ")}</p> : null}
                   <div className="mb-2 flex gap-2">
                     <input className={inputClass} dir="ltr" value={chatLink} onChange={(event) => setChatLink(event.target.value)} placeholder="https://" />

@@ -228,14 +228,19 @@ export async function uploadTaskAttachments(input: {
   const form = new FormData();
   form.set("businessId", input.businessId);
   for (const file of input.files) form.append("file", file);
-  const response = await fetch(`/api/business/tasks/${input.taskId}/attachments`, {
-    method: "POST",
-    credentials: "include",
-    body: form,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/api/business/tasks/${input.taskId}/attachments`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    });
+  } catch {
+    return { ok: false as const, error: "NETWORK", ids: [] as string[] };
+  }
   const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; ids?: string[]; id?: string; error?: string };
   if (!response.ok || payload.error) {
-    return { ok: false as const, error: payload.error || "NETWORK", ids: [] as string[] };
+    return { ok: false as const, error: payload.error || (response.status === 401 ? "AUTH_REQUIRED" : "NETWORK"), ids: [] as string[] };
   }
   return { ok: true as const, ids: payload.ids ?? (payload.id ? [payload.id] : []) };
 }

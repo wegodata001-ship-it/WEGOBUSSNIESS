@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
-import { getAdminDb, getAdminStorage } from "@/lib/firebase/admin";
+import { getAdminDb } from "@/lib/firebase/admin";
+import { getAdminBucket } from "@/lib/firebase/admin-storage";
 import { businessDocPath, businessSettingsDocPath } from "@/lib/firebase/paths";
 
 export async function POST(request: Request) {
@@ -20,11 +21,11 @@ export async function POST(request: Request) {
   }
   const ext = file.name.split(".").pop()?.toLowerCase() || "png";
   const storagePath = `businesses/${businessId}/branding/logo.${ext}`;
-  await getAdminStorage().bucket().file(storagePath).save(Buffer.from(await file.arrayBuffer()), {
+  await getAdminBucket().file(storagePath).save(Buffer.from(await file.arrayBuffer()), {
     contentType: file.type || "image/png",
     resumable: false,
   });
-  const [url] = await getAdminStorage().bucket().file(storagePath).getSignedUrl({
+  const [url] = await getAdminBucket().file(storagePath).getSignedUrl({
     action: "read",
     expires: Date.now() + 1000 * 60 * 60 * 24 * 365,
   });
@@ -56,7 +57,7 @@ export async function DELETE(request: Request) {
   const snap = await settingsRef.get();
   const storagePath = typeof snap.data()?.logoStoragePath === "string" ? snap.data()?.logoStoragePath : "";
   if (storagePath) {
-    await getAdminStorage().bucket().file(storagePath).delete({ ignoreNotFound: true });
+    await getAdminBucket().file(storagePath).delete({ ignoreNotFound: true });
   }
   const now = new Date();
   await Promise.all([

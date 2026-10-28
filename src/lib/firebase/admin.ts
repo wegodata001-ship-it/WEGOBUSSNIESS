@@ -14,20 +14,23 @@ if (typeof window !== "undefined") {
   throw new Error("Firebase Admin is server-only.");
 }
 
-const ADMIN_RUNTIME_ENV = {
-  projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-  clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-  privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY,
-  privateKeyBase64: process.env.FIREBASE_ADMIN_PRIVATE_KEY_BASE64,
-  publicProjectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  googleAppCreds: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-};
+function readAdminRuntimeEnv() {
+  return {
+    projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY,
+    privateKeyBase64: process.env.FIREBASE_ADMIN_PRIVATE_KEY_BASE64,
+    publicProjectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || process.env.FIREBASE_STORAGE_BUCKET,
+    googleAppCreds: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+  };
+}
 
 export function getNormalizedAdminPrivateKey() {
-  let key = (ADMIN_RUNTIME_ENV.privateKey ?? "").trim();
-  if (!key && ADMIN_RUNTIME_ENV.privateKeyBase64?.trim()) {
-    key = Buffer.from(ADMIN_RUNTIME_ENV.privateKeyBase64.trim(), "base64").toString("utf8").trim();
+  const env = readAdminRuntimeEnv();
+  let key = (env.privateKey ?? "").trim();
+  if (!key && env.privateKeyBase64?.trim()) {
+    key = Buffer.from(env.privateKeyBase64.trim(), "base64").toString("utf8").trim();
   }
 
   if (
@@ -49,12 +52,13 @@ export function getAdminApp(): App {
     return getApps()[0]!;
   }
 
-  const projectId = (ADMIN_RUNTIME_ENV.projectId || ADMIN_RUNTIME_ENV.publicProjectId || "").trim();
-  const clientEmail = (ADMIN_RUNTIME_ENV.clientEmail || "").trim();
+  const env = readAdminRuntimeEnv();
+  const projectId = (env.projectId || env.publicProjectId || "").trim();
+  const clientEmail = (env.clientEmail || "").trim();
   const privateKey = getNormalizedAdminPrivateKey();
-  const storageBucket = (ADMIN_RUNTIME_ENV.storageBucket || "").trim() || undefined;
+  const storageBucket = (env.storageBucket || "").trim() || undefined;
 
-  if (ADMIN_RUNTIME_ENV.googleAppCreds?.trim()) {
+  if (env.googleAppCreds?.trim()) {
     return initializeApp({
       projectId,
       storageBucket,
@@ -75,7 +79,12 @@ export function getAdminApp(): App {
       projectId,
       storageBucket,
     });
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "init-failed";
+    console.error(
+      "[FIREBASE_ADMIN_INIT]",
+      message.replace(/-----BEGIN[\s\S]*?-----END [A-Z ]+-----/g, "[REDACTED]").slice(0, 200),
+    );
     throw new Error(WAITING_FOR_FIREBASE_CONFIG);
   }
 }

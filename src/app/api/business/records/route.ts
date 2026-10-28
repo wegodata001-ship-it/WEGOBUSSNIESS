@@ -165,10 +165,30 @@ export async function GET(request: Request) {
     if (!actorCan(actor, "meetings.view") && !actor.isSuperAdmin) {
       return NextResponse.json({ data: [] });
     }
-    const snap = await db.collection(meetingsPath(businessId)).get();
-    return NextResponse.json({
-      data: snap.docs.map((docSnap) => toMeeting(docSnap.id, docSnap.data())),
-    });
+    try {
+      const snap = await db.collection(meetingsPath(businessId)).get();
+      const data = [];
+      for (const docSnap of snap.docs) {
+        try {
+          data.push(toMeeting(docSnap.id, docSnap.data()));
+        } catch (error) {
+          console.error(
+            "[RECORDS_MEETINGS]",
+            "convert_failed",
+            docSnap.id,
+            error instanceof Error ? error.name : "Error",
+          );
+        }
+      }
+      return NextResponse.json({ data });
+    } catch (error) {
+      console.error(
+        "[RECORDS_MEETINGS]",
+        "list_failed",
+        error instanceof Error ? error.name : "Error",
+      );
+      return NextResponse.json({ data: [] });
+    }
   }
 
   if (kind === "requests") {

@@ -1,9 +1,9 @@
 import { reviveSessionDates } from "@/lib/session/serialize";
-import type { ResolveResult } from "@/types/session";
+import type { AuthSession, ResolveResult } from "@/types/session";
 
 export type { ResolveResult };
 
-export async function resolveUserSession(): Promise<ResolveResult> {
+export async function resolveUserSession(): Promise<AuthSession> {
   const response = await fetch("/api/session/resolve", {
     credentials: "include",
     cache: "no-store",
@@ -20,8 +20,11 @@ export async function resolveUserSession(): Promise<ResolveResult> {
   if (result.status === "ready" || result.status === "blocked") {
     return result as ResolveResult;
   }
+  if (result.status === "unauthenticated" || response.status === 401) {
+    return { status: "unauthenticated" };
+  }
 
-  return { status: "blocked", reason: response.status === 401 ? "no_membership" : "unconfigured" };
+  return { status: "blocked", reason: "unconfigured" };
 }
 
 export async function loginWithPassword(email: string, password: string): Promise<ResolveResult> {
