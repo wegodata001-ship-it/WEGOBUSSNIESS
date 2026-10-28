@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CategoryPicker } from "@/components/admin/category-picker";
 import { ActionSelect, MiniModal } from "@/components/admin/action-select";
 import { ColorPicker, PriorityPicker, TaskTypePicker } from "@/components/admin/form-chips";
 import { EmployeeMultiSelect } from "@/components/admin/employee-multi-select";
 import { TaskLibraryPicker } from "@/components/admin/task-library-picker";
+import { loadTaskFormAssets, persistTaskFormAssets, TaskFormAssets, type FormFileItem, type FormLinkItem } from "@/components/admin/task-form-assets";
 import { DatePicker, Field, GhostButton, Modal, PrimaryButton, inputClass } from "@/components/admin/ui";
 import { mutateBusiness } from "@/lib/admin/api";
 import { managedProjectCategories } from "@/lib/admin/department-categories";
@@ -121,6 +122,7 @@ export function TaskFormModal({
   onChange,
   onClose,
   onSave,
+  onSaved,
   busy,
   businessId,
   employees,
@@ -141,7 +143,8 @@ export function TaskFormModal({
   draft: TaskDraft;
   onChange: (next: TaskDraft) => void;
   onClose: () => void;
-  onSave: () => void;
+  onSave: () => Promise<{ ok: boolean; id?: string } | void> | { ok: boolean; id?: string } | void;
+  onSaved?: () => void;
   busy: boolean;
   businessId: string;
   employees: Employee[];
@@ -171,8 +174,100 @@ export function TaskFormModal({
   const [quickError, setQuickError] = useState("");
   const [savingQuick, setSavingQuick] = useState(false);
   const [replacing, setReplacing] = useState(!draft.id);
+  const [files, setFiles] = useState<FormFileItem[]>([]);
+  const [links, setLinks] = useState<FormLinkItem[]>([]);
+  const [assetBusy, setAssetBusy] = useState(false);
+  const [assetError, setAssetError] = useState("");
+  const [boundTaskId, setBoundTaskId] = useState(draft.id ?? "");
+  const [uploadProgress, setUploadProgress] = useState("");
+  const openedTaskId = useRef(draft.id ?? "");
   const quickCategories = managedProjectCategories(departmentCategories, { includeId: quickCategory });
   const libraryItems = useMemo(() => mergeTaskLibrary(taskTemplates, libraryTasks), [libraryTasks, taskTemplates]);
+
+  useEffect(() => {
+    if (draft.id) setBoundTaskId(draft.id);
+  }, [draft.id]);
+
+  useEffect(() => {
+    if (!draft.id) return;
+    if (!openedTaskId.current) {
+      openedTaskId.current = draft.id;
+      return;
+    }
+    if (openedTaskId.current !== draft.id) return;
+    let active = true;
+    void loadTaskFormAssets(businessId, draft.id).then((result) => {
+      if (!active) return;
+      setFiles(result.files);
+      setLinks(result.links);
+    });
+    return () => {
+      active = false;
+    };
+  }, [businessId, draft.id]);
+
+  async function persistAssets(taskId: string) {
+    setUploadProgress(t("work.uploadProgress"));
+    const result = await persistTaskFormAssets({
+      businessId,
+      taskId,
+      files,
+      links,
+      onFilesChange: setFiles,
+    });
+    setLinks([...links]);
+    return result;
+  }
+
+  async function handleSave() {
+    if (!draft.title.trim() || busy || assetBusy) return;
+    setAssetBusy(true);
+    setAssetError("");
+    const result = await onSave();
+    if (!result || !result.ok) {
+      setAssetBusy(false);
+      setUploadProgress("");
+      return;
+    }
+    const taskId = result.id || boundTaskId || draft.id;
+    if (!taskId) {
+      setAssetBusy(false);
+      onSaved?.();
+      return;
+    }
+    setBoundTaskId(taskId);
+    if (result.id && result.id !== draft.id) onChange({ ...draft, id: result.id });
+    const pending = files.some((item) => item.file && item.status !== "ready") || links.some((item) => !item.linkId || item.dirty);
+    if (!pending) {
+      setAssetBusy(false);
+      setUploadProgress("");
+      onSaved?.();
+      return;
+    }
+    const persisted = await persistAssets(taskId);
+    setAssetBusy(false);
+    setUploadProgress("");
+    if (!persisted.ok) {
+      setAssetError(t("work.partialUpload"));
+      return;
+    }
+    onSaved?.();
+  }
+
+  async function retryAssets() {
+    const taskId = boundTaskId || draft.id;
+    if (!taskId || assetBusy) return;
+    setAssetBusy(true);
+    setAssetError("");
+    const persisted = await persistAssets(taskId);
+    setAssetBusy(false);
+    setUploadProgress("");
+    if (!persisted.ok) {
+      setAssetError(t("work.partialUpload"));
+      return;
+    }
+    onSaved?.();
+  }
 
   function applyLibraryItem(item: TaskLibraryItem) {
     onChange({
@@ -350,6 +445,15 @@ export function TaskFormModal({
           <Field label={t("common.notes")}>
             <textarea className={`${inputClass} h-24 py-2`} value={draft.description} onChange={(event) => onChange({ ...draft, description: event.target.value })} />
           </Field>
+          <TaskFormAssets
+            businessId={businessId}
+            taskId={boundTaskId || draft.id}
+            canManage
+            files={files}
+            links={links}
+            onFilesChange={setFiles}
+            onLinksChange={setLinks}
+          />
           {draft.freeText ? (
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
@@ -362,9 +466,17 @@ export function TaskFormModal({
           ) : null}
         </div>
         {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+        {assetError ? <p className="mt-2 text-sm text-rose-600">{assetError}</p> : null}
+        {uploadProgress ? <p className="mt-2 text-sm text-slate-500">{uploadProgress}</p> : null}
         <div className="mt-5 flex justify-end gap-2">
           <GhostButton onClick={onClose}>{t("common.cancel")}</GhostButton>
-          <PrimaryButton disabled={busy || !draft.title.trim()} onClick={onSave}>{busy ? t("work.saving") : t("work.saveTask")}</PrimaryButton>
+          {assetError && (boundTaskId || draft.id) ? (
+            <PrimaryButton disabled={busy || assetBusy} onClick={() => void retryAssets()}>{t("work.retryFailed")}</PrimaryButton>
+          ) : (
+            <PrimaryButton disabled={busy || assetBusy || !draft.title.trim()} onClick={() => void handleSave()}>
+              {busy || assetBusy ? t("work.saving") : t("work.saveTask")}
+            </PrimaryButton>
+          )}
         </div>
       </Modal>
 

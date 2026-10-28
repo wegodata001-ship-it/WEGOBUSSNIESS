@@ -215,7 +215,7 @@ export function MeetingsView() {
   }
 
   async function saveTaskDraft() {
-    if (!business?.id || !taskDraft?.title.trim()) return;
+    if (!business?.id || !taskDraft?.title.trim()) return { ok: false as const };
     setBusy(true);
     setTaskFormError(null);
     const result = await saveBusinessTask({
@@ -226,11 +226,10 @@ export function MeetingsView() {
     setBusy(false);
     if (!result.ok) {
       setTaskFormError(taskMutationMessage(result.error, t));
-      return;
+      return { ok: false as const };
     }
-    setTaskDraft(null);
-    setToast(t("tasks.saved"));
-    await reload({ silent: true });
+    if (!taskDraft.id && result.id) setTaskDraft({ ...taskDraft, id: result.id });
+    return { ok: true as const, id: result.id };
   }
 
   async function saveDraft() {
@@ -515,7 +514,12 @@ export function MeetingsView() {
           draft={taskDraft}
           onChange={setTaskDraft}
           onClose={() => { setTaskDraft(null); setTaskFormError(null); }}
-          onSave={() => void saveTaskDraft()}
+          onSave={() => saveTaskDraft()}
+          onSaved={() => {
+            setTaskDraft(null);
+            setToast(t("tasks.saved"));
+            void reload({ silent: true });
+          }}
           busy={busy}
           businessId={business.id}
           employees={data.employees}

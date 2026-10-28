@@ -137,7 +137,7 @@ export function TasksManageView() {
   if (loading) return <Spinner label={t("common.loading")} />;
 
   async function save() {
-    if (!business?.id || !draft?.title.trim()) return;
+    if (!business?.id || !draft?.title.trim()) return { ok: false as const };
     setBusy(true);
     setFormError(null);
     const result = await saveBusinessTask({
@@ -148,11 +148,10 @@ export function TasksManageView() {
     setBusy(false);
     if (!result.ok) {
       setFormError(taskMutationMessage(result.error, t));
-      return;
+      return { ok: false as const };
     }
-    setDraft(null);
-    setToast(canManage ? t("tasks.saved") : t("work.sentForApproval"));
-    await reload({ silent: true });
+    if (!draft.id && result.id) setDraft({ ...draft, id: result.id });
+    return { ok: true as const, id: result.id };
   }
 
   async function run(action: string, task: Task, extra?: Record<string, unknown>) {
@@ -629,7 +628,12 @@ export function TasksManageView() {
           draft={draft}
           onChange={setDraft}
           onClose={() => { setDraft(null); setFormError(null); }}
-          onSave={() => void save()}
+          onSave={() => save()}
+          onSaved={() => {
+            setDraft(null);
+            setToast(canManage ? t("tasks.saved") : t("work.sentForApproval"));
+            void reload({ silent: true });
+          }}
           busy={busy}
           businessId={business.id}
           employees={data.employees}

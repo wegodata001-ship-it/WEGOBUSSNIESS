@@ -24,6 +24,7 @@
     "test:task-library": "npx tsx src/lib/admin/task-library.test.ts",
     "test:task-completion": "npx tsx src/lib/admin/task-completion.test.ts",
     "test:department-categories": "npx tsx src/lib/admin/department-categories.test.ts",
+    "test:task-file-rules": "npx tsx src/lib/admin/task-file-rules.test.ts",
     "test:document-totals": "npx tsx src/lib/docs/totals.test.ts",
     "test:business-profile": "npx tsx src/lib/data/business-profile.test.ts",
     "verify:settings-control": "npx tsx scripts/verify-settings-control.ts"

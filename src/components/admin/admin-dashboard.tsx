@@ -68,7 +68,7 @@ export function AdminDashboard() {
   }
 
   async function saveTask() {
-    if (!business?.id || !draft?.title.trim()) return;
+    if (!business?.id || !draft?.title.trim()) return { ok: false as const };
     setBusy(true);
     setFormError(null);
     const result = await saveBusinessTask({
@@ -79,11 +79,10 @@ export function AdminDashboard() {
     setBusy(false);
     if (!result.ok) {
       setFormError(taskMutationMessage(result.error, t));
-      return;
+      return { ok: false as const };
     }
-    setDraft(null);
-    setToast(t("tasks.saved"));
-    await refresh();
+    if (!draft.id && result.id) setDraft({ ...draft, id: result.id });
+    return { ok: true as const, id: result.id };
   }
 
   async function runAction(task: Task, work: () => Promise<void>, optimistic?: Partial<Task>) {
@@ -285,7 +284,12 @@ export function AdminDashboard() {
           draft={draft}
           onChange={setDraft}
           onClose={() => { setDraft(null); setFormError(null); }}
-          onSave={() => void saveTask()}
+          onSave={() => saveTask()}
+          onSaved={() => {
+            setDraft(null);
+            setToast(t("tasks.saved"));
+            void refresh();
+          }}
           busy={busy}
           businessId={business.id}
           employees={data.employees}

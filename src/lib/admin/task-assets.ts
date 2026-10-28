@@ -5,6 +5,7 @@ import { loadTaskForActor } from "@/lib/admin/task-thread";
 import { actorCan, type ServerActor } from "@/lib/auth/server-actor";
 import { getAdminDb, getAdminStorage } from "@/lib/firebase/admin";
 import { toTaskAttachment, toTaskLink } from "@/lib/firebase/converters";
+import { isAllowedTaskFile, parseHttpsUrl, safeFileName } from "@/lib/admin/task-file-rules";
 import {
   taskAttachmentDocPath,
   taskAttachmentsPath,
@@ -15,58 +16,10 @@ import {
   taskDocPath,
 } from "@/lib/firebase/paths";
 
-const MAX_BYTES = 25 * 1024 * 1024;
-
-const ALLOWED_TYPES = new Set([
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-  "image/svg+xml",
-  "text/plain",
-  "text/csv",
-  "application/zip",
-  "application/json",
-]);
-
-const ALLOWED_EXT = new Set([
-  "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
-  "jpg", "jpeg", "png", "gif", "webp", "svg",
-  "txt", "csv", "zip", "json",
-]);
+export { isAllowedTaskFile, parseHttpsUrl, safeFileName } from "@/lib/admin/task-file-rules";
 
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-export function safeFileName(name: string) {
-  return name.replace(/[^\w.\u0590-\u05ff\u0600-\u06ff-]+/g, "-").slice(0, 80) || "file";
-}
-
-export function isAllowedTaskFile(file: { name: string; type: string; size: number }) {
-  if (file.size <= 0 || file.size > MAX_BYTES) return { ok: false as const, error: "FILE_TOO_LARGE" };
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  if (ALLOWED_TYPES.has(file.type) || ALLOWED_EXT.has(ext)) return { ok: true as const };
-  return { ok: false as const, error: "FILE_TYPE" };
-}
-
-export function parseHttpsUrl(value: unknown) {
-  const raw = text(value);
-  if (!raw) return null;
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== "https:") return null;
-    return url.toString();
-  } catch {
-    return null;
-  }
 }
 
 function canManageAsset(actor: ServerActor, uploadedByUserId: string) {
