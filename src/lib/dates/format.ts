@@ -38,9 +38,21 @@ export function shiftDateOnly(value: DateOnly, days: number): DateOnly {
   return `${nextYear}-${nextMonth}-${nextDay}`;
 }
 
+function resolveIanaTimeZone(timeZone?: string | null): string {
+  const raw = typeof timeZone === "string" ? timeZone.trim() : "";
+  const candidate = raw || DEFAULT_TIMEZONE || "Asia/Jerusalem";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: candidate }).format(new Date());
+    return candidate;
+  } catch {
+    return "Asia/Jerusalem";
+  }
+}
+
 export function todayInTimeZone(timeZone = DEFAULT_TIMEZONE): DateOnly {
+  const safeZone = resolveIanaTimeZone(timeZone);
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
+    timeZone: safeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -49,6 +61,11 @@ export function todayInTimeZone(timeZone = DEFAULT_TIMEZONE): DateOnly {
   const year = parts.find((part) => part.type === "year")?.value;
   const month = parts.find((part) => part.type === "month")?.value;
   const day = parts.find((part) => part.type === "day")?.value;
+  if (!year || !month || !day) {
+    // Last-resort UTC stamp — never throw from date UI helpers.
+    const now = new Date();
+    return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
+  }
   return `${year}-${month}-${day}`;
 }
 
@@ -57,6 +74,7 @@ export function formatBusinessDate(
   locale: Locale,
   timeZone = DEFAULT_TIMEZONE,
 ) {
+  const safeZone = resolveIanaTimeZone(timeZone);
   if (typeof value === "string") {
     if (!isDateOnly(value)) {
       throw new Error("Expected a DATE value in YYYY-MM-DD format.");
@@ -78,7 +96,7 @@ export function formatBusinessDate(
     day: "numeric",
     month: "long",
     year: "numeric",
-    timeZone,
+    timeZone: safeZone,
   }).format(value);
 }
 
@@ -87,6 +105,7 @@ export function formatBusinessTime(
   locale: Locale,
   timeZone = DEFAULT_TIMEZONE,
 ) {
+  const safeZone = resolveIanaTimeZone(timeZone);
   if (typeof value === "string") {
     if (!isTimeOnly(value)) {
       throw new Error("Expected a TIME value in HH:mm format.");
@@ -99,7 +118,7 @@ export function formatBusinessTime(
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-    timeZone,
+    timeZone: safeZone,
   }).format(value);
 }
 
@@ -108,6 +127,7 @@ export function formatBusinessTimestamp(
   locale: Locale,
   timeZone = DEFAULT_TIMEZONE,
 ) {
+  const safeZone = resolveIanaTimeZone(timeZone);
   assertNotLegacySheetDate(value);
   return new Intl.DateTimeFormat(localeTag(locale), {
     day: "numeric",
@@ -116,6 +136,6 @@ export function formatBusinessTimestamp(
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-    timeZone,
+    timeZone: safeZone,
   }).format(value);
 }

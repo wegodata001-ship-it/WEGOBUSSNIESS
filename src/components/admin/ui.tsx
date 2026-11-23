@@ -1,8 +1,19 @@
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { shiftDateOnly, todayInTimeZone } from "@/lib/dates/format";
+import {
+  Component,
+  useEffect,
+  useState,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
+import {
+  buildDatePickerCells,
+  normalizeDatePickerValue,
+  shiftDatePickerMonth,
+} from "@/lib/dates/date-picker-model";
+import { isDateOnly, shiftDateOnly, todayInTimeZone } from "@/lib/dates/format";
 import { statusTone } from "@/lib/admin/labels";
 import { useI18n } from "@/components/providers/i18n-provider";
 
@@ -133,7 +144,27 @@ export function Modal({
   );
 }
 
-export function DatePicker({
+class DatePickerBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("DatePicker crashed", error.message, info.componentStack);
+  }
+
+  render() {
+    if (this.state.failed) return this.props.fallback;
+    return this.props.children;
+  }
+}
+
+function DatePickerInner({
   value,
   onChange,
 }: {
@@ -142,21 +173,11 @@ export function DatePicker({
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const monthStart = useMemo(() => `${value.slice(0, 7)}-01`, [value]);
-  const [year, month] = monthStart.split("-").map(Number);
-  const first = new Date(Date.UTC(year, month - 1, 1));
-  const startWeekday = (first.getUTCDay() + 6) % 7;
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const cells = Array.from({ length: startWeekday + daysInMonth }, (_, index) => {
-    if (index < startWeekday) return null;
-    const day = index - startWeekday + 1;
-    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  });
+  const model = buildDatePickerCells(value);
+  const safeValue = model.value;
 
   function shiftMonth(delta: number) {
-    const next = new Date(Date.UTC(year, month - 1 + delta, 1));
-    const stamp = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-01`;
-    onChange(value.slice(8) ? `${stamp.slice(0, 8)}${value.slice(8)}` : stamp);
+    onChange(shiftDatePickerMonth(safeValue, delta));
   }
 
   return (
@@ -166,7 +187,7 @@ export function DatePicker({
         onClick={() => setOpen((state) => !state)}
         className={`${inputClass} text-start`}
       >
-        {value}
+        {safeValue}
       </button>
       {open ? (
         <div className="absolute z-30 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
@@ -174,7 +195,7 @@ export function DatePicker({
             <button type="button" onClick={() => shiftMonth(-1)} className="rounded-lg p-1 hover:bg-slate-50">
               <ChevronRight className="h-4 w-4" />
             </button>
-            <p className="text-sm font-medium">{value.slice(0, 7)}</p>
+            <p className="text-sm font-medium">{`${model.year}-${String(model.month).padStart(2, "0")}`}</p>
             <button type="button" onClick={() => shiftMonth(1)} className="rounded-lg p-1 hover:bg-slate-50">
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -183,7 +204,7 @@ export function DatePicker({
             {["ב", "ג", "ד", "ה", "ו", "ש", "א"].map((day) => (
               <span key={day}>{day}</span>
             ))}
-            {cells.map((cell, index) => (
+            {model.cells.map((cell, index) => (
               <button
                 key={cell ?? `e-${index}`}
                 type="button"
@@ -194,9 +215,9 @@ export function DatePicker({
                   setOpen(false);
                 }}
                 className={`h-8 rounded-lg text-sm ${
-                  cell === value
+                  cell === safeValue
                     ? "bg-[var(--brand-primary)] text-white"
-                    : cell === todayInTimeZone()
+                    : cell === model.today
                       ? "bg-amber-50 text-amber-700"
                       : "text-slate-700 hover:bg-slate-50"
                 }`}
@@ -209,7 +230,7 @@ export function DatePicker({
             type="button"
             className="mt-2 w-full rounded-xl bg-slate-50 py-2 text-sm"
             onClick={() => {
-              onChange(todayInTimeZone());
+              onChange(model.today);
               setOpen(false);
             }}
           >
@@ -221,6 +242,30 @@ export function DatePicker({
   );
 }
 
+export function DatePicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const safeFallback = normalizeDatePickerValue(value);
+  return (
+    <DatePickerBoundary
+      fallback={
+        <input
+          type="date"
+          className={inputClass}
+          value={safeFallback}
+          onChange={(event) => onChange(normalizeDatePickerValue(event.target.value))}
+        />
+      }
+    >
+      <DatePickerInner value={value} onChange={onChange} />
+    </DatePickerBoundary>
+  );
+}
+
 export function DateNav({
   value,
   onChange,
@@ -229,13 +274,22 @@ export function DateNav({
   onChange: (next: string) => void;
 }) {
   const { t } = useI18n();
+  const safeValue = normalizeDatePickerValue(value);
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <GhostButton onClick={() => onChange(shiftDateOnly(value, -1))}>{t("board.previousDay")}</GhostButton>
+      <GhostButton
+        onClick={() => onChange(isDateOnly(safeValue) ? shiftDateOnly(safeValue, -1) : safeValue)}
+      >
+        {t("board.previousDay")}
+      </GhostButton>
       <GhostButton onClick={() => onChange(todayInTimeZone())}>{t("common.today")}</GhostButton>
-      <GhostButton onClick={() => onChange(shiftDateOnly(value, 1))}>{t("board.nextDay")}</GhostButton>
+      <GhostButton
+        onClick={() => onChange(isDateOnly(safeValue) ? shiftDateOnly(safeValue, 1) : safeValue)}
+      >
+        {t("board.nextDay")}
+      </GhostButton>
       <div className="w-44">
-        <DatePicker value={value} onChange={onChange} />
+        <DatePicker value={safeValue} onChange={onChange} />
       </div>
     </div>
   );
