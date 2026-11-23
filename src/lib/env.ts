@@ -18,7 +18,7 @@ export const ADMIN_FIREBASE_ENV_KEYS = [
 export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "WEGO Business";
 
 export const DEFAULT_TIMEZONE =
-  process.env.NEXT_PUBLIC_DEFAULT_TIMEZONE ?? "Asia/Jerusalem";
+  process.env.NEXT_PUBLIC_DEFAULT_TIMEZONE?.trim() || "Asia/Jerusalem";
 
 export const DEFAULT_LOCALE: Locale = resolveLocale(
   process.env.NEXT_PUBLIC_DEFAULT_LOCALE,
