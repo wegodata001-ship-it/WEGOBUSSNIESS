@@ -396,6 +396,11 @@ export function TaskFormModal({
               placeholder={t("work.searchEmployee")}
               onChange={setParticipants}
             />
+            {!participants.length ? (
+              <p className="mt-1 text-xs text-amber-700">{t("work.assignHint")}</p>
+            ) : (
+              <p className="mt-1 text-xs text-slate-500">{t("work.assignPrimary", { name: employees.find((item) => item.id === participants[0])?.displayName || participants[0] })}</p>
+            )}
           </Field>
           <div className="grid gap-3 md:grid-cols-2">
             <Field label={t("common.project")}>

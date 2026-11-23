@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { projectName, useBusinessCatalog } from "@/lib/admin/catalog";
 import { labelOf } from "@/lib/admin/labels";
+import { activeMovements } from "@/lib/finance/orphan";
 import { movementsMonthSummary, pricedTaskFinance, recordedMovements } from "@/lib/finance/summary";
 import { formatIls } from "@/lib/finance/money";
 import { todayInTimeZone } from "@/lib/dates/format";
@@ -37,11 +38,15 @@ export function MovementsView() {
     note: "",
   });
 
-  const monthSummary = useMemo(() => movementsMonthSummary(data.movements, month), [data.movements, month]);
+  const liveIds = useMemo(() => ({
+    projectIds: new Set(data.projects.map((item) => item.id)),
+    taskIds: new Set(data.tasks.map((item) => item.id)),
+  }), [data.projects, data.tasks]);
+  const monthSummary = useMemo(() => movementsMonthSummary(data.movements, month, liveIds), [data.movements, liveIds, month]);
   const pending = useMemo(() => pricedTaskFinance(data.tasks).open, [data.tasks]);
   const rows = useMemo(
-    () => recordedMovements(data.movements).slice().sort((left, right) => right.date.localeCompare(left.date)),
-    [data.movements],
+    () => recordedMovements(activeMovements(data.movements, liveIds)).slice().sort((left, right) => right.date.localeCompare(left.date)),
+    [data.movements, liveIds],
   );
 
   if (loading) return <Spinner label={t("common.loading")} />;

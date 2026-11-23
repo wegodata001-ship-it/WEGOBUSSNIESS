@@ -1,3 +1,5 @@
+import type { ProjectSystemDetails } from "@/types/project-system";
+
 export const PROJECT_STATUSES = ["ACTIVE", "ON_HOLD", "COMPLETED"] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
@@ -46,6 +48,7 @@ export type Project = {
   progress: number;
   isActive: boolean;
   color: string;
+  systemDetails: ProjectSystemDetails;
   createdAt: Date | null;
   updatedAt: Date | null;
 };

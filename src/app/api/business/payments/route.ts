@@ -23,10 +23,20 @@ export async function GET(request: Request) {
   }
 
   const snap = await getAdminDb().collection(paymentsPath(actor.businessId)).get();
-  const payments = snap.docs
+  let payments = snap.docs
     .map((docSnap) => toPaymentRecord(docSnap.id, docSnap.data()))
-    .filter((item) => !taskId || item.allocations.some((row) => row.taskId === taskId))
-    .sort((left, right) => toTimestamp(right.createdAt) - toTimestamp(left.createdAt));
+    .filter((item) => !taskId || item.allocations.some((row) => row.taskId === taskId));
+
+  // When listing without a task filter, hide orphan payments tied only to deleted tasks.
+  if (!taskId) {
+    const { tasksPath } = await import("@/lib/firebase/paths");
+    const tasksSnap = await getAdminDb().collection(tasksPath(actor.businessId)).get();
+    const liveTaskIds = new Set(tasksSnap.docs.map((docSnap) => docSnap.id));
+    const { activePayments } = await import("@/lib/finance/orphan");
+    payments = activePayments(payments, liveTaskIds);
+  }
+
+  payments = payments.sort((left, right) => toTimestamp(right.createdAt) - toTimestamp(left.createdAt));
   return NextResponse.json({ data: payments });
 }
 

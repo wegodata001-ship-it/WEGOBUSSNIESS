@@ -90,6 +90,22 @@ export function projectDocPath(businessId: string, projectId: string) {
   return `${projectsPath(businessId)}/${projectId}`;
 }
 
+export function projectSystemFilesPath(businessId: string, projectId: string) {
+  return `${projectDocPath(businessId, projectId)}/systemFiles`;
+}
+
+export function projectSystemFileDocPath(businessId: string, projectId: string, fileId: string) {
+  return `${projectSystemFilesPath(businessId, projectId)}/${fileId}`;
+}
+
+export function projectMaintenanceLogsPath(businessId: string, projectId: string) {
+  return `${projectDocPath(businessId, projectId)}/maintenanceLogs`;
+}
+
+export function projectMaintenanceLogDocPath(businessId: string, projectId: string, logId: string) {
+  return `${projectMaintenanceLogsPath(businessId, projectId)}/${logId}`;
+}
+
 export function tasksPath(businessId: string) {
   return businessScopedPath(businessId, businessCollections.tasks);
 }

@@ -4,7 +4,8 @@ import { canViewTaskFinance } from "@/lib/finance/access";
 import { hideTaskFinance } from "@/lib/finance/public-task";
 import { toTimestamp } from "@/lib/dates/timestamp";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
-import { canListBusinessProjects } from "@/lib/permissions/project-access";
+import { filterMeetingsForActor } from "@/lib/permissions/meeting-access";
+import { canListBusinessProjects, canViewAllBusinessProjects, filterProjectsForActor } from "@/lib/permissions/project-access";
 import {
   toActivityLog,
   toAppUser,
@@ -26,7 +27,6 @@ import {
   toServiceItem,
   toTermsTemplate,
   toTask,
-  toTaskStatusDefinition,
   toTaskTemplate,
   toMoneyMovement,
   toWorkSession,
@@ -51,7 +51,6 @@ import {
   projectsPath,
   serviceItemsPath,
   tasksPath,
-  taskStatusesPath,
   taskTemplatesPath,
   movementsPath,
   termsTemplatesPath,
@@ -167,10 +166,10 @@ export async function GET(request: Request) {
     }
     try {
       const snap = await db.collection(meetingsPath(businessId)).get();
-      const data = [];
+      const meetings = [];
       for (const docSnap of snap.docs) {
         try {
-          data.push(toMeeting(docSnap.id, docSnap.data()));
+          meetings.push(toMeeting(docSnap.id, docSnap.data()));
         } catch (error) {
           console.error(
             "[RECORDS_MEETINGS]",
@@ -180,7 +179,9 @@ export async function GET(request: Request) {
           );
         }
       }
-      return NextResponse.json({ data });
+      return NextResponse.json({
+        data: filterMeetingsForActor(actor, meetings),
+      });
     } catch (error) {
       console.error(
         "[RECORDS_MEETINGS]",
@@ -207,8 +208,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
     }
     const snap = await db.collection(projectsPath(businessId)).get();
+    const projects = snap.docs.map((docSnap) => toProject(docSnap.id, docSnap.data()));
+    if (canViewAllBusinessProjects(actor)) {
+      return NextResponse.json({ data: projects });
+    }
+    const taskSnap = await db.collection(tasksPath(businessId)).get();
+    const tasks = taskSnap.docs.map((docSnap) => toTask(docSnap.id, docSnap.data()));
     return NextResponse.json({
-      data: snap.docs.map((docSnap) => toProject(docSnap.id, docSnap.data())),
+      data: filterProjectsForActor(actor, projects, tasks),
     });
   }
 
@@ -243,8 +250,8 @@ export async function GET(request: Request) {
   }
 
   if (kind === "taskStatuses") {
-    const { ensureDefaultTaskStatuses } = await import("@/lib/admin/task-status-write");
-    const data = await ensureDefaultTaskStatuses(businessId);
+    const { listTaskStatusesReadOnly } = await import("@/lib/admin/task-status-write");
+    const data = await listTaskStatusesReadOnly(businessId);
     return NextResponse.json({ data });
   }
 
