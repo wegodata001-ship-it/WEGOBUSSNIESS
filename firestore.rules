@@ -232,6 +232,16 @@ service cloud.firestore {
         allow read: if isSuperAdmin() || isActiveMember(businessId);
         allow write: if isSuperAdmin() || isBusinessOwner(businessId);
       }
+
+      // Encrypted project passwords — Admin SDK only (server routes).
+      match /projectCredentials/{projectId} {
+        allow read, write: if false;
+      }
+
+      // Reauth rate-limit gates for credential vault — Admin SDK only.
+      match /credentialGates/{uid} {
+        allow read, write: if false;
+      }
     }
   }
 }
