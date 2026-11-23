@@ -592,6 +592,7 @@ export const he: Record<MessageKey, string> = {
   "projects.system.addLog": "הוספת רשומה",
   "projects.system.noLogs": "אין רשומות תחזוקה",
   "projects.system.saved": "נשמר בהצלחה",
+  "projects.system.unsaved": "יש שינויים שלא נשמרו",
   "projects.system.saveFailed": "שמירה נכשלה",
   "projects.hoursLine": "{hours} שעות",
   "projects.categoryLine": "קטגוריה: {name}",

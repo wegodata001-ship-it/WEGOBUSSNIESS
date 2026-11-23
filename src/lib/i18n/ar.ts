@@ -592,6 +592,7 @@ export const ar: Record<MessageKey, string> = {
   "projects.system.addLog": "إضافة سجل",
   "projects.system.noLogs": "لا توجد سجلات صيانة",
   "projects.system.saved": "تم الحفظ بنجاح",
+  "projects.system.unsaved": "هناك تعديلات غير محفوظة",
   "projects.system.saveFailed": "فشل الحفظ",
   "projects.hoursLine": "{hours} ساعات",
   "projects.categoryLine": "الفئة: {name}",

@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Field, GhostButton, PrimaryButton, inputClass } from "@/components/admin/ui";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { EmptyState } from "@/components/ui/empty-state";
 import { mutateBusiness } from "@/lib/admin/api";
 import { employeeName } from "@/lib/admin/catalog";
+import { resolveProjectSystemFormSync } from "@/lib/admin/project-system-form-state";
 import { PROJECT_SYSTEM_ALLOWED_EXT, PROJECT_SYSTEM_FILE_MAX_BYTES } from "@/lib/admin/project-system-rules";
 import type { Employee } from "@/types/employee";
 import type { Project } from "@/types/department";
@@ -31,8 +32,8 @@ const ACCEPT = Array.from(PROJECT_SYSTEM_ALLOWED_EXT).map((ext) => `.${ext}`).jo
 
 export function ProjectSystemPanel({ businessId, project, employees, canManage, onSaved }: Props) {
   const { t } = useI18n();
-  const initial = project.systemDetails ?? emptyProjectSystemDetails();
-  const [form, setForm] = useState<ProjectSystemDetails>(initial);
+  const [form, setForm] = useState<ProjectSystemDetails>(() => project.systemDetails ?? emptyProjectSystemDetails());
+  const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -41,12 +42,26 @@ export function ProjectSystemPanel({ businessId, project, employees, canManage, 
   const [logTitle, setLogTitle] = useState("");
   const [logBody, setLogBody] = useState("");
   const [uploading, setUploading] = useState(false);
+  const boundProjectIdRef = useRef<string | null>(project.id);
 
   useEffect(() => {
-    setForm(project.systemDetails ?? emptyProjectSystemDetails());
-    setSaved(false);
-    setError("");
-  }, [project.id, project.systemDetails]);
+    const sync = resolveProjectSystemFormSync({
+      previousProjectId: boundProjectIdRef.current,
+      nextProjectId: project.id,
+      dirty,
+      incoming: project.systemDetails,
+      current: form,
+    });
+    if (sync.didReset) {
+      boundProjectIdRef.current = project.id;
+      setForm(sync.form);
+      setDirty(false);
+      setSaved(false);
+      setError("");
+    }
+    // Intentionally ignore project.systemDetails identity changes while editing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id]);
 
   const loadExtras = useCallback(async () => {
     const [filesRes, logsRes] = await Promise.all([
@@ -65,6 +80,7 @@ export function ProjectSystemPanel({ businessId, project, employees, canManage, 
 
   function patch<K extends keyof ProjectSystemDetails>(key: K, value: ProjectSystemDetails[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+    setDirty(true);
     setSaved(false);
   }
 
@@ -72,35 +88,42 @@ export function ProjectSystemPanel({ businessId, project, employees, canManage, 
     if (!canManage) return;
     setBusy(true);
     setError("");
+    const snapshot = form;
     try {
       await mutateBusiness({
         businessId,
         action: "updateProjectSystemDetails",
         id: project.id,
         data: {
-          systemName: form.systemName,
-          systemDescription: form.systemDescription,
-          systemUrl: form.systemUrl,
-          adminUrl: form.adminUrl,
-          username: form.username,
-          githubUrl: form.githubUrl,
-          databaseKind: form.databaseKind,
-          databaseNotes: form.databaseNotes,
-          hostingKind: form.hostingKind,
-          hostingNotes: form.hostingNotes,
-          domain: form.domain,
-          domainRenewalDate: form.domainRenewalDate,
-          ownerEmployeeId: form.ownerEmployeeId,
-          technicalNotes: form.technicalNotes,
+          systemName: snapshot.systemName,
+          systemDescription: snapshot.systemDescription,
+          systemUrl: snapshot.systemUrl,
+          adminUrl: snapshot.adminUrl,
+          username: snapshot.username,
+          githubUrl: snapshot.githubUrl,
+          databaseKind: snapshot.databaseKind,
+          databaseNotes: snapshot.databaseNotes,
+          hostingKind: snapshot.hostingKind,
+          hostingNotes: snapshot.hostingNotes,
+          domain: snapshot.domain,
+          domainRenewalDate: snapshot.domainRenewalDate,
+          ownerEmployeeId: snapshot.ownerEmployeeId,
+          technicalNotes: snapshot.technicalNotes,
         },
       });
+      setForm(snapshot);
+      setDirty(false);
       setSaved(true);
       onSaved();
     } catch (err) {
+      // Keep typed values intact on failure.
+      setForm(snapshot);
+      setDirty(true);
       const code = err instanceof Error ? err.message : "SAVE_FAILED";
       setError(code === "PASSWORD_PLAINTEXT_FORBIDDEN"
         ? t("projects.system.passwordDisabled")
         : t("projects.system.saveFailed"));
+      setSaved(false);
     } finally {
       setBusy(false);
     }
@@ -242,12 +265,13 @@ export function ProjectSystemPanel({ businessId, project, employees, canManage, 
         </Field>
       </div>
 
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-      {saved ? <p className="text-sm text-emerald-700">{t("projects.system.saved")}</p> : null}
+      {error ? <p className="text-sm text-rose-600" role="alert">{error}</p> : null}
+      {saved && !dirty ? <p className="text-sm text-emerald-700" role="status">{t("projects.system.saved")}</p> : null}
+      {dirty && !busy ? <p className="text-xs text-slate-500">{t("projects.system.unsaved")}</p> : null}
 
       {canManage ? (
         <div className="flex justify-end">
-          <PrimaryButton disabled={busy} onClick={() => void save()}>
+          <PrimaryButton disabled={busy || !dirty} onClick={() => void save()}>
             {busy ? t("work.saving") : t("common.save")}
           </PrimaryButton>
         </div>

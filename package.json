@@ -29,6 +29,7 @@
     "test:department-categories": "npx tsx src/lib/admin/department-categories.test.ts",
     "test:task-file-rules": "npx tsx src/lib/admin/task-file-rules.test.ts",
     "test:project-system": "npx tsx src/lib/admin/project-system-rules.test.ts",
+    "test:project-system-form": "npx tsx src/lib/admin/project-system-form-state.test.ts",
     "test:finance-orphan": "npx tsx src/lib/finance/orphan.test.ts",
     "test:document-totals": "npx tsx src/lib/docs/totals.test.ts",
     "test:business-profile": "npx tsx src/lib/data/business-profile.test.ts",
