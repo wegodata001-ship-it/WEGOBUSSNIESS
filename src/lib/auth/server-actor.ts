@@ -3,6 +3,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { readRefreshToken, readRequestToken } from "@/lib/auth/request-token";
 import { toMembership } from "@/lib/firebase/converters";
 import { memberDocPath, userDocPath } from "@/lib/firebase/paths";
+import { canAccessBusinessMembership } from "@/lib/auth/business-access";
 import { hasPermission, isSuperAdmin, resolvePermissions } from "@/lib/permissions/engine";
 import { verifyOrRefreshUid } from "@/lib/session/resolve-admin";
 import type { Permission } from "@/types/permissions";
@@ -38,13 +39,16 @@ export async function requireActor(request: Request, businessId: string) {
     const platformRole = userSnap.data()?.platformRole === "SUPER_ADMIN" ? "SUPER_ADMIN" : null;
     const superAdmin = isSuperAdmin({ platformRole });
     const memberSnap = await db.doc(memberDocPath(businessId, verified.uid)).get();
-    if (!memberSnap.exists && !superAdmin) {
-      return { error: NextResponse.json({ error: "NO_MEMBERSHIP" }, { status: 403 }) };
-    }
-
     const membership = memberSnap.exists ? toMembership(memberSnap.data()!, businessId) : null;
-    if (membership && !membership.isActive && !superAdmin) {
-      return { error: NextResponse.json({ error: "INACTIVE_MEMBERSHIP" }, { status: 403 }) };
+    if (!canAccessBusinessMembership({
+      isSuperAdmin: superAdmin,
+      memberExists: memberSnap.exists,
+      membershipActive: membership?.isActive === true,
+    })) {
+      if (memberSnap.exists && membership && !membership.isActive) {
+        return { error: NextResponse.json({ error: "INACTIVE_MEMBERSHIP" }, { status: 403 }) };
+      }
+      return { error: NextResponse.json({ error: "NO_MEMBERSHIP" }, { status: 403 }) };
     }
 
     const permissions = membership ? resolvePermissions(membership) : [];

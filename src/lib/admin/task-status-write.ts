@@ -6,9 +6,19 @@ import { CALENDAR_COLORS, type CalendarColor } from "@/lib/admin/palette";
 import {
   DEFAULT_TASK_STATUS_SEEDS,
   TASK_STATUS_TYPES,
-  type TaskStatusDefinition,
   type TaskStatusType,
 } from "@/types/task-status";
+import {
+  resolveTaskStatusesReadModel,
+  sortTaskStatusDefinitions,
+  virtualDefaultTaskStatuses,
+} from "@/lib/admin/task-status-defaults";
+
+export {
+  resolveTaskStatusesReadModel,
+  sortTaskStatusDefinitions,
+  virtualDefaultTaskStatuses,
+} from "@/lib/admin/task-status-defaults";
 
 export function canManageTaskStatuses(actor: ServerActor) {
   return actor.isOwnerOrManager || actorCan(actor, "settings.manage") || actorCan(actor, "departments.manage");
@@ -18,13 +28,22 @@ function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/** Read-only listing used by GET handlers. Does not seed Firestore. */
+export async function listTaskStatusesReadOnly(businessId: string) {
+  const db = getAdminDb();
+  const snap = await db.collection(taskStatusesPath(businessId)).get();
+  const docs = snap.docs.map((docSnap) => toTaskStatusDefinition(docSnap.id, docSnap.data()));
+  return resolveTaskStatusesReadModel({ businessId, docs }).statuses;
+}
+
+/** Explicit write path: persist default statuses when the collection is empty. */
 export async function ensureDefaultTaskStatuses(businessId: string) {
   const db = getAdminDb();
   const snap = await db.collection(taskStatusesPath(businessId)).get();
   if (!snap.empty) {
-    return snap.docs
-      .map((docSnap) => toTaskStatusDefinition(docSnap.id, docSnap.data()))
-      .sort((left, right) => left.sortOrder - right.sortOrder);
+    return sortTaskStatusDefinitions(
+      snap.docs.map((docSnap) => toTaskStatusDefinition(docSnap.id, docSnap.data())),
+    );
   }
   const now = new Date();
   await Promise.all(DEFAULT_TASK_STATUS_SEEDS.map((item) => db.doc(taskStatusDocPath(businessId, item.id)).set({
@@ -39,14 +58,7 @@ export async function ensureDefaultTaskStatuses(businessId: string) {
     createdAt: now,
     updatedAt: now,
   })));
-  return DEFAULT_TASK_STATUS_SEEDS.map((item) => ({
-    ...item,
-    businessId,
-    isActive: true,
-    isSystem: true,
-    createdAt: now,
-    updatedAt: now,
-  } satisfies TaskStatusDefinition));
+  return virtualDefaultTaskStatuses(businessId, now);
 }
 
 export async function upsertTaskStatus(input: {
@@ -66,6 +78,7 @@ export async function upsertTaskStatus(input: {
   const color = CALENDAR_COLORS.includes(input.data.color as CalendarColor)
     ? input.data.color as CalendarColor
     : "BLUE";
+  await ensureDefaultTaskStatuses(input.businessId);
   const db = getAdminDb();
   const now = new Date();
   const existing = input.id ? await db.doc(taskStatusDocPath(input.businessId, input.id)).get() : null;
@@ -100,6 +113,7 @@ export async function reorderTaskStatuses(input: {
   if (!canManageTaskStatuses(input.actor)) {
     return { ok: false as const, error: "FORBIDDEN", status: 403 };
   }
+  await ensureDefaultTaskStatuses(input.businessId);
   const db = getAdminDb();
   const now = new Date();
   await Promise.all(input.ids.map((id, index) => db.doc(taskStatusDocPath(input.businessId, id)).set({

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ensureDefaultTaskStatuses, upsertTaskStatus, reorderTaskStatuses } from "@/lib/admin/task-status-write";
+import { listTaskStatusesReadOnly, upsertTaskStatus, reorderTaskStatuses } from "@/lib/admin/task-status-write";
 import { requireActor } from "@/lib/auth/server-actor";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   if (!businessId) return NextResponse.json({ error: "MISSING_BUSINESS" }, { status: 400 });
   const resolved = await requireActor(request, businessId);
   if ("error" in resolved && resolved.error) return resolved.error;
-  const data = await ensureDefaultTaskStatuses(resolved.actor!.businessId);
+  const data = await listTaskStatusesReadOnly(resolved.actor!.businessId);
   return NextResponse.json({ data });
 }
 

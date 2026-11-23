@@ -1,4 +1,5 @@
 import { money } from "@/lib/finance/money";
+import { activeMovements } from "@/lib/finance/orphan";
 import type { MoneyMovement } from "@/types/movement";
 import type { Task } from "@/types/task";
 
@@ -21,8 +22,13 @@ export function monthKey(date: string) {
   return date.slice(0, 7);
 }
 
-export function movementsMonthSummary(items: MoneyMovement[], month: string) {
-  const rows = recordedMovements(items).filter((item) => monthKey(item.date) === month);
+export function movementsMonthSummary(
+  items: MoneyMovement[],
+  month: string,
+  live?: { projectIds: Set<string>; taskIds: Set<string> },
+) {
+  const source = live ? activeMovements(items, live) : items;
+  const rows = recordedMovements(source).filter((item) => monthKey(item.date) === month);
   const income = money(rows.filter((item) => item.type === "INCOME").reduce((sum, item) => sum + item.amount, 0));
   const expense = money(rows.filter((item) => item.type === "EXPENSE").reduce((sum, item) => sum + item.amount, 0));
   return {

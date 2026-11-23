@@ -21,6 +21,7 @@ import { PERMISSIONS } from "@/types/permissions";
 import type { BusinessRole, Locale, PlatformRole } from "@/types/roles";
 import { BUSINESS_ROLES, resolveLocale } from "@/types/roles";
 import { asCalendarColor, asTaskKind } from "@/lib/admin/palette";
+import { toProjectSystemDetails } from "@/lib/admin/project-system-rules";
 import { normalizeTaskTeam } from "@/lib/admin/task-team";
 import type { PaymentMethod, PaymentRecord, PaymentRecordStatus, TaskPaymentStatus } from "@/types/payment";
 import { PAYMENT_METHODS, PAYMENT_RECORD_STATUSES, TASK_PAYMENT_STATUSES } from "@/types/payment";
@@ -226,6 +227,7 @@ export function toProject(id: string, data: DocumentData): Project {
     progress: normalizeProjectProgress(data.progress),
     isActive: data.isActive !== false,
     color: asCalendarColor(data.color),
+    systemDetails: toProjectSystemDetails(data.systemDetails),
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };

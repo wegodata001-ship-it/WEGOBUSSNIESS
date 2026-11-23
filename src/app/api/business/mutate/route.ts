@@ -11,6 +11,7 @@ import {
 import { createBusinessEmployee, resetBusinessEmployeePassword, updateBusinessEmployee } from "@/lib/admin/employee-write";
 import { deleteMeetingDoc, upsertMeeting } from "@/lib/admin/meeting-write";
 import { syncProjectProgressFromTasks } from "@/lib/admin/project-progress-sync";
+import { addProjectMaintenanceLog, updateProjectSystemDetails } from "@/lib/admin/project-system-write";
 import { taskCompletionPatch } from "@/lib/admin/task-completion";
 import { upsertTask } from "@/lib/admin/task-write";
 import { cleanupTaskSubtree } from "@/lib/admin/task-assets";
@@ -278,6 +279,31 @@ export async function POST(request: Request) {
         });
       }
       return NextResponse.json({ ok: true, id: ref.id });
+    }
+
+    if (action === "updateProjectSystemDetails") {
+      if (!id) return NextResponse.json({ error: "MISSING_ID" }, { status: 400 });
+      const result = await updateProjectSystemDetails({
+        actor,
+        businessId,
+        projectId: id,
+        data: data ?? {},
+      });
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+      return NextResponse.json({ ok: true, id: result.id, systemDetails: result.systemDetails });
+    }
+
+    if (action === "addProjectMaintenanceLog") {
+      if (!id) return NextResponse.json({ error: "MISSING_ID" }, { status: 400 });
+      const result = await addProjectMaintenanceLog({
+        actor,
+        businessId,
+        projectId: id,
+        title: data?.title,
+        body: data?.body,
+      });
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+      return NextResponse.json({ ok: true, id: result.id });
     }
 
     if (action === "archiveProject" || action === "restoreProject") {

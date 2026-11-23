@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader, StatusBadge } from "@/components/admin/ui";
+import { ProjectSystemPanel } from "@/components/admin/project-system-panel";
 import { useBusinessContext } from "@/components/providers/business-context";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -17,17 +18,19 @@ import { labelOf } from "@/lib/admin/labels";
 import { actualHoursForTask, isOverdue, taskIsActive } from "@/lib/admin/time";
 import { isDateOnly, todayInTimeZone } from "@/lib/dates/format";
 import { ClipboardList, FileArchive, Users } from "lucide-react";
+import { activeMovements } from "@/lib/finance/orphan";
 import { pricedTaskFinance, recordedMovements } from "@/lib/finance/summary";
 import { formatIls } from "@/lib/finance/money";
 import type { MessageKey } from "@/lib/i18n";
 
-const TABS: Array<{ id: "overview" | "tasks" | "hours" | "documents" | "team" | "activity"; key: MessageKey }> = [
+const TABS: Array<{ id: "overview" | "tasks" | "hours" | "documents" | "team" | "activity" | "system"; key: MessageKey }> = [
   { id: "overview", key: "projects.tabOverview" },
   { id: "tasks", key: "work.tabTasks" },
   { id: "hours", key: "projects.tabHours" },
   { id: "documents", key: "projects.tabDocuments" },
   { id: "team", key: "work.tabTeam" },
   { id: "activity", key: "projects.tabActivity" },
+  { id: "system", key: "projects.tabSystem" },
 ];
 
 function formatProjectDate(dateOnly: string, locale: string) {
@@ -46,6 +49,9 @@ export function ProjectWorkspace() {
   const params = useParams<{ projectId: string }>();
   const { business, membership, permissions } = useBusinessContext();
   const canViewFinance = permissions.includes("finance.view") || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER";
+  const canManageSystem = permissions.includes("projects.manage")
+    || membership?.role === "BUSINESS_OWNER"
+    || membership?.role === "MANAGER";
   const { data, loading, reload } = useBusinessCatalog(business?.id ?? null);
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("overview");
   const today = todayInTimeZone(business?.timezone);
@@ -74,7 +80,13 @@ export function ProjectWorkspace() {
   const resolved = resolveProjectCategory(project, data.departmentCategories);
   const styles = categoryStyles(resolved.color);
   const finance = pricedTaskFinance(tasks);
-  const recentMoves = recordedMovements(data.movements).filter((item) => item.projectId === projectId).slice(0, 5);
+  const liveIds = {
+    projectIds: new Set(data.projects.map((item) => item.id)),
+    taskIds: new Set(data.tasks.map((item) => item.id)),
+  };
+  const recentMoves = recordedMovements(activeMovements(data.movements, liveIds))
+    .filter((item) => item.projectId === projectId)
+    .slice(0, 5);
 
   return (
     <div className="space-y-5">
@@ -214,6 +226,18 @@ export function ProjectWorkspace() {
               <p key={item.id} className="border-t border-slate-100 py-2 text-sm first:border-0">{item.message}</p>
             ))
             : <EmptyState icon={ClipboardList} title={t("projects.noActivity")} />}
+        </SectionCard>
+      ) : null}
+
+      {tab === "system" && business?.id ? (
+        <SectionCard title={t("projects.tabSystem")}>
+          <ProjectSystemPanel
+            businessId={business.id}
+            project={project}
+            employees={data.employees}
+            canManage={canManageSystem}
+            onSaved={() => void reload({ silent: true })}
+          />
         </SectionCard>
       ) : null}
     </div>
