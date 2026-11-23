@@ -52,6 +52,7 @@ export function ProjectWorkspace() {
   const canManageSystem = permissions.includes("projects.manage")
     || membership?.role === "BUSINESS_OWNER"
     || membership?.role === "MANAGER";
+  const canManageCredentials = membership?.role === "BUSINESS_OWNER";
   const { data, loading, reload } = useBusinessCatalog(business?.id ?? null);
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("overview");
   const today = todayInTimeZone(business?.timezone);
@@ -236,6 +237,7 @@ export function ProjectWorkspace() {
             project={project}
             employees={data.employees}
             canManage={canManageSystem}
+            canManageCredentials={canManageCredentials}
             onSaved={() => void reload({ silent: true })}
           />
         </SectionCard>

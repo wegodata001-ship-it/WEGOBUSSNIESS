@@ -82,7 +82,7 @@ export function isAllowedProjectSystemFile(file: { name: string; type: string; s
 
 /**
  * Password plaintext is never accepted for storage.
- * Optional passwordSecretRef may point to an external vault entry.
+ * passwordConfigured / passwordSecretRef are server-managed only (credentials vault).
  */
 export function sanitizeProjectSystemDetails(
   input: Record<string, unknown>,
@@ -116,9 +116,9 @@ export function sanitizeProjectSystemDetails(
     ? (PROJECT_HOSTING_KINDS.includes(input.hostingKind as ProjectHostingKind) ? input.hostingKind as ProjectHostingKind : null)
     : base.hostingKind;
 
-  const passwordSecretRef = input.passwordSecretRef !== undefined
-    ? nullable(input.passwordSecretRef)
-    : base.passwordSecretRef;
+  // Never accept client-supplied vault refs; preserve server-managed flags only.
+  const passwordSecretRef = base.passwordSecretRef;
+  const passwordConfigured = Boolean(base.passwordConfigured || passwordSecretRef);
 
   return {
     ok: true,
@@ -128,7 +128,7 @@ export function sanitizeProjectSystemDetails(
       systemUrl,
       adminUrl,
       username: input.username !== undefined ? text(input.username) : base.username,
-      passwordConfigured: Boolean(passwordSecretRef),
+      passwordConfigured,
       passwordSecretRef,
       githubUrl,
       databaseKind,

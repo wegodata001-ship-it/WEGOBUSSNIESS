@@ -106,6 +106,14 @@ export function projectMaintenanceLogDocPath(businessId: string, projectId: stri
   return `${projectMaintenanceLogsPath(businessId, projectId)}/${logId}`;
 }
 
+export function projectCredentialsPath(businessId: string) {
+  return `${businessDocPath(businessId)}/projectCredentials`;
+}
+
+export function projectCredentialsDocPath(businessId: string, projectId: string) {
+  return `${projectCredentialsPath(businessId)}/${projectId}`;
+}
+
 export function tasksPath(businessId: string) {
   return businessScopedPath(businessId, businessCollections.tasks);
 }

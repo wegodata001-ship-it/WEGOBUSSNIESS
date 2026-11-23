@@ -55,11 +55,29 @@ if (ok.ok) {
   assert.equal(ok.data.hostingKind, "VERCEL");
 }
 
-const withVault = sanitizeProjectSystemDetails({ passwordSecretRef: "vault/projects/p1/password" }, emptyProjectSystemDetails());
-assert.equal(withVault.ok, true);
-if (withVault.ok) {
-  assert.equal(withVault.data.passwordConfigured, true);
-  assert.equal(withVault.data.passwordSecretRef, "vault/projects/p1/password");
+const forgedVault = sanitizeProjectSystemDetails(
+  { passwordSecretRef: "vault/projects/p1/password", passwordConfigured: true },
+  emptyProjectSystemDetails(),
+);
+assert.equal(forgedVault.ok, true);
+if (forgedVault.ok) {
+  assert.equal(forgedVault.data.passwordConfigured, false);
+  assert.equal(forgedVault.data.passwordSecretRef, null);
+}
+
+const preservedVault = sanitizeProjectSystemDetails(
+  { systemName: "CRM" },
+  {
+    ...emptyProjectSystemDetails(),
+    passwordConfigured: true,
+    passwordSecretRef: "businesses/b1/projectCredentials/p1",
+  },
+);
+assert.equal(preservedVault.ok, true);
+if (preservedVault.ok) {
+  assert.equal(preservedVault.data.passwordConfigured, true);
+  assert.equal(preservedVault.data.passwordSecretRef, "businesses/b1/projectCredentials/p1");
+  assert.equal(preservedVault.data.systemName, "CRM");
 }
 
 const legacy = toProjectSystemDetails({
