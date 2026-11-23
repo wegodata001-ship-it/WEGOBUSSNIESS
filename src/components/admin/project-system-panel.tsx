@@ -6,6 +6,12 @@ import { useI18n } from "@/components/providers/i18n-provider";
 import { EmptyState } from "@/components/ui/empty-state";
 import { mutateBusiness } from "@/lib/admin/api";
 import { employeeName } from "@/lib/admin/catalog";
+import {
+  canCopyProjectCredential,
+  canDeleteProjectCredential,
+  canRevealProjectCredential,
+  canSaveProjectCredential,
+} from "@/lib/admin/project-credential-actions";
 import { resolveProjectSystemFormSync } from "@/lib/admin/project-system-form-state";
 import { PROJECT_SYSTEM_ALLOWED_EXT, PROJECT_SYSTEM_FILE_MAX_BYTES } from "@/lib/admin/project-system-rules";
 import type { Employee } from "@/types/employee";
@@ -111,20 +117,50 @@ export function ProjectSystemPanel({
       setEncryptionReady(false);
       setPasswordConfigured(Boolean(project.systemDetails?.passwordConfigured));
     }
-  }, [businessId, canManageCredentials, project.id, project.systemDetails?.passwordConfigured]);
+    // Do not depend on passwordConfigured — status reloads must not recreate this callback
+    // and wipe the reauth field the owner is typing into.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessId, canManageCredentials, project.id]);
 
   useEffect(() => {
     void loadExtras();
   }, [loadExtras]);
 
+  // Reset vault fields only when switching projects (not after save/catalog refresh).
   useEffect(() => {
     setRevealedPassword(null);
     setPasswordDraft("");
     setAccountPassword("");
     setShowPassword(false);
     setCredentialMessage("");
+  }, [project.id]);
+
+  useEffect(() => {
     void loadCredentialStatus();
-  }, [loadCredentialStatus, project.id]);
+  }, [loadCredentialStatus]);
+
+  const revealEnabled = canRevealProjectCredential({
+    passwordConfigured,
+    encryptionReady,
+    credentialBusy,
+    accountPassword,
+  });
+  const copyEnabled = canCopyProjectCredential({
+    revealedPassword,
+    credentialBusy,
+  });
+  const deleteEnabled = canDeleteProjectCredential({
+    passwordConfigured,
+    encryptionReady,
+    credentialBusy,
+    accountPassword,
+  });
+  const saveEnabled = canSaveProjectCredential({
+    encryptionReady,
+    credentialBusy,
+    passwordDraft,
+    accountPassword,
+  });
 
   function credentialErrorMessage(code?: string) {
     if (code === "ENCRYPTION_NOT_CONFIGURED") return t("projects.system.passwordDisabled");
@@ -169,8 +205,12 @@ export function ProjectSystemPanel({
     }
   }
 
-  async function revealCredential() {
-    if (!canManageCredentials || !encryptionReady || !passwordConfigured) return;
+  async function revealCredential(): Promise<string | null> {
+    if (!canManageCredentials || !encryptionReady || !passwordConfigured) return null;
+    if (!accountPassword.trim()) {
+      setError(t("projects.system.reauthRequired"));
+      return null;
+    }
     setCredentialBusy(true);
     setCredentialMessage("");
     setError("");
@@ -189,11 +229,12 @@ export function ProjectSystemPanel({
       const payload = await response.json().catch(() => ({})) as { error?: string; password?: string };
       if (!response.ok || !payload.password) {
         setError(credentialErrorMessage(payload.error));
-        return;
+        return null;
       }
       setRevealedPassword(payload.password);
       setShowPassword(true);
       setCredentialMessage(t("projects.system.passwordRevealed"));
+      return payload.password;
     } finally {
       setCredentialBusy(false);
     }
@@ -201,6 +242,13 @@ export function ProjectSystemPanel({
 
   async function deleteCredential() {
     if (!canManageCredentials || !passwordConfigured) return;
+    if (!accountPassword.trim()) {
+      setError(t("projects.system.reauthRequired"));
+      return;
+    }
+    if (typeof window !== "undefined" && !window.confirm(t("projects.system.deletePasswordConfirm"))) {
+      return;
+    }
     setCredentialBusy(true);
     setCredentialMessage("");
     setError("");
@@ -224,6 +272,7 @@ export function ProjectSystemPanel({
       setRevealedPassword(null);
       setPasswordDraft("");
       setAccountPassword("");
+      setShowPassword(false);
       setCredentialMessage(t("projects.system.passwordDeleted"));
       onSaved();
     } finally {
@@ -232,9 +281,13 @@ export function ProjectSystemPanel({
   }
 
   async function copyRevealedPassword() {
-    if (!revealedPassword) return;
+    let secret = revealedPassword;
+    if (!secret) {
+      secret = await revealCredential();
+    }
+    if (!secret) return;
     try {
-      await navigator.clipboard.writeText(revealedPassword);
+      await navigator.clipboard.writeText(secret);
       setCredentialMessage(t("projects.system.passwordCopied"));
     } catch {
       setError(t("projects.system.copyFailed"));
@@ -408,44 +461,54 @@ export function ProjectSystemPanel({
               <p className="text-xs text-slate-500">
                 {passwordConfigured ? t("projects.system.passwordConfigured") : t("projects.system.passwordMissing")}
               </p>
-              <input
-                className={inputClass}
-                type={showPassword && revealedPassword ? "text" : "password"}
-                value={revealedPassword && showPassword ? revealedPassword : passwordDraft}
-                onChange={(e) => {
-                  setRevealedPassword(null);
-                  setPasswordDraft(e.target.value);
-                }}
-                placeholder={passwordConfigured ? t("projects.system.passwordChangePlaceholder") : t("projects.system.passwordPlaceholder")}
-                autoComplete="new-password"
-              />
-              <input
-                className={inputClass}
-                type="password"
-                value={accountPassword}
-                onChange={(e) => setAccountPassword(e.target.value)}
-                placeholder={t("projects.system.reauthPlaceholder")}
-                autoComplete="current-password"
-              />
+              <div>
+                <p className="mb-1 text-xs font-medium text-slate-600">{t("projects.system.vaultPasswordLabel")}</p>
+                <input
+                  className={inputClass}
+                  type={showPassword && revealedPassword ? "text" : "password"}
+                  value={revealedPassword && showPassword ? revealedPassword : passwordDraft}
+                  onChange={(e) => {
+                    setRevealedPassword(null);
+                    setPasswordDraft(e.target.value);
+                  }}
+                  placeholder={passwordConfigured ? t("projects.system.passwordChangePlaceholder") : t("projects.system.passwordPlaceholder")}
+                  autoComplete="new-password"
+                />
+              </div>
+              <div>
+                <p className="mb-1 text-xs font-medium text-slate-600">{t("projects.system.reauthLabel")}</p>
+                <input
+                  className={inputClass}
+                  type="password"
+                  value={accountPassword}
+                  onChange={(e) => setAccountPassword(e.target.value)}
+                  placeholder={t("projects.system.reauthPlaceholder")}
+                  autoComplete="current-password"
+                />
+                <p className="mt-1 text-xs text-slate-500">{t("projects.system.reauthHint")}</p>
+              </div>
               <div className="flex flex-wrap gap-2">
-                <PrimaryButton disabled={credentialBusy || !passwordDraft.trim() || !accountPassword} onClick={() => void saveCredential()}>
+                <PrimaryButton disabled={!saveEnabled} onClick={() => void saveCredential()}>
                   {t("projects.system.savePassword")}
                 </PrimaryButton>
-                <GhostButton disabled={credentialBusy || !passwordConfigured || !accountPassword} onClick={() => void revealCredential()}>
+                <GhostButton disabled={!revealEnabled} onClick={() => void revealCredential()}>
                   {t("projects.system.revealPassword")}
                 </GhostButton>
                 <GhostButton
-                  disabled={credentialBusy || !revealedPassword}
+                  disabled={!copyEnabled}
                   onClick={() => setShowPassword((value) => !value)}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   <span className="ms-1">{showPassword ? t("projects.system.hidePassword") : t("projects.system.showPassword")}</span>
                 </GhostButton>
-                <GhostButton disabled={credentialBusy || !revealedPassword} onClick={() => void copyRevealedPassword()}>
+                <GhostButton
+                  disabled={credentialBusy || !(revealedPassword || revealEnabled)}
+                  onClick={() => void copyRevealedPassword()}
+                >
                   <Copy className="h-4 w-4" />
                   <span className="ms-1">{t("projects.system.copyPassword")}</span>
                 </GhostButton>
-                <GhostButton disabled={credentialBusy || !passwordConfigured || !accountPassword} onClick={() => void deleteCredential()}>
+                <GhostButton disabled={!deleteEnabled} onClick={() => void deleteCredential()}>
                   {t("projects.system.deletePassword")}
                 </GhostButton>
               </div>
