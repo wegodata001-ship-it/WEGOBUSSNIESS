@@ -20,6 +20,7 @@ import { actualHoursForTask, isOverdue, taskIsActive } from "@/lib/admin/time";
 import { isDateOnly, todayInTimeZone } from "@/lib/dates/format";
 import { ClipboardList, FileArchive, Users } from "lucide-react";
 import { activeMovements } from "@/lib/finance/orphan";
+import { isTaskSoftDeleted } from "@/lib/admin/task-delete-rules";
 import { computeProjectFinance } from "@/lib/finance/project-ledger";
 import { recordedMovements } from "@/lib/finance/summary";
 import { formatIls } from "@/lib/finance/money";
@@ -65,7 +66,10 @@ export function ProjectWorkspace() {
   const projectId = String(params.projectId ?? "");
   const project = data.projects.find((item) => item.id === projectId);
 
-  const tasks = useMemo(() => data.tasks.filter((task) => task.projectId === projectId), [data.tasks, projectId]);
+  const tasks = useMemo(
+    () => data.tasks.filter((task) => task.projectId === projectId && !isTaskSoftDeleted(task)),
+    [data.tasks, projectId],
+  );
   const openTasks = useMemo(() => tasks.filter((task) => !isCompletedTaskStatus(task.status)), [tasks]);
   const doneTasks = useMemo(() => tasks.filter((task) => isCompletedTaskStatus(task.status)), [tasks]);
 

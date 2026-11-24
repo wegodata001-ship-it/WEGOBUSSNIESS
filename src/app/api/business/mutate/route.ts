@@ -137,7 +137,10 @@ export async function POST(request: Request) {
       const ids = rawIds.filter((item): item is string => typeof item === "string");
       const result = await softDeleteTasks({ actor, businessId, taskIds: ids });
       if (!result.ok) {
-        return NextResponse.json({ error: result.error }, { status: result.status });
+        return NextResponse.json(
+          { error: result.error, blockers: result.blockers },
+          { status: result.status },
+        );
       }
       return NextResponse.json({
         ok: true,

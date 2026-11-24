@@ -4,9 +4,13 @@ import type { Task } from "@/types/task";
 
 export type TaskDeleteBlocker =
   | "PAYMENTS"
-  | "BILLING"
   | "WORK_HOURS"
   | "DOCUMENTS";
+
+export type TaskDeleteBlockError =
+  | "TASK_HAS_PAYMENTS"
+  | "TASK_HAS_WORK_HOURS"
+  | "TASK_HAS_DOCUMENTS";
 
 export function isTaskSoftDeleted(task: Pick<Task, "deletedAt"> | { deletedAt?: unknown } | null | undefined) {
   return Boolean(task && task.deletedAt != null);
@@ -26,26 +30,44 @@ export function canRestoreTasks(actor: {
   return Boolean(actor.isSuperAdmin || actor.role === "BUSINESS_OWNER");
 }
 
-/** Local finance / billing signals that must stay intact for accounting. */
-export function taskHasProtectedFinance(task: Pick<
+/**
+ * Only actual received money / payment links block soft-delete.
+ * A billable task with a price but no payments may be soft-deleted;
+ * soft-delete excludes it from project totals until restored.
+ */
+export function taskHasBlockingPayments(task: Pick<
   Task,
-  "paidAmount" | "paymentIds" | "billingMode" | "priceIncludingVat" | "paymentStatus"
+  "paidAmount" | "paymentIds" | "paymentStatus"
 >) {
   if ((task.paidAmount ?? 0) > 0) return true;
   if ((task.paymentIds?.length ?? 0) > 0) return true;
   if (task.paymentStatus && task.paymentStatus !== "UNPAID") return true;
-  if (task.billingMode === "BILLABLE" && task.priceIncludingVat != null) return true;
-  if (task.priceIncludingVat != null && (task.paidAmount ?? 0) > 0) return true;
   return false;
 }
 
-export function localFinanceBlockers(task: Parameters<typeof taskHasProtectedFinance>[0]): TaskDeleteBlocker[] {
-  if (!taskHasProtectedFinance(task)) return [];
-  const blockers: TaskDeleteBlocker[] = [];
-  if (task.billingMode === "BILLABLE" || task.priceIncludingVat != null) blockers.push("BILLING");
-  if ((task.paidAmount ?? 0) > 0 || (task.paymentIds?.length ?? 0) > 0 || (task.paymentStatus && task.paymentStatus !== "UNPAID")) {
-    blockers.push("PAYMENTS");
+/** @deprecated use taskHasBlockingPayments — priced-only tasks are no longer blocked. */
+export function taskHasProtectedFinance(task: Pick<
+  Task,
+  "paidAmount" | "paymentIds" | "billingMode" | "priceIncludingVat" | "paymentStatus"
+>) {
+  return taskHasBlockingPayments(task);
+}
+
+export function localFinanceBlockers(task: Parameters<typeof taskHasBlockingPayments>[0]): TaskDeleteBlocker[] {
+  return taskHasBlockingPayments(task) ? ["PAYMENTS"] : [];
+}
+
+const BLOCKER_PRIORITY: TaskDeleteBlocker[] = ["PAYMENTS", "WORK_HOURS", "DOCUMENTS"];
+
+export function primaryDeleteBlocker(blockers: TaskDeleteBlocker[]): TaskDeleteBlocker | null {
+  for (const key of BLOCKER_PRIORITY) {
+    if (blockers.includes(key)) return key;
   }
-  if (!blockers.length) blockers.push("BILLING");
-  return blockers;
+  return blockers[0] ?? null;
+}
+
+export function deleteBlockerToError(blocker: TaskDeleteBlocker): TaskDeleteBlockError {
+  if (blocker === "WORK_HOURS") return "TASK_HAS_WORK_HOURS";
+  if (blocker === "DOCUMENTS") return "TASK_HAS_DOCUMENTS";
+  return "TASK_HAS_PAYMENTS";
 }
