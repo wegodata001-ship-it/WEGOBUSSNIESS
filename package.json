@@ -45,7 +45,9 @@
     "test:document-totals": "npx tsx src/lib/docs/totals.test.ts",
     "test:business-profile": "npx tsx src/lib/data/business-profile.test.ts",
     "test:records-access": "npx tsx src/lib/permissions/records-access.regression.test.ts",
-    "test:phase1-security": "npm run test:cron-auth && npm run test:meeting-access && npm run test:project-access && npm run test:task-status-read && npm run test:records-access && npm run test:permissions",
+    "test:employee-directory": "npx tsx src/lib/permissions/employee-directory-access.test.ts",
+    "test:task-access": "npx tsx src/lib/admin/task-access.test.ts",
+    "test:phase1-security": "npm run test:cron-auth && npm run test:meeting-access && npm run test:project-access && npm run test:task-status-read && npm run test:records-access && npm run test:employee-directory && npm run test:task-access && npm run test:permissions",
     "inventory:reset-dry-run": "npx tsx scripts/inventory-reset-dry-run.ts",
     "verify:settings-control": "npx tsx scripts/verify-settings-control.ts"
   },

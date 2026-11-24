@@ -201,6 +201,7 @@ export async function updateBusinessEmployee(input: {
       role,
       permissions: ROLE_PERMISSIONS[role],
       displayName,
+      employeeId: input.id,
       isActive: status === "ACTIVE",
       updatedAt: now,
     }, { merge: true });
