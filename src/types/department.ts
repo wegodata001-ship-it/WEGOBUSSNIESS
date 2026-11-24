@@ -1,3 +1,4 @@
+import type { TaskPaymentStatus } from "@/types/payment";
 import type { ProjectSystemDetails } from "@/types/project-system";
 
 export const PROJECT_STATUSES = ["ACTIVE", "ON_HOLD", "COMPLETED"] as const;
@@ -49,6 +50,15 @@ export type Project = {
   isActive: boolean;
   color: string;
   systemDetails: ProjectSystemDetails;
+  /** Optional agreed project base price (before VAT). Null/0 = no fixed project price. */
+  basePriceBeforeVat: number | null;
+  baseVatRate: number | null;
+  baseVatAmount: number | null;
+  basePriceIncludingVat: number | null;
+  basePaidAmount: number;
+  baseBalanceDue: number | null;
+  basePaymentStatus: TaskPaymentStatus | null;
+  paymentIds: string[];
   createdAt: Date | null;
   updatedAt: Date | null;
 };

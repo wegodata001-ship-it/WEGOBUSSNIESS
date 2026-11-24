@@ -377,13 +377,15 @@ export async function saveTaskPrice(input: {
 
 export async function receiveBusinessPayment(input: {
   businessId: string;
-  taskIds: string[];
+  taskIds?: string[];
+  projectId?: string | null;
   amount: number;
   paymentMethod: string;
   paymentDate: string;
   reference?: string;
   notes?: string;
-  allocations?: Array<{ taskId: string; amount: number }>;
+  allocations?: Array<{ taskId?: string; projectId?: string; target?: string; amount: number }>;
+  allowOverpay?: boolean;
 }): Promise<BusinessMutationResult> {
   const response = await fetch("/api/business/payments", {
     method: "POST",
@@ -398,9 +400,39 @@ export async function receiveBusinessPayment(input: {
   return { ok: true, id: payload.id || "" };
 }
 
+export async function saveProjectBasePrice(input: {
+  businessId: string;
+  projectId: string;
+  priceBeforeVat: number;
+}): Promise<BusinessMutationResult> {
+  const response = await fetch(`/api/business/projects/${input.projectId}/finance`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ businessId: input.businessId, priceBeforeVat: input.priceBeforeVat }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
+  if (!response.ok || payload.error) {
+    return { ok: false, error: payload.error || "NETWORK", status: response.status };
+  }
+  return { ok: true, id: payload.id || input.projectId };
+}
+
 export async function fetchTaskPayments(businessId: string, taskId: string) {
   const response = await fetch(
     `/api/business/payments?businessId=${encodeURIComponent(businessId)}&taskId=${encodeURIComponent(taskId)}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.error) {
+    return { ok: false as const, data: [] };
+  }
+  return { ok: true as const, data: payload.data ?? [] };
+}
+
+export async function fetchProjectPayments(businessId: string, projectId: string) {
+  const response = await fetch(
+    `/api/business/payments?businessId=${encodeURIComponent(businessId)}&projectId=${encodeURIComponent(projectId)}`,
     { credentials: "include", cache: "no-store" },
   );
   const payload = await response.json().catch(() => ({}));

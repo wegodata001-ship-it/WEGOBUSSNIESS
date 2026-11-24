@@ -1,10 +1,12 @@
 import { money } from "@/lib/finance/money";
 import { activeMovements } from "@/lib/finance/orphan";
+import { isBillableFinanceTask } from "@/lib/finance/project-ledger";
 import type { MoneyMovement } from "@/types/movement";
 import type { Task } from "@/types/task";
 
+/** Rollup of billable task lines only (excludes included/normal tasks). */
 export function pricedTaskFinance(tasks: Task[]) {
-  const priced = tasks.filter((task) => task.priceIncludingVat !== null);
+  const priced = tasks.filter(isBillableFinanceTask);
   const total = money(priced.reduce((sum, task) => sum + (task.priceIncludingVat ?? 0), 0));
   const received = money(priced.reduce((sum, task) => sum + task.paidAmount, 0));
   return {

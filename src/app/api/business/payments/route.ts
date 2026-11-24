@@ -13,6 +13,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const businessId = url.searchParams.get("businessId") ?? "";
   const taskId = url.searchParams.get("taskId") ?? "";
+  const projectId = url.searchParams.get("projectId") ?? "";
   if (!businessId) return NextResponse.json({ error: "MISSING_BUSINESS" }, { status: 400 });
 
   const resolved = await requireActor(request, businessId);
@@ -23,17 +24,29 @@ export async function GET(request: Request) {
   }
 
   const snap = await getAdminDb().collection(paymentsPath(actor.businessId)).get();
-  let payments = snap.docs
-    .map((docSnap) => toPaymentRecord(docSnap.id, docSnap.data()))
-    .filter((item) => !taskId || item.allocations.some((row) => row.taskId === taskId));
+  let payments = snap.docs.map((docSnap) => toPaymentRecord(docSnap.id, docSnap.data()));
 
-  // When listing without a task filter, hide orphan payments tied only to deleted tasks.
-  if (!taskId) {
+  if (taskId) {
+    payments = payments.filter((item) => item.allocations.some((row) => row.taskId === taskId));
+  } else if (projectId) {
     const { tasksPath } = await import("@/lib/firebase/paths");
-    const tasksSnap = await getAdminDb().collection(tasksPath(actor.businessId)).get();
+    const { paymentTouchesProject } = await import("@/lib/finance/project-ledger");
+    const tasksSnap = await getAdminDb().collection(tasksPath(actor.businessId)).where("projectId", "==", projectId).get();
+    const projectTaskIds = new Set(tasksSnap.docs.map((docSnap) => docSnap.id));
+    payments = payments.filter((item) => paymentTouchesProject(item, projectId, projectTaskIds));
+  }
+
+  // When listing without a task filter, hide orphan payments tied only to deleted tasks/projects.
+  if (!taskId) {
+    const { tasksPath, projectsPath } = await import("@/lib/firebase/paths");
+    const [tasksSnap, projectsSnap] = await Promise.all([
+      getAdminDb().collection(tasksPath(actor.businessId)).get(),
+      getAdminDb().collection(projectsPath(actor.businessId)).get(),
+    ]);
     const liveTaskIds = new Set(tasksSnap.docs.map((docSnap) => docSnap.id));
+    const liveProjectIds = new Set(projectsSnap.docs.map((docSnap) => docSnap.id));
     const { activePayments } = await import("@/lib/finance/orphan");
-    payments = activePayments(payments, liveTaskIds);
+    payments = activePayments(payments, liveTaskIds, liveProjectIds);
   }
 
   payments = payments.sort((left, right) => toTimestamp(right.createdAt) - toTimestamp(left.createdAt));
@@ -52,12 +65,14 @@ export async function POST(request: Request) {
     actor: resolved.actor!,
     businessId: resolved.actor!.businessId,
     taskIds: Array.isArray(body.taskIds) ? body.taskIds : [],
+    projectId: typeof body.projectId === "string" ? body.projectId : null,
     amount: body.amount,
     paymentMethod: body.paymentMethod,
     paymentDate: body.paymentDate,
     reference: body.reference,
     notes: body.notes,
     allocations: Array.isArray(body.allocations) ? body.allocations : undefined,
+    allowOverpay: body.allowOverpay !== false,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   return NextResponse.json({ ok: true, id: result.id, allocations: result.allocations });

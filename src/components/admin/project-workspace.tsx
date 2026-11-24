@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader, StatusBadge } from "@/components/admin/ui";
+import { ProjectFinancePanel } from "@/components/admin/project-finance-panel";
 import { ProjectSystemPanel } from "@/components/admin/project-system-panel";
 import { useBusinessContext } from "@/components/providers/business-context";
 import { useI18n } from "@/components/providers/i18n-provider";
@@ -19,17 +20,19 @@ import { actualHoursForTask, isOverdue, taskIsActive } from "@/lib/admin/time";
 import { isDateOnly, todayInTimeZone } from "@/lib/dates/format";
 import { ClipboardList, FileArchive, Users } from "lucide-react";
 import { activeMovements } from "@/lib/finance/orphan";
-import { pricedTaskFinance, recordedMovements } from "@/lib/finance/summary";
+import { computeProjectFinance } from "@/lib/finance/project-ledger";
+import { recordedMovements } from "@/lib/finance/summary";
 import { formatIls } from "@/lib/finance/money";
 import type { MessageKey } from "@/lib/i18n";
 
-const TABS: Array<{ id: "overview" | "tasks" | "hours" | "documents" | "team" | "activity" | "system"; key: MessageKey }> = [
+const TABS: Array<{ id: "overview" | "tasks" | "hours" | "documents" | "team" | "activity" | "finance" | "system"; key: MessageKey }> = [
   { id: "overview", key: "projects.tabOverview" },
   { id: "tasks", key: "work.tabTasks" },
   { id: "hours", key: "projects.tabHours" },
   { id: "documents", key: "projects.tabDocuments" },
   { id: "team", key: "work.tabTeam" },
   { id: "activity", key: "projects.tabActivity" },
+  { id: "finance", key: "projects.tabFinance" },
   { id: "system", key: "projects.tabSystem" },
 ];
 
@@ -49,6 +52,9 @@ export function ProjectWorkspace() {
   const params = useParams<{ projectId: string }>();
   const { business, membership, permissions } = useBusinessContext();
   const canViewFinance = permissions.includes("finance.view") || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER";
+  const canSetPrice = permissions.includes("finance.setPrice") || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER";
+  const canReceivePayment = permissions.includes("finance.receivePayment") || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER";
+  const canVoidPayment = permissions.includes("finance.voidPayment") || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER";
   const canManageSystem = permissions.includes("projects.manage")
     || membership?.role === "BUSINESS_OWNER"
     || membership?.role === "MANAGER";
@@ -80,7 +86,7 @@ export function ProjectWorkspace() {
   const progress = computeProjectProgress(tasks);
   const resolved = resolveProjectCategory(project, data.departmentCategories);
   const styles = categoryStyles(resolved.color);
-  const finance = pricedTaskFinance(tasks);
+  const finance = computeProjectFinance(project, tasks);
   const liveIds = {
     projectIds: new Set(data.projects.map((item) => item.id)),
     taskIds: new Set(data.tasks.map((item) => item.id)),
@@ -109,7 +115,7 @@ export function ProjectWorkspace() {
         <span className="text-slate-500">{t("projects.manager", { name: employeeName(data.employees, project.managerEmployeeId) })}</span>
       </div>
       <div className="flex flex-wrap gap-2">
-        {TABS.map((item) => (
+        {TABS.filter((item) => item.id !== "finance" || canViewFinance).map((item) => (
           <button key={item.id} type="button" onClick={() => setTab(item.id)} className={`rounded-xl px-3 py-2 text-sm ${tab === item.id ? "bg-[var(--brand-primary)] text-white" : "bg-white text-slate-600"}`}>
             {t(item.key)}
           </button>
@@ -133,10 +139,10 @@ export function ProjectWorkspace() {
             })}</p>
           </SectionCard>
           {canViewFinance ? (
-            <SectionCard title={t("finance.section")}>
-              <p className="flex justify-between text-sm"><span>{t("finance.priced")}</span><span>{formatIls(finance.total)}</span></p>
-              <p className="mt-1 flex justify-between text-sm"><span>{t("finance.received")}</span><span>{formatIls(finance.received)}</span></p>
-              <p className="mt-1 flex justify-between text-sm font-medium"><span>{t("finance.open")}</span><span>{formatIls(finance.open)}</span></p>
+            <SectionCard title={t("finance.section")} action={<button type="button" className="text-sm text-[var(--brand-primary)]" onClick={() => setTab("finance")}>{t("finance.openTab")}</button>}>
+              <p className="flex justify-between text-sm"><span>{t("finance.totalDue")}</span><span>{formatIls(finance.totalDue)}</span></p>
+              <p className="mt-1 flex justify-between text-sm"><span>{t("finance.paid")}</span><span>{formatIls(finance.paid)}</span></p>
+              <p className="mt-1 flex justify-between text-sm font-medium"><span>{t("finance.balance")}</span><span>{formatIls(finance.balanceDue)}</span></p>
               {recentMoves.length ? (
                 <div className="mt-3 border-t border-slate-100 pt-3">
                   <p className="mb-2 text-xs font-medium text-slate-500">{t("finance.recent")}</p>
@@ -227,6 +233,22 @@ export function ProjectWorkspace() {
               <p key={item.id} className="border-t border-slate-100 py-2 text-sm first:border-0">{item.message}</p>
             ))
             : <EmptyState icon={ClipboardList} title={t("projects.noActivity")} />}
+        </SectionCard>
+      ) : null}
+
+      {tab === "finance" && canViewFinance && business?.id ? (
+        <SectionCard title={t("projects.tabFinance")}>
+          <ProjectFinancePanel
+            businessId={business.id}
+            project={project}
+            tasks={tasks}
+            canView={canViewFinance}
+            canSetPrice={canSetPrice}
+            canReceive={canReceivePayment}
+            canVoid={canVoidPayment}
+            timezone={business.timezone}
+            onChanged={() => void reload({ silent: true })}
+          />
         </SectionCard>
       ) : null}
 

@@ -14,6 +14,7 @@
     "seed": "npx tsx scripts/seed.ts",
     "verify:firebase": "npx tsx scripts/verify-firebase.ts",
     "test:payments": "npx tsx src/lib/finance/payments.test.ts",
+    "test:project-ledger": "npx tsx src/lib/finance/project-ledger.test.ts",
     "test:timestamps": "npx tsx src/lib/dates/timestamp.test.ts",
     "test:legacy-dates": "npx tsx src/lib/dates/legacy.test.ts",
     "test:date-picker": "npx tsx src/lib/dates/date-picker-model.test.ts",
