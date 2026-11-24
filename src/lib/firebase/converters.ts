@@ -40,7 +40,7 @@ import { REQUEST_STATUSES } from "@/types/logistics";
 import { MEETING_STATUSES, MEETING_TYPES } from "@/types/meeting";
 import { dateTimeInZone, toSafeDate, zonedDateTime } from "@/lib/admin/meeting-time";
 import { DEFAULT_TIMEZONE } from "@/lib/env";
-import { DEFAULT_BUSINESS_VAT_RATE } from "@/lib/finance/vat";
+import { DEFAULT_BUSINESS_VAT_RATE, resolveProjectBaseVatMode } from "@/lib/finance/vat";
 import { normalizeProjectProgress } from "@/lib/admin/project-progress";
 import { isDateOnly, isTimeOnly } from "@/lib/dates/format";
 import { EMPLOYEE_STATUSES } from "@/types/employee";
@@ -232,6 +232,7 @@ export function toProject(id: string, data: DocumentData): Project {
     baseVatRate: asNumber(data.baseVatRate),
     baseVatAmount: asNumber(data.baseVatAmount),
     basePriceIncludingVat: asNumber(data.basePriceIncludingVat),
+    basePriceVatMode: resolveProjectBaseVatMode(data.basePriceVatMode),
     basePaidAmount: asNumber(data.basePaidAmount, 0) ?? 0,
     baseBalanceDue: asNumber(data.baseBalanceDue),
     basePaymentStatus: data.basePaymentStatus && TASK_PAYMENT_STATUSES.includes(data.basePaymentStatus as TaskPaymentStatus)

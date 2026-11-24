@@ -404,12 +404,18 @@ export async function saveProjectBasePrice(input: {
   businessId: string;
   projectId: string;
   priceBeforeVat: number;
+  vatMode?: "EXCLUDING_VAT" | "INCLUDING_VAT";
 }): Promise<BusinessMutationResult> {
   const response = await fetch(`/api/business/projects/${input.projectId}/finance`, {
     method: "PATCH",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ businessId: input.businessId, priceBeforeVat: input.priceBeforeVat }),
+    body: JSON.stringify({
+      businessId: input.businessId,
+      amount: input.priceBeforeVat,
+      priceBeforeVat: input.priceBeforeVat,
+      vatMode: input.vatMode,
+    }),
   });
   const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
   if (!response.ok || payload.error) {

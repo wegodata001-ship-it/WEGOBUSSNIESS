@@ -1,4 +1,8 @@
 import { money } from "@/lib/finance/money";
+import { PROJECT_BASE_VAT_MODES, type ProjectBaseVatMode } from "@/types/department";
+
+export type { ProjectBaseVatMode };
+export { PROJECT_BASE_VAT_MODES };
 
 export const DEFAULT_BUSINESS_VAT_RATE = 0.18;
 
@@ -19,6 +23,41 @@ export function calculateTaskPrice(priceBeforeVat: number, vatRate: number) {
     vatAmount,
     priceIncludingVat: money(before + vatAmount),
   };
+}
+
+/** Legacy projects without a stored mode keep excluding-VAT behavior. */
+export function resolveProjectBaseVatMode(value: unknown): ProjectBaseVatMode {
+  return PROJECT_BASE_VAT_MODES.includes(value as ProjectBaseVatMode)
+    ? value as ProjectBaseVatMode
+    : "EXCLUDING_VAT";
+}
+
+/**
+ * Project base price from a single entered amount + VAT mode.
+ * EXCLUDING_VAT: entered is before VAT → add VAT.
+ * INCLUDING_VAT: entered already includes VAT → split before/VAT without adding again.
+ */
+export function calculateProjectBasePrice(
+  enteredAmount: number,
+  vatRate: number,
+  mode: ProjectBaseVatMode = "EXCLUDING_VAT",
+) {
+  const entered = money(enteredAmount);
+  const rate = normalizeVatRate(vatRate);
+  if (mode === "INCLUDING_VAT") {
+    const priceIncludingVat = entered;
+    const priceBeforeVat = rate > 0 ? money(priceIncludingVat / (1 + rate)) : priceIncludingVat;
+    const vatAmount = money(priceIncludingVat - priceBeforeVat);
+    return {
+      priceBeforeVat,
+      vatRate: rate,
+      vatAmount,
+      priceIncludingVat,
+      vatMode: mode,
+    };
+  }
+  const calc = calculateTaskPrice(entered, rate);
+  return { ...calc, vatMode: mode };
 }
 
 export function paymentStatusFor(paidAmount: number, priceIncludingVat: number | null) {

@@ -34,7 +34,9 @@ export async function GET(
     ok: true,
     project: {
       basePriceBeforeVat: project.basePriceBeforeVat,
+      baseVatAmount: project.baseVatAmount,
       basePriceIncludingVat: project.basePriceIncludingVat,
+      basePriceVatMode: project.basePriceVatMode,
       basePaidAmount: project.basePaidAmount,
       baseBalanceDue: project.baseBalanceDue,
       basePaymentStatus: project.basePaymentStatus,
@@ -52,6 +54,8 @@ export async function PATCH(
   const body = await request.json().catch(() => ({})) as {
     businessId?: string;
     priceBeforeVat?: unknown;
+    amount?: unknown;
+    vatMode?: unknown;
   };
   const businessId = typeof body.businessId === "string" ? body.businessId.trim() : "";
   if (!businessId) return NextResponse.json({ error: "MISSING_BUSINESS" }, { status: 400 });
@@ -64,7 +68,8 @@ export async function PATCH(
     actor: resolved.actor!,
     businessId: resolved.actor!.businessId,
     projectId,
-    priceBeforeVat: body.priceBeforeVat,
+    priceBeforeVat: body.amount !== undefined ? body.amount : body.priceBeforeVat,
+    vatMode: body.vatMode,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   return NextResponse.json({ ok: true, id: result.id });

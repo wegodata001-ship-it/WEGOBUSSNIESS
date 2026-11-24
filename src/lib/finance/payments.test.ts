@@ -1,11 +1,48 @@
 import assert from "node:assert/strict";
 import { allocateByTaskOrder, allocationsTotal } from "@/lib/finance/allocate";
 import { money } from "@/lib/finance/money";
-import { calculateTaskPrice, DEFAULT_BUSINESS_VAT_RATE, paymentStatusFor, remainingBalance } from "@/lib/finance/vat";
+import {
+  calculateProjectBasePrice,
+  calculateTaskPrice,
+  DEFAULT_BUSINESS_VAT_RATE,
+  paymentStatusFor,
+  remainingBalance,
+  resolveProjectBaseVatMode,
+} from "@/lib/finance/vat";
 
 const vat = DEFAULT_BUSINESS_VAT_RATE;
 const taskA = calculateTaskPrice(1000, vat);
 const taskB = calculateTaskPrice(500, vat);
+
+// Project base VAT modes (rate from settings, not hardcoded in callers).
+assert.equal(resolveProjectBaseVatMode(undefined), "EXCLUDING_VAT");
+assert.equal(resolveProjectBaseVatMode(null), "EXCLUDING_VAT");
+assert.equal(resolveProjectBaseVatMode("INCLUDING_VAT"), "INCLUDING_VAT");
+
+const excluding = calculateProjectBasePrice(5000, vat, "EXCLUDING_VAT");
+assert.equal(excluding.priceBeforeVat, 5000);
+assert.equal(excluding.vatAmount, money(5000 * vat));
+assert.equal(excluding.priceIncludingVat, money(5000 + excluding.vatAmount));
+assert.equal(excluding.priceIncludingVat, 5900);
+
+const including = calculateProjectBasePrice(5000, vat, "INCLUDING_VAT");
+assert.equal(including.priceIncludingVat, 5000);
+assert.equal(including.priceBeforeVat, money(5000 / (1 + vat)));
+assert.equal(including.vatAmount, money(5000 - including.priceBeforeVat));
+assert.equal(money(including.priceBeforeVat + including.vatAmount), 5000);
+
+// Switching mode with same entered digits changes totals as expected.
+const switchedToExcluding = calculateProjectBasePrice(5000, vat, "EXCLUDING_VAT");
+const switchedToIncluding = calculateProjectBasePrice(5000, vat, "INCLUDING_VAT");
+assert.notEqual(switchedToExcluding.priceIncludingVat, switchedToIncluding.priceIncludingVat);
+assert.equal(switchedToExcluding.priceIncludingVat, 5900);
+assert.equal(switchedToIncluding.priceIncludingVat, 5000);
+
+// Custom business rate (not frozen 18%).
+const rate17 = calculateProjectBasePrice(1000, 0.17, "EXCLUDING_VAT");
+assert.equal(rate17.vatRate, 0.17);
+assert.equal(rate17.priceIncludingVat, money(1000 + 170));
+
 
 assert.equal(taskA.priceBeforeVat, 1000);
 assert.equal(taskA.vatAmount, money(1000 * vat));
