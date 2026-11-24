@@ -21,11 +21,28 @@ export function activeMovements(
   return items.filter((item) => !isOrphanMovement(item, live));
 }
 
-export function isOrphanPayment(item: PaymentRecord, liveTaskIds: Set<string>) {
-  if (!item.allocations.length) return false;
-  return item.allocations.every((row) => !liveTaskIds.has(row.taskId));
+export function isOrphanPayment(
+  item: PaymentRecord,
+  liveTaskIds: Set<string>,
+  liveProjectIds?: Set<string>,
+) {
+  if (!item.allocations.length) {
+    if (item.projectId && liveProjectIds) return !liveProjectIds.has(item.projectId);
+    return false;
+  }
+  return item.allocations.every((row) => {
+    if (row.target === "PROJECT_BASE") {
+      if (!row.projectId) return true;
+      return liveProjectIds ? !liveProjectIds.has(row.projectId) : false;
+    }
+    return !row.taskId || !liveTaskIds.has(row.taskId);
+  });
 }
 
-export function activePayments(items: PaymentRecord[], liveTaskIds: Set<string>) {
-  return items.filter((item) => !isOrphanPayment(item, liveTaskIds));
+export function activePayments(
+  items: PaymentRecord[],
+  liveTaskIds: Set<string>,
+  liveProjectIds?: Set<string>,
+) {
+  return items.filter((item) => !isOrphanPayment(item, liveTaskIds, liveProjectIds));
 }

@@ -3,14 +3,15 @@ import { createMoneyMovement, voidMoneyMovementByPayment } from "@/lib/admin/mov
 import { writeTaskActivity } from "@/lib/admin/task-activity";
 import { canReceiveTaskPayment, canSetTaskPrice, canVoidTaskPayment } from "@/lib/finance/access";
 import { allocateByTaskOrder, allocationsTotal } from "@/lib/finance/allocate";
+import { isBillableFinanceTask } from "@/lib/finance/project-ledger";
 import { money, parseMoney } from "@/lib/finance/money";
 import { calculateTaskPrice, DEFAULT_BUSINESS_VAT_RATE, normalizeVatRate, paymentStatusFor, remainingBalance } from "@/lib/finance/vat";
 import type { ServerActor } from "@/lib/auth/server-actor";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { toTask } from "@/lib/firebase/converters";
+import { toProject, toTask } from "@/lib/firebase/converters";
 import { businessSettingsDocPath, paymentAllocationsPath, paymentDocPath, paymentsPath, projectDocPath, taskDocPath } from "@/lib/firebase/paths";
 import { isDateOnly } from "@/lib/dates/format";
-import { PAYMENT_METHODS, type PaymentMethod } from "@/types/payment";
+import { PAYMENT_METHODS, type PaymentAllocation, type PaymentMethod } from "@/types/payment";
 
 export type PaymentWriteError =
   | "FORBIDDEN"
@@ -52,6 +53,7 @@ export async function setTaskPrice(input: {
   const balanceDue = remainingBalance(calc.priceIncludingVat, paidAmount);
   const now = new Date();
   await ref.set({
+    billingMode: "BILLABLE",
     ...calc,
     paidAmount,
     balanceDue,
@@ -72,13 +74,21 @@ export async function setTaskPrice(input: {
 export async function receiveTaskPayment(input: {
   actor: ServerActor;
   businessId: string;
-  taskIds: string[];
+  taskIds?: string[];
+  projectId?: string | null;
   amount: unknown;
   paymentMethod: unknown;
   paymentDate: unknown;
   reference?: unknown;
   notes?: unknown;
-  allocations?: Array<{ taskId?: unknown; amount?: unknown }>;
+  allocations?: Array<{
+    taskId?: unknown;
+    projectId?: unknown;
+    target?: unknown;
+    amount?: unknown;
+  }>;
+  /** When true, allow paying more than current balances (credit). */
+  allowOverpay?: boolean;
 }) {
   if (!canReceiveTaskPayment(input.actor)) {
     return { ok: false as const, error: "FORBIDDEN" as PaymentWriteError, status: 403 };
@@ -97,52 +107,129 @@ export async function receiveTaskPayment(input: {
     : null;
   if (!paymentDate) return { ok: false as const, error: "TASK_FIELDS" as PaymentWriteError, status: 400 };
 
-  const taskIds = [...new Set(input.taskIds.filter((id) => typeof id === "string" && id.trim()))];
-  if (!taskIds.length) return { ok: false as const, error: "TASK_FIELDS" as PaymentWriteError, status: 400 };
+  const projectId = typeof input.projectId === "string" && input.projectId.trim()
+    ? input.projectId.trim()
+    : null;
+  const taskIds = [...new Set((input.taskIds ?? []).filter((id) => typeof id === "string" && id.trim()))];
+  if (!taskIds.length && !projectId) {
+    return { ok: false as const, error: "TASK_FIELDS" as PaymentWriteError, status: 400 };
+  }
 
   const db = getAdminDb();
+  const projectSnap = projectId ? await db.doc(projectDocPath(input.businessId, projectId)).get() : null;
+  if (projectId && !projectSnap?.exists) {
+    return { ok: false as const, error: "NOT_FOUND" as PaymentWriteError, status: 404 };
+  }
+  const project = projectSnap?.exists ? toProject(projectSnap.id, projectSnap.data()!) : null;
+
   const snaps = await Promise.all(taskIds.map((id) => db.doc(taskDocPath(input.businessId, id)).get()));
-  const tasks = snaps.map((snap) => {
-    if (!snap.exists) return null;
-    return toTask(snap.id, snap.data()!);
-  });
+  const tasks = snaps.map((snap) => (snap.exists ? toTask(snap.id, snap.data()!) : null));
   if (tasks.some((task) => !task)) {
     return { ok: false as const, error: "NOT_FOUND" as PaymentWriteError, status: 404 };
   }
   const priced = tasks.map((task) => task!);
-  if (priced.some((task) => task.priceIncludingVat === null || task.balanceDue === null)) {
+  if (priced.some((task) => !isBillableFinanceTask(task) || task.balanceDue === null)) {
     return { ok: false as const, error: "NO_PRICE" as PaymentWriteError, status: 400 };
   }
 
-  const allocatable = priced.map((task) => ({
-    id: task.id,
-    balanceDue: task.balanceDue ?? 0,
-  }));
-  const planned = input.allocations?.length
-    ? input.allocations.map((item) => ({
-      taskId: typeof item.taskId === "string" ? item.taskId : "",
-      amount: parseMoney(item.amount) ?? 0,
-    }))
-    : allocateByTaskOrder(allocatable, amount).allocations;
+  type Planned = { target: "TASK" | "PROJECT_BASE"; taskId: string | null; projectId: string | null; amount: number };
+  let planned: Planned[] = [];
 
-  if (planned.some((item) => !taskIds.includes(item.taskId) || item.amount < 0)) {
+  if (input.allocations?.length) {
+    planned = input.allocations.map((item) => {
+      const allocAmount = parseMoney(item.amount) ?? 0;
+      const target = item.target === "PROJECT_BASE" || (!item.taskId && (item.projectId || projectId))
+        ? "PROJECT_BASE" as const
+        : "TASK" as const;
+      return {
+        target,
+        taskId: target === "TASK" && typeof item.taskId === "string" ? item.taskId : null,
+        projectId: target === "PROJECT_BASE"
+          ? (typeof item.projectId === "string" && item.projectId ? item.projectId : projectId)
+          : projectId,
+        amount: allocAmount,
+      };
+    });
+  } else if (projectId && !taskIds.length) {
+    planned = [{ target: "PROJECT_BASE", taskId: null, projectId, amount }];
+  } else if (projectId && taskIds.length) {
+    const baseBalance = project?.baseBalanceDue ?? (project?.basePriceIncludingVat != null
+      ? remainingBalance(project.basePriceIncludingVat, project.basePaidAmount ?? 0)
+      : 0) ?? 0;
+    let left = amount;
+    const toBase = money(Math.min(left, Math.max(0, baseBalance)));
+    left = money(left - toBase);
+    planned = [];
+    if (toBase > 0) planned.push({ target: "PROJECT_BASE", taskId: null, projectId, amount: toBase });
+    if (left > 0) {
+      const taskPlan = allocateByTaskOrder(
+        priced.map((task) => ({ id: task.id, balanceDue: task.balanceDue ?? 0 })),
+        left,
+      ).allocations;
+      for (const row of taskPlan) {
+        if (row.amount > 0) {
+          planned.push({ target: "TASK", taskId: row.taskId, projectId, amount: row.amount });
+        }
+      }
+      const allocatedTasks = money(taskPlan.reduce((sum, row) => sum + row.amount, 0));
+      const leftover = money(left - allocatedTasks);
+      if (leftover > 0 && input.allowOverpay !== false) {
+        // Overpay lands on project base as credit capacity.
+        const existing = planned.find((row) => row.target === "PROJECT_BASE");
+        if (existing) existing.amount = money(existing.amount + leftover);
+        else planned.push({ target: "PROJECT_BASE", taskId: null, projectId, amount: leftover });
+      }
+    }
+  } else {
+    const taskPlan = allocateByTaskOrder(
+      priced.map((task) => ({ id: task.id, balanceDue: task.balanceDue ?? 0 })),
+      amount,
+    ).allocations;
+    planned = taskPlan
+      .filter((row) => row.amount > 0)
+      .map((row) => ({
+        target: "TASK" as const,
+        taskId: row.taskId,
+        projectId: priced.find((task) => task.id === row.taskId)?.projectId ?? null,
+        amount: row.amount,
+      }));
+  }
+
+  if (planned.some((item) => item.amount < 0)) {
     return { ok: false as const, error: "INVALID_ALLOCATION" as PaymentWriteError, status: 400 };
   }
-  if (allocationsTotal(planned) !== amount) {
+  if (allocationsTotal(planned.map((item) => ({ taskId: item.taskId ?? item.projectId ?? "", amount: item.amount }))) !== amount) {
     return { ok: false as const, error: "INVALID_ALLOCATION" as PaymentWriteError, status: 400 };
   }
+
   for (const item of planned) {
-    const task = priced.find((row) => row.id === item.taskId);
-    if (!task || item.amount - 0.001 > (task.balanceDue ?? 0)) {
-      return { ok: false as const, error: "INVALID_ALLOCATION" as PaymentWriteError, status: 400 };
+    if (item.target === "TASK") {
+      if (!item.taskId || !taskIds.includes(item.taskId)) {
+        return { ok: false as const, error: "INVALID_ALLOCATION" as PaymentWriteError, status: 400 };
+      }
+      const task = priced.find((row) => row.id === item.taskId);
+      if (!task) return { ok: false as const, error: "INVALID_ALLOCATION" as PaymentWriteError, status: 400 };
+      if (input.allowOverpay === false && item.amount - 0.001 > (task.balanceDue ?? 0)) {
+        return { ok: false as const, error: "INVALID_ALLOCATION" as PaymentWriteError, status: 400 };
+      }
+    } else {
+      if (!item.projectId || item.projectId !== projectId || !project) {
+        return { ok: false as const, error: "INVALID_ALLOCATION" as PaymentWriteError, status: 400 };
+      }
     }
   }
 
   const now = new Date();
   const paymentRef = db.collection(paymentsPath(input.businessId)).doc();
-  const allocations = planned
+  const allocations: PaymentAllocation[] = planned
     .filter((item) => item.amount > 0)
-    .map((item) => ({ paymentId: paymentRef.id, taskId: item.taskId, amount: item.amount }));
+    .map((item) => ({
+      paymentId: paymentRef.id,
+      target: item.target,
+      taskId: item.taskId,
+      projectId: item.projectId,
+      amount: item.amount,
+    }));
 
   await paymentRef.set({
     businessId: input.businessId,
@@ -152,6 +239,7 @@ export async function receiveTaskPayment(input: {
     reference: typeof input.reference === "string" ? input.reference.trim() : "",
     notes: typeof input.notes === "string" ? input.notes.trim() : "",
     status: "RECORDED",
+    projectId,
     allocations,
     createdByUserId: input.actor.uid,
     createdByEmployeeId: input.actor.employeeId,
@@ -169,24 +257,38 @@ export async function receiveTaskPayment(input: {
   })));
 
   for (const item of allocations) {
-    const task = priced.find((row) => row.id === item.taskId)!;
-    const paidAmount = money(task.paidAmount + item.amount);
-    const balanceDue = remainingBalance(task.priceIncludingVat, paidAmount);
-    await db.doc(taskDocPath(input.businessId, task.id)).set({
-      paidAmount,
-      balanceDue,
-      paymentStatus: paymentStatusFor(paidAmount, task.priceIncludingVat),
-      paymentIds: [...task.paymentIds, paymentRef.id],
-      updatedAt: now,
-    }, { merge: true });
-    await writeTaskActivity({
-      businessId: input.businessId,
-      taskId: task.id,
-      actorUserId: input.actor.uid,
-      actorEmployeeId: input.actor.employeeId,
-      type: "payment",
-      message: `נרשם תשלום בסך ${item.amount}`,
-    });
+    if (item.target === "TASK" && item.taskId) {
+      const task = priced.find((row) => row.id === item.taskId)!;
+      const paidAmount = money(task.paidAmount + item.amount);
+      const balanceDue = remainingBalance(task.priceIncludingVat, paidAmount);
+      await db.doc(taskDocPath(input.businessId, task.id)).set({
+        paidAmount,
+        balanceDue,
+        paymentStatus: paymentStatusFor(paidAmount, task.priceIncludingVat),
+        paymentIds: [...new Set([...task.paymentIds, paymentRef.id])],
+        updatedAt: now,
+      }, { merge: true });
+      await writeTaskActivity({
+        businessId: input.businessId,
+        taskId: task.id,
+        actorUserId: input.actor.uid,
+        actorEmployeeId: input.actor.employeeId,
+        type: "payment",
+        message: `נרשם תשלום בסך ${item.amount}`,
+      });
+    } else if (item.target === "PROJECT_BASE" && item.projectId && project) {
+      const paidAmount = money((project.basePaidAmount ?? 0) + item.amount);
+      const price = project.basePriceIncludingVat;
+      await db.doc(projectDocPath(input.businessId, item.projectId)).set({
+        basePaidAmount: paidAmount,
+        baseBalanceDue: remainingBalance(price, paidAmount),
+        basePaymentStatus: paymentStatusFor(paidAmount, price),
+        paymentIds: [...new Set([...(project.paymentIds ?? []), paymentRef.id])],
+        updatedAt: now,
+      }, { merge: true });
+      // Keep in-memory project paid for multi-line PROJECT_BASE (rare).
+      project.basePaidAmount = paidAmount;
+    }
   }
 
   await writeActivity({
@@ -195,7 +297,9 @@ export async function receiveTaskPayment(input: {
     action: "receivePayment",
     entityType: "payment",
     entityId: paymentRef.id,
-    message: `נרשמה קבלת תשלום עבור ${allocations.length} משימות`,
+    message: projectId
+      ? `נרשמה קבלת תשלום לפרויקט`
+      : `נרשמה קבלת תשלום עבור ${allocations.filter((row) => row.target === "TASK").length} משימות`,
   });
 
   const { notifyManagers } = await import("@/lib/admin/notify");
@@ -204,16 +308,20 @@ export async function receiveTaskPayment(input: {
     skipUserIds: [input.actor.uid],
     title: "תשלום התקבל",
     body: `התקבל תשלום בסך ${amount.toLocaleString("he-IL")} ₪`,
-    href: "/movements",
+    href: projectId ? `/projects/${projectId}` : "/movements",
     type: "payment.received",
     entityType: "payment",
     entityId: paymentRef.id,
     dedupeKey: `PAYMENT_RECEIVED:${paymentRef.id}`,
   });
 
-  const first = priced[0];
-  const projectSnap = first?.projectId ? await db.doc(projectDocPath(input.businessId, first.projectId)).get() : null;
-  const projectData = projectSnap?.data();
+  const movementProjectId = projectId
+    ?? priced[0]?.projectId
+    ?? null;
+  const projectData = project
+    ?? (movementProjectId
+      ? (await db.doc(projectDocPath(input.businessId, movementProjectId)).get()).data()
+      : null);
   await createMoneyMovement({
     actor: input.actor,
     businessId: input.businessId,
@@ -221,11 +329,13 @@ export async function receiveTaskPayment(input: {
     amount,
     date: paymentDate,
     clientName: typeof projectData?.clientName === "string" ? projectData.clientName : "",
-    projectId: first?.projectId ?? null,
-    taskIds: allocations.map((item) => item.taskId),
+    projectId: movementProjectId,
+    taskIds: allocations.map((item) => item.taskId).filter((id): id is string => Boolean(id)),
     paymentId: paymentRef.id,
     paymentMethod: method,
-    description: priced.map((task) => task.title).join(", "),
+    description: priced.length
+      ? priced.map((task) => task.title).join(", ")
+      : (typeof projectData?.name === "string" ? projectData.name : "תשלום פרויקט"),
     note: typeof input.notes === "string" ? input.notes : "",
   });
 
@@ -250,7 +360,8 @@ export async function voidTaskPayment(input: {
     return { ok: false as const, error: "ALREADY_VOIDED" as PaymentWriteError, status: 400 };
   }
   const now = new Date();
-  const allocations = Array.isArray(data.allocations) ? data.allocations as Array<{ taskId: string; amount: number }> : [];
+  const recorded = (await import("@/lib/firebase/converters")).toPaymentRecord(input.paymentId, data);
+  const allocations = recorded.allocations;
   await ref.set({
     status: "VOIDED",
     cancelledByUserId: input.actor.uid,
@@ -263,6 +374,21 @@ export async function voidTaskPayment(input: {
   await Promise.all(allocSnap.docs.map((docSnap) => docSnap.ref.set({ status: "VOIDED", cancelledAt: now }, { merge: true })));
 
   for (const item of allocations) {
+    if (item.target === "PROJECT_BASE" && item.projectId) {
+      const projectRef = db.doc(projectDocPath(input.businessId, item.projectId));
+      const projectSnap = await projectRef.get();
+      if (!projectSnap.exists) continue;
+      const project = toProject(projectSnap.id, projectSnap.data()!);
+      const paidAmount = money(Math.max(0, (project.basePaidAmount ?? 0) - item.amount));
+      await projectRef.set({
+        basePaidAmount: paidAmount,
+        baseBalanceDue: remainingBalance(project.basePriceIncludingVat, paidAmount),
+        basePaymentStatus: paymentStatusFor(paidAmount, project.basePriceIncludingVat),
+        updatedAt: now,
+      }, { merge: true });
+      continue;
+    }
+    if (!item.taskId) continue;
     const taskRef = db.doc(taskDocPath(input.businessId, item.taskId));
     const taskSnap = await taskRef.get();
     if (!taskSnap.exists) continue;

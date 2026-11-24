@@ -22,6 +22,9 @@ export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 export const TASK_WRITE_STATUSES = ["TODO", "IN_PROGRESS", "WAITING", "DONE", "ARCHIVED"] as const;
 export type TaskWriteStatus = (typeof TASK_WRITE_STATUSES)[number];
 
+export const TASK_BILLING_MODES = ["INCLUDED", "BILLABLE"] as const;
+export type TaskBillingMode = (typeof TASK_BILLING_MODES)[number];
+
 export const ACTIVE_TASK_STATUSES: TaskStatus[] = ["TODO", "OPEN", "PENDING", "IN_PROGRESS", "WAITING"];
 export const DONE_TASK_STATUSES: TaskStatus[] = ["DONE", "COMPLETED"];
 export const ARCHIVED_TASK_STATUSES: TaskStatus[] = ["ARCHIVED", "CANCELLED"];
@@ -94,6 +97,8 @@ export type Task = {
   rejectedAt: Date | null;
   rejectionReason: string | null;
   commentCount: number;
+  /** INCLUDED = no extra charge (default). BILLABLE = optional paid task. */
+  billingMode: TaskBillingMode;
   priceBeforeVat: number | null;
   vatRate: number | null;
   vatAmount: number | null;

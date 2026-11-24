@@ -39,6 +39,7 @@ export type TaskDraft = {
   templateId: string;
   saveToLibrary: boolean;
   freeText: boolean;
+  billingMode: "INCLUDED" | "BILLABLE";
   priceBeforeVat: string;
 };
 
@@ -62,6 +63,7 @@ export function emptyTaskDraft(today: string, startTime = "09:00", endTime = "10
     templateId: "",
     saveToLibrary: false,
     freeText: false,
+    billingMode: "INCLUDED",
     priceBeforeVat: "",
   };
 }
@@ -87,6 +89,7 @@ export function draftFromTask(task: Task, today: string): TaskDraft {
     templateId: task.templateId ?? "",
     saveToLibrary: false,
     freeText: false,
+    billingMode: task.billingMode === "BILLABLE" || task.priceIncludingVat != null ? "BILLABLE" : "INCLUDED",
     priceBeforeVat: task.priceBeforeVat != null ? String(task.priceBeforeVat) : "",
   };
 }
@@ -113,7 +116,12 @@ export function taskDraftPayload(draft: TaskDraft) {
     status: draft.status,
     templateId: draft.templateId || null,
     saveToLibrary: draft.saveToLibrary,
-    ...(draft.priceBeforeVat.trim() ? { priceBeforeVat: Number(draft.priceBeforeVat) } : {}),
+    billingMode: draft.billingMode,
+    ...(draft.billingMode === "BILLABLE" && draft.priceBeforeVat.trim()
+      ? { priceBeforeVat: Number(draft.priceBeforeVat) }
+      : draft.billingMode === "INCLUDED"
+        ? { priceBeforeVat: null }
+        : {}),
   };
 }
 
@@ -443,9 +451,42 @@ export function TaskFormModal({
             <PriorityPicker value={draft.priority} onChange={(priority) => onChange({ ...draft, priority })} />
           </Field>
           {canSetPrice ? (
-            <Field label={t("work.priceOptional")}>
-              <input className={inputClass} inputMode="decimal" value={draft.priceBeforeVat} onChange={(event) => onChange({ ...draft, priceBeforeVat: event.target.value })} placeholder="₪" />
-            </Field>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="mb-2 text-sm font-medium text-slate-800">{t("finance.taskBilling")}</p>
+              <div className="flex flex-col gap-2 text-sm">
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="task-billing-mode"
+                    checked={draft.billingMode !== "BILLABLE"}
+                    onChange={() => onChange({ ...draft, billingMode: "INCLUDED", priceBeforeVat: "" })}
+                  />
+                  {t("finance.billingIncluded")}
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="task-billing-mode"
+                    checked={draft.billingMode === "BILLABLE"}
+                    onChange={() => onChange({ ...draft, billingMode: "BILLABLE" })}
+                  />
+                  {t("finance.billingBillable")}
+                </label>
+              </div>
+              {draft.billingMode === "BILLABLE" ? (
+                <Field label={t("finance.taskAmount")}>
+                  <input
+                    className={inputClass}
+                    inputMode="decimal"
+                    value={draft.priceBeforeVat}
+                    onChange={(event) => onChange({ ...draft, priceBeforeVat: event.target.value })}
+                    placeholder="₪"
+                  />
+                </Field>
+              ) : (
+                <p className="mt-2 text-xs text-slate-500">{t("finance.billingIncludedHint")}</p>
+              )}
+            </div>
           ) : null}
           <Field label={t("common.notes")}>
             <textarea className={`${inputClass} h-24 py-2`} value={draft.description} onChange={(event) => onChange({ ...draft, description: event.target.value })} />

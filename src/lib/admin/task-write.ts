@@ -180,13 +180,44 @@ export async function upsertTask(input: {
       ? (typeof existing.createdByEmployeeId === "string" ? existing.createdByEmployeeId : actor.employeeId)
       : actor.employeeId,
     updatedAt: now,
-    ...(canSetTaskPrice(actor) && data.priceBeforeVat !== undefined ? (() => {
+    ...(canSetTaskPrice(actor) && data.billingMode !== undefined ? (() => {
+      const mode = text(data.billingMode) === "BILLABLE" ? "BILLABLE" as const : "INCLUDED" as const;
+      if (mode === "INCLUDED") {
+        return {
+          billingMode: "INCLUDED",
+          priceBeforeVat: null,
+          vatRate: null,
+          vatAmount: null,
+          priceIncludingVat: null,
+          balanceDue: null,
+          paymentStatus: null,
+          // Keep paidAmount history if any payments existed; balance cleared.
+        };
+      }
+      const price = data.priceBeforeVat !== undefined
+        ? parseMoney(data.priceBeforeVat)
+        : (typeof existing.priceBeforeVat === "number" ? existing.priceBeforeVat : null);
+      if (price === null || price < 0) {
+        return { billingMode: "BILLABLE" };
+      }
+      const vatRate = typeof existing.vatRate === "number" ? existing.vatRate : DEFAULT_BUSINESS_VAT_RATE;
+      const calc = calculateTaskPrice(price, vatRate);
+      const paidAmount = typeof existing.paidAmount === "number" ? existing.paidAmount : 0;
+      return {
+        billingMode: "BILLABLE",
+        ...calc,
+        paidAmount,
+        balanceDue: remainingBalance(calc.priceIncludingVat, paidAmount),
+        paymentStatus: paymentStatusFor(paidAmount, calc.priceIncludingVat),
+      };
+    })() : canSetTaskPrice(actor) && data.priceBeforeVat !== undefined ? (() => {
       const price = parseMoney(data.priceBeforeVat);
       if (price === null || price < 0) return {};
       const vatRate = typeof existing.vatRate === "number" ? existing.vatRate : DEFAULT_BUSINESS_VAT_RATE;
       const calc = calculateTaskPrice(price, vatRate);
       const paidAmount = typeof existing.paidAmount === "number" ? existing.paidAmount : 0;
       return {
+        billingMode: "BILLABLE",
         ...calc,
         paidAmount,
         balanceDue: remainingBalance(calc.priceIncludingVat, paidAmount),
@@ -199,6 +230,7 @@ export async function upsertTask(input: {
     ? db.doc(taskDocPath(businessId, input.taskId!))
     : db.collection(tasksPath(businessId)).doc();
 
+  const createExtras = payload as Record<string, unknown>;
   await ref.set(isUpdate
     ? payload
     : {
@@ -206,6 +238,9 @@ export async function upsertTask(input: {
       seedKey: null,
       actualHours: null,
       commentCount: 0,
+      billingMode: createExtras.billingMode ?? "INCLUDED",
+      paidAmount: typeof createExtras.paidAmount === "number" ? createExtras.paidAmount : 0,
+      paymentIds: [],
       createdByUserId: actor.uid,
       approvedByUserId: null,
       approvedAt: null,

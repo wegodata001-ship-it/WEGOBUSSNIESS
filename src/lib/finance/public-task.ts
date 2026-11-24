@@ -3,6 +3,7 @@ import type { Task } from "@/types/task";
 export function hideTaskFinance(task: Task): Task {
   return {
     ...task,
+    billingMode: "INCLUDED",
     priceBeforeVat: null,
     vatRate: null,
     vatAmount: null,

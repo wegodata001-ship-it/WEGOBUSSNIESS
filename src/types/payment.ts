@@ -14,9 +14,15 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export const PAYMENT_RECORD_STATUSES = ["RECORDED", "VOIDED"] as const;
 export type PaymentRecordStatus = (typeof PAYMENT_RECORD_STATUSES)[number];
 
+export const PAYMENT_ALLOCATION_TARGETS = ["TASK", "PROJECT_BASE"] as const;
+export type PaymentAllocationTarget = (typeof PAYMENT_ALLOCATION_TARGETS)[number];
+
 export type PaymentAllocation = {
   paymentId: string;
-  taskId: string;
+  /** TASK = billable task line; PROJECT_BASE = agreed project price. */
+  target: PaymentAllocationTarget;
+  taskId: string | null;
+  projectId: string | null;
   amount: number;
 };
 
@@ -29,6 +35,8 @@ export type PaymentRecord = {
   reference: string;
   notes: string;
   status: PaymentRecordStatus;
+  /** Optional project scope for project-card payments (may also allocate to tasks). */
+  projectId: string | null;
   allocations: PaymentAllocation[];
   createdByUserId: string;
   createdByEmployeeId: string | null;

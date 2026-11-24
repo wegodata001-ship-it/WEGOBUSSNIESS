@@ -23,16 +23,16 @@ import { BUSINESS_ROLES, resolveLocale } from "@/types/roles";
 import { asCalendarColor, asTaskKind } from "@/lib/admin/palette";
 import { toProjectSystemDetails } from "@/lib/admin/project-system-rules";
 import { normalizeTaskTeam } from "@/lib/admin/task-team";
-import type { PaymentMethod, PaymentRecord, PaymentRecordStatus, TaskPaymentStatus } from "@/types/payment";
-import { PAYMENT_METHODS, PAYMENT_RECORD_STATUSES, TASK_PAYMENT_STATUSES } from "@/types/payment";
+import type { PaymentAllocationTarget, PaymentMethod, PaymentRecord, PaymentRecordStatus, TaskPaymentStatus } from "@/types/payment";
+import { PAYMENT_ALLOCATION_TARGETS, PAYMENT_METHODS, PAYMENT_RECORD_STATUSES, TASK_PAYMENT_STATUSES } from "@/types/payment";
 import type { MoneyMovement, MovementStatus, MovementType } from "@/types/movement";
 import { MOVEMENT_STATUSES, MOVEMENT_TYPES } from "@/types/movement";
-import type { Task, TaskActivity, TaskAttachment, TaskComment, TaskLink, TaskPriority, TaskStatus } from "@/types/task";
+import type { Task, TaskActivity, TaskAttachment, TaskBillingMode, TaskComment, TaskLink, TaskPriority, TaskStatus } from "@/types/task";
 import type { TaskStatusDefinition, TaskStatusType } from "@/types/task-status";
 import { TASK_STATUS_TYPES } from "@/types/task-status";
 import type { TaskTemplate } from "@/types/task-template";
 import { taskLibraryKey } from "@/lib/admin/task-library";
-import { TASK_PRIORITIES, TASK_STATUSES } from "@/types/task";
+import { TASK_BILLING_MODES, TASK_PRIORITIES, TASK_STATUSES } from "@/types/task";
 import type { AppUser } from "@/types/user";
 import type { WorkSession, WorkSessionKind, WorkSessionStatus } from "@/types/work-hours";
 import { WORK_SESSION_KINDS, WORK_SESSION_STATUSES } from "@/types/work-hours";
@@ -228,6 +228,16 @@ export function toProject(id: string, data: DocumentData): Project {
     isActive: data.isActive !== false,
     color: asCalendarColor(data.color),
     systemDetails: toProjectSystemDetails(data.systemDetails),
+    basePriceBeforeVat: asNumber(data.basePriceBeforeVat),
+    baseVatRate: asNumber(data.baseVatRate),
+    baseVatAmount: asNumber(data.baseVatAmount),
+    basePriceIncludingVat: asNumber(data.basePriceIncludingVat),
+    basePaidAmount: asNumber(data.basePaidAmount, 0) ?? 0,
+    baseBalanceDue: asNumber(data.baseBalanceDue),
+    basePaymentStatus: data.basePaymentStatus && TASK_PAYMENT_STATUSES.includes(data.basePaymentStatus as TaskPaymentStatus)
+      ? data.basePaymentStatus as TaskPaymentStatus
+      : null,
+    paymentIds: asStringArray(data.paymentIds),
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };
@@ -270,6 +280,13 @@ export function toTask(id: string, data: DocumentData): Task {
     rejectedAt: toDate(data.rejectedAt),
     rejectionReason: asNullableString(data.rejectionReason),
     commentCount: asNumber(data.commentCount, 0) ?? 0,
+    billingMode: (() => {
+      if (TASK_BILLING_MODES.includes(data.billingMode as TaskBillingMode)) {
+        return data.billingMode as TaskBillingMode;
+      }
+      // Legacy: priced tasks behave as billable extras.
+      return asNumber(data.priceIncludingVat) !== null ? "BILLABLE" : "INCLUDED";
+    })(),
     priceBeforeVat: asNumber(data.priceBeforeVat),
     vatRate: asNumber(data.vatRate),
     vatAmount: asNumber(data.vatAmount),
@@ -567,12 +584,24 @@ export function toPaymentRecord(id: string, data: DocumentData): PaymentRecord {
   const allocations = Array.isArray(data.allocations)
     ? data.allocations
       .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
-      .map((item) => ({
-        paymentId: typeof item.paymentId === "string" ? item.paymentId : id,
-        taskId: typeof item.taskId === "string" ? item.taskId : "",
-        amount: typeof item.amount === "number" ? item.amount : 0,
-      }))
-      .filter((item) => item.taskId)
+      .map((item) => {
+        const amount = typeof item.amount === "number" ? item.amount : 0;
+        const explicitTarget = PAYMENT_ALLOCATION_TARGETS.includes(item.target as PaymentAllocationTarget)
+          ? item.target as PaymentAllocationTarget
+          : null;
+        const taskId = typeof item.taskId === "string" && item.taskId.trim() ? item.taskId.trim() : null;
+        const projectId = typeof item.projectId === "string" && item.projectId.trim() ? item.projectId.trim() : null;
+        const target: PaymentAllocationTarget = explicitTarget
+          ?? (projectId && !taskId ? "PROJECT_BASE" : "TASK");
+        return {
+          paymentId: typeof item.paymentId === "string" ? item.paymentId : id,
+          target,
+          taskId: target === "TASK" ? taskId : null,
+          projectId: target === "PROJECT_BASE" ? projectId : (projectId ?? null),
+          amount,
+        };
+      })
+      .filter((item) => item.amount > 0 && (item.taskId || (item.target === "PROJECT_BASE" && item.projectId)))
     : [];
   return {
     id,
@@ -583,6 +612,7 @@ export function toPaymentRecord(id: string, data: DocumentData): PaymentRecord {
     reference: asString(data.reference),
     notes: asString(data.notes),
     status: asOneOf<PaymentRecordStatus>(data.status, PAYMENT_RECORD_STATUSES, "RECORDED"),
+    projectId: asNullableString(data.projectId),
     allocations,
     createdByUserId: asString(data.createdByUserId),
     createdByEmployeeId: asNullableString(data.createdByEmployeeId),
