@@ -35,7 +35,9 @@ export function LoginForm() {
   const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(EMAIL_MEMORY_KEY);
@@ -45,12 +47,38 @@ export function LoginForm() {
     }
   }, []);
 
+  async function onForgotPassword() {
+    if (loading || resetting) return;
+    const value = email.trim();
+    if (!value || !value.includes("@")) {
+      setInfo(null);
+      setError(t("auth.resetNeedEmail"));
+      return;
+    }
+    setResetting(true);
+    setError(null);
+    setInfo(null);
+    try {
+      await fetch("/api/session/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: value }),
+      });
+      setInfo(t("auth.resetSent"));
+    } catch {
+      setError(t("auth.resetFailed"));
+    } finally {
+      setResetting(false);
+    }
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (loading) return;
 
     setLoading(true);
     setError(null);
+    setInfo(null);
 
     try {
       const resolved = await auth.login(email.trim(), password);
@@ -83,6 +111,11 @@ export function LoginForm() {
         <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm leading-5 text-red-700">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <p className="whitespace-pre-line">{error}</p>
+        </div>
+      ) : null}
+      {info ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm leading-5 text-emerald-800">
+          <p className="whitespace-pre-line">{info}</p>
         </div>
       ) : null}
 
@@ -143,9 +176,14 @@ export function LoginForm() {
           />
           {t("auth.rememberMe")}
         </label>
-        <span className="cursor-default text-[#64748B]" title={t("auth.forgotPassword")}>
-          {t("auth.forgotPassword")}
-        </span>
+        <button
+          type="button"
+          onClick={() => void onForgotPassword()}
+          disabled={loading || resetting}
+          className="text-[#2563EB] transition hover:text-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {resetting ? t("auth.resetSending") : t("auth.forgotPassword")}
+        </button>
       </div>
 
       <button
