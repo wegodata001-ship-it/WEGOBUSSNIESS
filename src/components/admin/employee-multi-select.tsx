@@ -56,11 +56,22 @@ export function EmployeeMultiSelect({
     });
   }, [departments, employees, excludeIds, query]);
 
-  const selected = employees.filter((employee) => value.includes(employee.id));
+  const byId = useMemo(() => new Map(employees.map((employee) => [employee.id, employee])), [employees]);
+  const selected = useMemo(() => {
+    return value.map((id) => {
+      const employee = byId.get(id);
+      return employee ?? {
+        id,
+        displayName: id,
+      };
+    });
+  }, [byId, value]);
 
   function toggle(id: string) {
     if (disabled) return;
-    onChange(value.includes(id) ? value.filter((item) => item !== id) : [...value, id]);
+    // Always persist employee document id (never display name / auth uid alone).
+    const next = value.includes(id) ? value.filter((item) => item !== id) : [...value, id];
+    onChange(next);
   }
 
   return (
@@ -71,7 +82,17 @@ export function EmployeeMultiSelect({
             <EmployeeAvatar name={employee.displayName} />
             {employee.displayName}
             {disabled ? null : (
-              <button type="button" onClick={() => toggle(employee.id)} className="rounded-full p-0.5 hover:bg-slate-200" aria-label={`הסרת ${employee.displayName}`}>
+              <button
+                type="button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  toggle(employee.id);
+                }}
+                className="rounded-full p-0.5 hover:bg-slate-200"
+                aria-label={`הסרת ${employee.displayName}`}
+              >
                 <X className="h-3 w-3" />
               </button>
             )}
@@ -80,6 +101,7 @@ export function EmployeeMultiSelect({
         <button
           type="button"
           disabled={disabled}
+          onMouseDown={(event) => event.stopPropagation()}
           onClick={() => setOpen((state) => !state)}
           className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50"
         >
@@ -89,7 +111,10 @@ export function EmployeeMultiSelect({
       </div>
 
       {open && !disabled ? (
-        <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div
+          className="absolute z-30 mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
           <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
             <Search className="h-4 w-4 text-slate-400" />
             <input
@@ -107,7 +132,17 @@ export function EmployeeMultiSelect({
                 <button
                   key={employee.id}
                   type="button"
-                  onClick={() => toggle(employee.id)}
+                  onMouseDown={(event) => {
+                    // Prevent modal backdrop / outside handlers from clearing selection mid-click.
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    toggle(employee.id);
+                    setQuery("");
+                  }}
                   className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-start hover:bg-slate-50"
                 >
                   <span className={`flex h-5 w-5 items-center justify-center rounded border ${checked ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white" : "border-slate-300"}`}>

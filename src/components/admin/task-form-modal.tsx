@@ -24,6 +24,7 @@ import type { Task, TaskWriteStatus } from "@/types/task";
 import type { TaskTemplate } from "@/types/task-template";
 import { labelOf } from "@/lib/admin/labels";
 import type { CalendarColor, TaskKind } from "@/lib/admin/palette";
+import { fieldsFromParticipantIds, participantWriteFields, participantsFromFields } from "@/lib/admin/task-participants";
 import { useI18n } from "@/components/providers/i18n-provider";
 
 function enteredAmountFromTask(task: Task) {
@@ -93,8 +94,11 @@ export function draftFromTask(task: Task, today: string): TaskDraft {
     description: task.description,
     projectId: task.projectId ?? "",
     departmentId: task.departmentId ?? "",
-    assigneeId: task.assigneeId ?? "",
-    collaboratorIds: task.collaboratorIds.filter((id) => id !== task.assigneeId),
+    ...fieldsFromParticipantIds([
+      task.assigneeId,
+      ...task.collaboratorIds,
+      ...(task.assigneeEmployeeIds ?? []),
+    ]),
     startDate: task.startDate ?? task.scheduledDate ?? today,
     dueDate: task.dueDate ?? today,
     startTime: task.startTime ?? "09:00",
@@ -114,15 +118,18 @@ export function draftFromTask(task: Task, today: string): TaskDraft {
 }
 
 export function taskDraftPayload(draft: TaskDraft) {
-  const participantIds = [draft.assigneeId, ...draft.collaboratorIds].filter(Boolean);
+  const team = participantWriteFields({
+    assigneeId: draft.assigneeId,
+    collaboratorIds: draft.collaboratorIds,
+  });
   return {
     title: draft.title,
     description: draft.description,
     projectId: draft.projectId || null,
     departmentId: draft.departmentId || null,
-    assigneeId: draft.assigneeId || null,
-    collaboratorIds: draft.collaboratorIds.filter((id) => id && id !== draft.assigneeId),
-    participantIds,
+    assigneeId: team.assigneeId,
+    collaboratorIds: team.collaboratorIds,
+    participantIds: team.participantIds,
     estimatedHours: draft.estimatedHours ? Number(draft.estimatedHours) : null,
     startDate: draft.startDate,
     dueDate: draft.dueDate,
@@ -212,6 +219,8 @@ export function TaskFormModal({
   const [boundTaskId, setBoundTaskId] = useState(draft.id ?? "");
   const [uploadProgress, setUploadProgress] = useState("");
   const openedTaskId = useRef(draft.id ?? "");
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const quickCategories = managedProjectCategories(departmentCategories, { includeId: quickCategory });
   const libraryItems = useMemo(() => mergeTaskLibrary(taskTemplates, libraryTasks), [libraryTasks, taskTemplates]);
 
@@ -326,13 +335,16 @@ export function TaskFormModal({
     setReplacing(false);
   }
 
-  const participants = [draft.assigneeId, ...draft.collaboratorIds].filter(Boolean);
+  const participants = participantsFromFields({
+    assigneeId: draft.assigneeId,
+    collaboratorIds: draft.collaboratorIds,
+  });
 
   function setParticipants(ids: string[]) {
+    // Use latest draft so concurrent field updates cannot wipe the selection.
     onChange({
-      ...draft,
-      assigneeId: ids[0] ?? "",
-      collaboratorIds: ids.slice(1),
+      ...draftRef.current,
+      ...fieldsFromParticipantIds(ids),
     });
   }
 
