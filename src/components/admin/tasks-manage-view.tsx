@@ -648,6 +648,7 @@ export function TasksManageView() {
           canCreateProject={permissions.includes("projects.manage") || membership?.role === "BUSINESS_OWNER"}
           canCreateDepartment={permissions.includes("departments.manage") || membership?.role === "BUSINESS_OWNER"}
           canSetPrice={canSetPrice}
+          vatRate={data.settings.vatRate}
           onCatalogRefresh={() => reload({ silent: true })}
           error={formError}
         />

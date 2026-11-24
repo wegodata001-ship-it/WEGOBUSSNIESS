@@ -533,6 +533,7 @@ export function MeetingsView() {
           canEditTeam={canEditTask}
           canCreateProject={canCreateProject}
           canCreateDepartment={canCreateDepartment}
+          vatRate={data.settings.vatRate}
           onCatalogRefresh={() => reload({ silent: true })}
           error={taskFormError}
         />

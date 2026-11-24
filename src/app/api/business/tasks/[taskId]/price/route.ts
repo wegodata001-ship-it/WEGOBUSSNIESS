@@ -20,7 +20,8 @@ export async function PATCH(
     actor: resolved.actor!,
     businessId: resolved.actor!.businessId,
     taskId,
-    priceBeforeVat: body.priceBeforeVat,
+    priceBeforeVat: body.priceBeforeVat ?? body.amount,
+    vatMode: body.vatMode ?? body.priceVatMode,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   return NextResponse.json({ ok: true, id: result.id });

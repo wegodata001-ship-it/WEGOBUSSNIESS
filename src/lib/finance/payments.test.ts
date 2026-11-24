@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { allocateByTaskOrder, allocationsTotal } from "@/lib/finance/allocate";
 import { money } from "@/lib/finance/money";
 import {
+  calculateEnteredPriceWithVat,
   calculateProjectBasePrice,
   calculateTaskPrice,
   DEFAULT_BUSINESS_VAT_RATE,
@@ -9,6 +10,7 @@ import {
   remainingBalance,
   resolveProjectBaseVatMode,
 } from "@/lib/finance/vat";
+import { computeProjectFinance } from "@/lib/finance/project-ledger";
 
 const vat = DEFAULT_BUSINESS_VAT_RATE;
 const taskA = calculateTaskPrice(1000, vat);
@@ -77,5 +79,63 @@ assert.equal(paymentStatusFor(taskA.priceIncludingVat, taskA.priceIncludingVat),
 assert.equal(remainingBalance(taskA.priceIncludingVat, taskA.priceIncludingVat), 0);
 assert.equal(paymentStatusFor(0, taskA.priceIncludingVat), "UNPAID");
 assert.equal(paymentStatusFor(0, null), null);
+
+// Billable task VAT modes (same entered digits, business rate).
+const taskIncl = calculateEnteredPriceWithVat(1000, vat, "INCLUDING_VAT");
+assert.equal(taskIncl.priceIncludingVat, 1000);
+assert.equal(taskIncl.priceBeforeVat, money(1000 / (1 + vat)));
+assert.equal(taskIncl.vatAmount, money(1000 - taskIncl.priceBeforeVat));
+
+const taskExcl = calculateEnteredPriceWithVat(1000, vat, "EXCLUDING_VAT");
+assert.equal(taskExcl.priceBeforeVat, 1000);
+assert.equal(taskExcl.vatAmount, money(1000 * vat));
+assert.equal(taskExcl.priceIncludingVat, 1180);
+
+// Mode switch with same digits must not keep the previous total.
+assert.notEqual(taskIncl.priceIncludingVat, taskExcl.priceIncludingVat);
+
+// Partial payment against including-VAT total.
+assert.equal(paymentStatusFor(400, taskIncl.priceIncludingVat), "PARTIALLY_PAID");
+assert.equal(remainingBalance(taskIncl.priceIncludingVat, 400), 600);
+
+// Legacy missing mode resolves to excluding (previous behavior).
+assert.equal(resolveProjectBaseVatMode(undefined), "EXCLUDING_VAT");
+const legacyTask = calculateEnteredPriceWithVat(1000, vat, resolveProjectBaseVatMode(undefined));
+assert.equal(legacyTask.priceIncludingVat, 1180);
+
+// Project base + billable tasks: totals use including-VAT once (no double VAT).
+const projectBase = calculateEnteredPriceWithVat(1000, vat, "INCLUDING_VAT");
+const billableTask = calculateEnteredPriceWithVat(1000, vat, "EXCLUDING_VAT");
+const ledger = computeProjectFinance(
+  {
+    basePriceIncludingVat: projectBase.priceIncludingVat,
+    basePaidAmount: 0,
+  },
+  [
+    {
+      id: "free",
+      billingMode: "INCLUDED",
+      priceIncludingVat: 9999,
+      paidAmount: 0,
+    },
+    {
+      id: "paid-task",
+      billingMode: "BILLABLE",
+      priceIncludingVat: billableTask.priceIncludingVat,
+      paidAmount: 180,
+    },
+  ],
+);
+assert.equal(ledger.basePrice, 1000);
+assert.equal(ledger.extrasTotal, 1180);
+assert.equal(ledger.totalDue, 2180);
+assert.equal(ledger.paid, 180);
+assert.equal(ledger.balanceDue, 2000);
+assert.equal(ledger.includedTaskCount, 1);
+
+// Custom rate for task pricing (settings-driven, not hardcoded 18%).
+const taskRate17 = calculateEnteredPriceWithVat(1000, 0.17, "EXCLUDING_VAT");
+assert.equal(taskRate17.vatRate, 0.17);
+assert.equal(taskRate17.priceIncludingVat, 1170);
 
 console.log("PAYMENTS_TEST_PASS");

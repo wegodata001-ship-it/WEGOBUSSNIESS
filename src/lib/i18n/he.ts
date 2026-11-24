@@ -1061,6 +1061,6 @@ export const he: Record<MessageKey, string> = {
   "finance.billingIncluded": "ללא חיוב נוסף / כלול במחיר הפרויקט",
   "finance.billingBillable": "משימה בתשלום",
   "finance.billingIncludedHint": "משימה רגילה לא מגדילה הכנסה גם אם הושלמה",
-  "finance.taskAmount": "סכום ₪ (לפני מע״מ)",
+  "finance.taskAmount": "סכום ₪",
   "status.BIT": "ביט",
 };

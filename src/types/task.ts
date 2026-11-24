@@ -1,3 +1,4 @@
+import type { ProjectBaseVatMode } from "@/types/department";
 import type { TaskPaymentStatus } from "@/types/payment";
 
 export const TASK_STATUSES = [
@@ -103,6 +104,8 @@ export type Task = {
   vatRate: number | null;
   vatAmount: number | null;
   priceIncludingVat: number | null;
+  /** How the entered billable amount is interpreted. Legacy default: EXCLUDING_VAT. */
+  priceVatMode: ProjectBaseVatMode;
   paidAmount: number;
   balanceDue: number | null;
   paymentStatus: TaskPaymentStatus | null;

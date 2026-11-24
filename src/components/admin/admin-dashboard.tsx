@@ -303,6 +303,8 @@ export function AdminDashboard() {
           canEditTeam={canEditTeam}
           canCreateProject={permissions.includes("projects.manage") || membership?.role === "BUSINESS_OWNER"}
           canCreateDepartment={permissions.includes("departments.manage") || membership?.role === "BUSINESS_OWNER"}
+          canSetPrice={permissions.includes("finance.setPrice") || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER"}
+          vatRate={data.settings.vatRate}
           onCatalogRefresh={() => reload({ silent: true })}
           error={formError}
         />

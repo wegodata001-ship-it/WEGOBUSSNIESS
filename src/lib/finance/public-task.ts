@@ -8,6 +8,7 @@ export function hideTaskFinance(task: Task): Task {
     vatRate: null,
     vatAmount: null,
     priceIncludingVat: null,
+    priceVatMode: "EXCLUDING_VAT",
     paidAmount: 0,
     balanceDue: null,
     paymentStatus: null,
