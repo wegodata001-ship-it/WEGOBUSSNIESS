@@ -27,6 +27,7 @@
     "test:cron-auth": "npx tsx src/lib/auth/cron-auth.test.ts",
     "test:task-status-read": "npx tsx src/lib/admin/task-status-read.test.ts",
     "test:task-library": "npx tsx src/lib/admin/task-library.test.ts",
+    "test:task-delete": "npx tsx src/lib/admin/task-delete.test.ts",
     "test:task-completion": "npx tsx src/lib/admin/task-completion.test.ts",
     "test:department-categories": "npx tsx src/lib/admin/department-categories.test.ts",
     "test:task-file-rules": "npx tsx src/lib/admin/task-file-rules.test.ts",

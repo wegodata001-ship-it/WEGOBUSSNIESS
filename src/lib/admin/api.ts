@@ -60,6 +60,7 @@ export async function mutateBusiness(input: {
   businessId: string;
   action: string;
   id?: string;
+  ids?: string[];
   data?: Record<string, unknown>;
 }) {
   const response = await fetch("/api/business/mutate", {
@@ -71,8 +72,10 @@ export async function mutateBusiness(input: {
   const payload = (await response.json().catch(() => ({}))) as {
     ok?: boolean;
     id?: string;
+    ids?: string[];
     error?: string;
     count?: number;
+    skipped?: unknown[];
     token?: string;
     newVersion?: boolean;
     client?: unknown;

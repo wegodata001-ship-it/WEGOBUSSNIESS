@@ -5,13 +5,21 @@ export async function fetchBusinessRecords<T>(
   businessId: string | null,
   kind: string,
   empty: T,
+  options?: { includeDeleted?: boolean; deletedOnly?: boolean },
 ): Promise<DataResult<T>> {
   if (!businessId) {
     return readyResult(empty);
   }
 
+  const params = new URLSearchParams({
+    businessId,
+    kind,
+  });
+  if (options?.includeDeleted) params.set("includeDeleted", "1");
+  if (options?.deletedOnly) params.set("deletedOnly", "1");
+
   const response = await fetch(
-    `/api/business/records?businessId=${encodeURIComponent(businessId)}&kind=${encodeURIComponent(kind)}`,
+    `/api/business/records?${params.toString()}`,
     {
       credentials: "include",
       cache: "no-store",

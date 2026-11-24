@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, Trash2 } from "lucide-react";
 import { CollaboratorAvatars } from "@/components/admin/employee-multi-select";
 import { TaskFormModal, draftFromTask, emptyTaskDraft, taskDraftPayload, type TaskDraft } from "@/components/admin/task-form-modal";
 import { Field, GhostButton, Modal, PageHeader, PrimaryButton, inputClass } from "@/components/admin/ui";
@@ -19,16 +19,18 @@ import { Spinner } from "@/components/ui/spinner";
 import { changeBusinessTaskStatus, decideBusinessTask, mutateBusiness, saveBusinessTask, taskMutationMessage } from "@/lib/admin/api";
 import { TaskPriorityPicker, TaskStatusPicker } from "@/components/tasks/task-inline-fields";
 import { departmentName, employeeName, projectName, useBusinessCatalog } from "@/lib/admin/catalog";
+import { isTaskSoftDeleted } from "@/lib/admin/task-delete-rules";
 import { labelOf } from "@/lib/admin/labels";
 import { statusDefinitionName } from "@/lib/admin/task-status-label";
 import { filterStatusChips, taskMatchesStatusFilter } from "@/lib/admin/task-status-resolve";
 import { isEmployeeOnTask, taskParticipantIds } from "@/lib/admin/task-team";
 import { daysBetween, isArchivedTaskStatus, isOverdue } from "@/lib/admin/time";
+import { listDeletedBusinessTasks } from "@/lib/data/tasks";
 import { todayInTimeZone } from "@/lib/dates/format";
 import { startTask, finishTask } from "@/lib/tasks/actions";
 import { displayTaskStatus, isDoneTaskStatus, isPendingApproval, TASK_PRIORITIES, type Task, type TaskPriority, type TaskStatus } from "@/types/task";
 
-type TabId = "all" | "mine" | "shared" | "approval" | "progress" | "overdue" | "done";
+type TabId = "all" | "mine" | "shared" | "approval" | "progress" | "overdue" | "done" | "deleted";
 
 export function TasksManageView() {
   const { t, locale } = useI18n();
@@ -69,8 +71,13 @@ export function TasksManageView() {
   const canViewFinance = canManage || permissions.includes("finance.view") || permissions.includes("finance.receivePayment") || permissions.includes("finance.setPrice");
   const canReceivePayment = permissions.includes("finance.receivePayment") || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER";
   const canSetPrice = permissions.includes("finance.setPrice") || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER";
+  const canDelete = permissions.includes("tasks.delete") || membership?.role === "BUSINESS_OWNER";
+  const canRestore = membership?.role === "BUSINESS_OWNER";
   const canSelectFinance = canSetPrice || canReceivePayment;
-  const canSelectRows = canManage || canSelectFinance;
+  const canSelectRows = canManage || canSelectFinance || canDelete;
+  const [deleteTarget, setDeleteTarget] = useState<Task | "bulk" | null>(null);
+  const [deletedTasks, setDeletedTasks] = useState<Task[]>([]);
+  const [deletedLoading, setDeletedLoading] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -85,6 +92,20 @@ export function TasksManageView() {
     if (found) setDetails(found);
   }, [data.tasks, searchParams]);
 
+  useEffect(() => {
+    if (tab !== "deleted" || !canRestore || !business?.id) return;
+    let active = true;
+    setDeletedLoading(true);
+    void listDeletedBusinessTasks(business.id).then((result) => {
+      if (!active) return;
+      setDeletedTasks(result.data);
+      setDeletedLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [tab, canRestore, business?.id, data.tasks]);
+
   const pendingCount = data.tasks.filter((task) => isPendingApproval(task.status)).length;
   const tasks = useMemo(
     () => data.tasks.map((task) => (patches[task.id] ? { ...task, ...patches[task.id] } : task)),
@@ -92,7 +113,14 @@ export function TasksManageView() {
   );
 
   const rows = useMemo(() => {
+    if (tab === "deleted") {
+      return deletedTasks.filter((task) => {
+        if (query && !`${task.title} ${task.description}`.includes(query)) return false;
+        return true;
+      });
+    }
     return tasks.filter((task) => {
+      if (isTaskSoftDeleted(task)) return false;
       const mine = isEmployeeOnTask(task, membershipEmployeeId) || task.createdByUserId === user.id;
       const shared = taskParticipantIds(task).length > 1;
       if (tab === "mine" && !mine) return false;
@@ -118,7 +146,7 @@ export function TasksManageView() {
       if (maxPrice && (task.priceBeforeVat ?? Number.POSITIVE_INFINITY) > Number(maxPrice)) return false;
       return true;
     });
-  }, [canManage, data.taskStatuses, departmentId, dueFilter, employeeId, maxPrice, membershipEmployeeId, minPrice, paymentStatus, priority, projectId, query, status, statusChip, tab, tasks, today, user.id]);
+  }, [canManage, data.taskStatuses, deletedTasks, departmentId, dueFilter, employeeId, maxPrice, membershipEmployeeId, minPrice, paymentStatus, priority, projectId, query, status, statusChip, tab, tasks, today, user.id]);
 
   const selectedTasks = rows.filter((task) => selected.includes(task.id));
   const selectedUnpriced = selectedTasks.filter((task) => task.priceIncludingVat === null);
@@ -132,6 +160,56 @@ export function TasksManageView() {
 
   function toggleAll(checked: boolean) {
     setSelected(checked ? rows.map((task) => task.id) : []);
+  }
+
+  function deleteErrorMessage(code: string) {
+    if (code === "FORBIDDEN") return t("tasks.forbidden");
+    if (code === "TASK_IN_USE") return t("tasks.inUse");
+    return t("tasks.network");
+  }
+
+  async function confirmDelete() {
+    if (!business?.id || !deleteTarget) return;
+    setBusy(true);
+    try {
+      if (deleteTarget === "bulk") {
+        const result = await mutateBusiness({
+          businessId: business.id,
+          action: "deleteTasks",
+          ids: selected,
+        });
+        const skipped = Array.isArray((result as { skipped?: unknown }).skipped)
+          ? (result as { skipped: unknown[] }).skipped
+          : [];
+        setSelected([]);
+        setToast(skipped.length ? t("tasks.bulkPartial") : t("tasks.deleted"));
+      } else {
+        await mutateBusiness({ businessId: business.id, action: "deleteTask", id: deleteTarget.id });
+        if (details?.id === deleteTarget.id) setDetails(null);
+        setToast(t("tasks.deleted"));
+      }
+      setDeleteTarget(null);
+      await reload({ silent: true });
+    } catch (error) {
+      setToast(deleteErrorMessage(error instanceof Error ? error.message : "NETWORK"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function restoreDeleted(task: Task) {
+    if (!business?.id || !canRestore) return;
+    setBusy(true);
+    try {
+      await mutateBusiness({ businessId: business.id, action: "restoreTask", id: task.id });
+      setDeletedTasks((current) => current.filter((item) => item.id !== task.id));
+      setToast(t("tasks.restored"));
+      await reload({ silent: true });
+    } catch (error) {
+      setToast(deleteErrorMessage(error instanceof Error ? error.message : "NETWORK"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (loading) return <Spinner label={t("common.loading")} />;
@@ -305,6 +383,7 @@ export function TasksManageView() {
       { id: "progress", label: t("status.IN_PROGRESS") },
       { id: "overdue", label: t("status.OVERDUE") },
       { id: "done", label: t("work.filterDone") },
+      ...(canRestore ? [{ id: "deleted" as const, label: t("tasks.deletedTab") }] : []),
     ]
     : [
       { id: "mine", label: t("work.myTasks") },
@@ -437,16 +516,24 @@ export function TasksManageView() {
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
-            {canManage ? <GhostButton onClick={() => setBulkStatusOpen(true)}>{t("work.changeStatusBulk")}</GhostButton> : null}
-            {canManage ? <GhostButton onClick={() => setBulkProjectOpen(true)}>{t("work.bulkAssignProject")}</GhostButton> : null}
-            {canSetPrice ? <GhostButton onClick={() => setPriceOpen(true)}>{t("work.setAmount")}</GhostButton> : null}
-            {canReceivePayment ? (
+            {tab !== "deleted" && canManage ? <GhostButton onClick={() => setBulkStatusOpen(true)}>{t("work.changeStatusBulk")}</GhostButton> : null}
+            {tab !== "deleted" && canManage ? <GhostButton onClick={() => setBulkProjectOpen(true)}>{t("work.bulkAssignProject")}</GhostButton> : null}
+            {tab !== "deleted" && canSetPrice ? <GhostButton onClick={() => setPriceOpen(true)}>{t("work.setAmount")}</GhostButton> : null}
+            {tab !== "deleted" && canReceivePayment ? (
               <PrimaryButton disabled={!selectedPayable.length} onClick={() => setPaymentOpen(true)}>{t("work.receivePayment")}</PrimaryButton>
+            ) : null}
+            {tab !== "deleted" && canDelete ? (
+              <GhostButton onClick={() => setDeleteTarget("bulk")}>
+                <span className="inline-flex items-center gap-1 text-rose-700"><Trash2 className="h-3.5 w-3.5" />{t("tasks.deleteSelected")}</span>
+              </GhostButton>
             ) : null}
             <div className="relative">
               <GhostButton onClick={() => setMoreOpen((open) => !open)}>{t("work.moreActions")} ⋯</GhostButton>
               {moreOpen ? (
-                <div className="absolute end-0 z-20 mt-1 w-40 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                <div className="absolute end-0 z-20 mt-1 w-48 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                  {tab !== "deleted" && canDelete ? (
+                    <button type="button" className="block w-full rounded-lg px-3 py-2 text-start text-sm text-rose-700 hover:bg-rose-50" onClick={() => { setDeleteTarget("bulk"); setMoreOpen(false); }}>{t("tasks.deleteSelected")}</button>
+                  ) : null}
                   <button type="button" className="block w-full rounded-lg px-3 py-2 text-start text-sm hover:bg-slate-50" onClick={() => { setSelected([]); setMoreOpen(false); }}>{t("work.clearSelection")}</button>
                 </div>
               ) : null}
@@ -562,14 +649,22 @@ export function TasksManageView() {
                           {canReceivePayment && task.priceIncludingVat !== null && (task.balanceDue ?? 0) > 0 ? (
                             <GhostButton onClick={() => { setSelected([task.id]); setPaymentOpen(true); }}>{t("work.receivePayment")}</GhostButton>
                           ) : null}
-                          {canManage || task.createdByUserId === user.id ? (
+                          {tab === "deleted" && canRestore ? (
+                            <GhostButton disabled={busy} onClick={() => void restoreDeleted(task)}>{t("tasks.restore")}</GhostButton>
+                          ) : null}
+                          {tab !== "deleted" && (canManage || task.createdByUserId === user.id) ? (
                             <GhostButton onClick={() => setDraft(draftFromTask(task, today))}>{t("common.edit")}</GhostButton>
                           ) : null}
-                          {canManage && !isPendingApproval(task.status) ? (
+                          {tab !== "deleted" && canManage && !isPendingApproval(task.status) ? (
                             <>
                               <GhostButton disabled={busy} onClick={() => void run("start", task)}>{t("tasks.start")}</GhostButton>
                               <GhostButton disabled={busy} onClick={() => void run("finish", task)}>{t("tasks.finish")}</GhostButton>
                             </>
+                          ) : null}
+                          {tab !== "deleted" && canDelete ? (
+                            <GhostButton disabled={busy} onClick={() => setDeleteTarget(task)}>
+                              <span className="inline-flex items-center gap-1 text-rose-700"><Trash2 className="h-3.5 w-3.5" />{t("common.delete")}</span>
+                            </GhostButton>
                           ) : null}
                         </div>
                       </td>
@@ -580,11 +675,13 @@ export function TasksManageView() {
             </table>
           </div>
         </>
+      ) : tab === "deleted" ? (
+        <EmptyState icon={ClipboardList} title={deletedLoading ? t("common.loading") : t("tasks.noDeleted")} />
       ) : (
         <EmptyState icon={ClipboardList} title={t("work.noTasks")} action={<PrimaryButton onClick={() => setDraft(emptyTaskDraft(today))}>{t("work.createTask")}</PrimaryButton>} />
       )}
 
-      {selected.length ? (
+      {selected.length && tab !== "deleted" ? (
         <div className="fixed inset-x-0 bottom-16 z-40 border-t border-slate-200 bg-white px-4 py-3 shadow-lg md:hidden">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-medium">{t("work.selectedCount", { count: String(selected.length) })} · {formatIls(selectedDue)}</p>
@@ -592,9 +689,30 @@ export function TasksManageView() {
               {canManage ? <GhostButton onClick={() => setBulkStatusOpen(true)}>{t("work.changeStatusBulk")}</GhostButton> : null}
               {canSetPrice ? <GhostButton onClick={() => setPriceOpen(true)}>{t("work.setAmount")}</GhostButton> : null}
               {canReceivePayment ? <PrimaryButton disabled={!selectedPayable.length} onClick={() => setPaymentOpen(true)}>{t("work.receivePayment")}</PrimaryButton> : null}
+              {canDelete ? (
+                <GhostButton onClick={() => setDeleteTarget("bulk")}>
+                  <span className="inline-flex items-center gap-1 text-rose-700"><Trash2 className="h-3.5 w-3.5" />{t("common.delete")}</span>
+                </GhostButton>
+              ) : null}
             </div>
           </div>
         </div>
+      ) : null}
+
+      {deleteTarget ? (
+        <Modal title={deleteTarget === "bulk" ? t("tasks.confirmDeleteSelected") : t("tasks.confirmDeleteTitle")} onClose={() => setDeleteTarget(null)}>
+          <p className="text-sm text-slate-700">
+            {deleteTarget === "bulk"
+              ? t("work.selectedCount", { count: String(selected.length) })
+              : deleteTarget.title}
+          </p>
+          <div className="mt-5 flex justify-end gap-2">
+            <GhostButton onClick={() => setDeleteTarget(null)}>{t("common.cancel")}</GhostButton>
+            <PrimaryButton disabled={busy || (deleteTarget === "bulk" && !selected.length)} onClick={() => void confirmDelete()}>
+              {t("common.delete")}
+            </PrimaryButton>
+          </div>
+        </Modal>
       ) : null}
 
       {toast ? (

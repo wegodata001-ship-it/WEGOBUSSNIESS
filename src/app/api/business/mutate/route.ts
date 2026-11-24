@@ -14,7 +14,7 @@ import { syncProjectProgressFromTasks } from "@/lib/admin/project-progress-sync"
 import { addProjectMaintenanceLog, updateProjectSystemDetails } from "@/lib/admin/project-system-write";
 import { taskCompletionPatch } from "@/lib/admin/task-completion";
 import { upsertTask } from "@/lib/admin/task-write";
-import { cleanupTaskSubtree } from "@/lib/admin/task-assets";
+import { restoreTask, softDeleteTask, softDeleteTasks } from "@/lib/admin/task-delete";
 import { notifyEmployees, notifyManagers, notifyUsers } from "@/lib/admin/notify";
 import { normalizeTaskTeam } from "@/lib/admin/task-team";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
@@ -48,6 +48,7 @@ type Body = {
   businessId?: string;
   action?: string;
   id?: string;
+  ids?: string[];
   data?: Record<string, unknown>;
 };
 
@@ -119,20 +120,47 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, id: result.id });
     }
 
-    if (action === "changeTaskStatus" || action === "assignTask" || action === "archiveTask" || action === "deleteTask") {
+    if (action === "deleteTask") {
       if (!id) return NextResponse.json({ error: "MISSING_ID" }, { status: 400 });
-      const permission: Permission = action === "deleteTask" ? "tasks.delete" : "tasks.edit";
-      const denied = need(permission);
+      const result = await softDeleteTask({ actor, businessId, taskId: id });
+      if (!result.ok) {
+        return NextResponse.json(
+          { error: result.error, blockers: result.blockers },
+          { status: result.status },
+        );
+      }
+      return NextResponse.json({ ok: true, id: result.id });
+    }
+
+    if (action === "deleteTasks") {
+      const rawIds = Array.isArray(body?.ids) ? body!.ids : Array.isArray(data.ids) ? data.ids : [];
+      const ids = rawIds.filter((item): item is string => typeof item === "string");
+      const result = await softDeleteTasks({ actor, businessId, taskIds: ids });
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: result.status });
+      }
+      return NextResponse.json({
+        ok: true,
+        ids: result.ids,
+        count: result.ids.length,
+        skipped: result.skipped,
+      });
+    }
+
+    if (action === "restoreTask") {
+      if (!id) return NextResponse.json({ error: "MISSING_ID" }, { status: 400 });
+      const result = await restoreTask({ actor, businessId, taskId: id });
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: result.status });
+      }
+      return NextResponse.json({ ok: true, id: result.id });
+    }
+
+    if (action === "changeTaskStatus" || action === "assignTask" || action === "archiveTask") {
+      if (!id) return NextResponse.json({ error: "MISSING_ID" }, { status: 400 });
+      const denied = need("tasks.edit" as Permission);
       if (denied) return denied;
       const ref = db.doc(taskDocPath(businessId, id));
-      if (action === "deleteTask") {
-        const existing = (await ref.get()).data() ?? {};
-        await cleanupTaskSubtree(businessId, id);
-        await ref.delete();
-        await syncProjectProgressFromTasks(businessId, typeof existing.projectId === "string" ? existing.projectId : null);
-        await writeActivity({ businessId, actorUserId: actor.uid, action, entityType: "task", entityId: id, message: "משימה נמחקה" });
-        return NextResponse.json({ ok: true, id });
-      }
       const existingSnap = await ref.get();
       const existingData = existingSnap.data() ?? {};
       const patch: Record<string, unknown> = { updatedAt: now };
