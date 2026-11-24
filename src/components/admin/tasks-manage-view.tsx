@@ -687,19 +687,17 @@ export function TasksManageView() {
       )}
 
       {selected.length && tab !== "deleted" ? (
-        <div className="fixed inset-x-0 bottom-16 z-40 border-t border-slate-200 bg-white px-4 py-3 shadow-lg md:hidden">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-medium">{t("work.selectedCount", { count: String(selected.length) })} · {formatIls(selectedDue)}</p>
-            <div className="flex gap-2">
-              {canManage ? <GhostButton onClick={() => setBulkStatusOpen(true)}>{t("work.changeStatusBulk")}</GhostButton> : null}
-              {canSetPrice ? <GhostButton onClick={() => setPriceOpen(true)}>{t("work.setAmount")}</GhostButton> : null}
-              {canReceivePayment ? <PrimaryButton disabled={!selectedPayable.length} onClick={() => setPaymentOpen(true)}>{t("work.receivePayment")}</PrimaryButton> : null}
-              {canDelete ? (
-                <GhostButton onClick={() => setDeleteTarget("bulk")}>
-                  <span className="inline-flex items-center gap-1 text-rose-700"><Trash2 className="h-3.5 w-3.5" />{t("common.delete")}</span>
-                </GhostButton>
-              ) : null}
-            </div>
+        <div className="fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 border-t border-slate-200 bg-white px-3 py-3 shadow-lg md:hidden">
+          <p className="mb-2 text-sm font-medium">{t("work.selectedCount", { count: String(selected.length) })} · {formatIls(selectedDue)}</p>
+          <div className="flex flex-wrap gap-2">
+            {canManage ? <GhostButton onClick={() => setBulkStatusOpen(true)}>{t("work.changeStatusBulk")}</GhostButton> : null}
+            {canSetPrice ? <GhostButton onClick={() => setPriceOpen(true)}>{t("work.setAmount")}</GhostButton> : null}
+            {canReceivePayment ? <PrimaryButton disabled={!selectedPayable.length} onClick={() => setPaymentOpen(true)}>{t("work.receivePayment")}</PrimaryButton> : null}
+            {canDelete ? (
+              <GhostButton onClick={() => setDeleteTarget("bulk")}>
+                <span className="inline-flex items-center gap-1 text-rose-700"><Trash2 className="h-3.5 w-3.5" />{t("common.delete")}</span>
+              </GhostButton>
+            ) : null}
           </div>
         </div>
       ) : null}

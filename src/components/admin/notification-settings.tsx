@@ -182,7 +182,24 @@ export function NotificationSettingsPanel({
 
       <section>
         <h3 className="mb-3 text-sm font-semibold text-slate-800">{t("settings.deliveryLog")}</h3>
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="grid gap-3 md:hidden">
+          {deliveries.map((item) => (
+            <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-3 text-sm">
+              <p className="font-medium text-slate-800">{item.subject || item.type}</p>
+              <p className="mt-1 text-xs text-slate-500">{item.recipient}</p>
+              <p className="mt-1 text-xs text-slate-400">{item.createdAt ? new Date(item.createdAt).toLocaleString("he-IL") : "—"}</p>
+              <p className="mt-2">
+                {item.status === "SENT" ? "✓" : item.status === "FAILED" ? (
+                  <button type="button" className="min-h-10 text-rose-600" onClick={() => void retry(item.id)}>
+                    ✕ {item.errorCode || t("settings.testMailFailed")}
+                  </button>
+                ) : item.status}
+              </p>
+            </div>
+          ))}
+          {!deliveries.length ? <p className="px-1 py-4 text-sm text-slate-400">{t("notify.empty")}</p> : null}
+        </div>
+        <div className="hidden overflow-x-auto rounded-xl border border-slate-200 md:block">
           <table className="min-w-full text-start text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>

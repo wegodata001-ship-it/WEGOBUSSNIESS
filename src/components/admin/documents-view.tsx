@@ -24,7 +24,7 @@ export function DocumentsView({ embedded = false }: { embedded?: boolean }) {
   const [note, setNote] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
-  const [layout, setLayout] = useState<"table" | "cards">("table");
+  const [layout, setLayout] = useState<"table" | "cards">("cards");
 
   const rows = useMemo(() => data.documents.filter((item) => {
     if (projectId && item.projectId !== projectId) return false;
@@ -90,59 +90,70 @@ export function DocumentsView({ embedded = false }: { embedded?: boolean }) {
 
       {rows.length === 0 ? (
         <EmptyState icon={FileArchive} title={t("archive.empty")} action={<PrimaryButton onClick={() => setOpen(true)}>+ {t("archive.upload")}</PrimaryButton>} />
-      ) : layout === "cards" ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {rows.map((doc) => (
-            <article key={doc.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="font-medium">{doc.name}</p>
-              <p className="mt-1 text-xs text-slate-500">{projectName(data.projects, doc.projectId)} · {labelOf(doc.category)}</p>
-              <div className="mt-3 flex gap-2">
-                <GhostButton onClick={() => void openFile(doc.id)}>{t("archive.viewDownload")}</GhostButton>
-              </div>
-            </article>
-          ))}
-        </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-500">
-              <tr>
-                <th className="px-3 py-3 text-start">{t("common.name")}</th>
-                <th className="px-3 py-3 text-start">{t("common.project")}</th>
-                <th className="px-3 py-3 text-start">{t("common.client")}</th>
-                <th className="px-3 py-3 text-start">{t("common.category")}</th>
-                <th className="px-3 py-3 text-start">{t("common.actions")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((doc) => (
-                <tr key={doc.id} className="border-t border-slate-100">
-                  <td className="px-3 py-3">{doc.name}</td>
-                  <td className="px-3 py-3">{projectName(data.projects, doc.projectId)}</td>
-                  <td className="px-3 py-3">{doc.clientName || "—"}</td>
-                  <td className="px-3 py-3"><StatusBadge value={doc.category} label={labelOf(doc.category)} /></td>
-                  <td className="px-3 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      <GhostButton onClick={() => void openFile(doc.id)}>{t("archive.viewDownload")}</GhostButton>
-                      <GhostButton onClick={() => {
-                        const next = window.prompt(t("archive.promptName"), doc.name);
-                        if (next && business?.id) void mutateBusiness({ businessId: business.id, action: "updateDocument", id: doc.id, data: { name: next } }).then(reload);
-                      }}>{t("archive.rename")}</GhostButton>
-                      <GhostButton onClick={() => {
-                        const next = window.prompt(t("archive.promptCategory"), doc.category);
-                        if (next && business?.id) void mutateBusiness({ businessId: business.id, action: "updateDocument", id: doc.id, data: { category: next } }).then(reload);
-                      }}>{t("archive.moveCategory")}</GhostButton>
-                      <GhostButton disabled={busy} onClick={() => {
-                        if (!business?.id) return;
-                        void deleteBusinessDocument(business.id, doc.id).then(reload);
-                      }}>{t("common.delete")}</GhostButton>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className={`grid gap-3 md:grid-cols-2 xl:grid-cols-3 ${layout === "table" ? "md:hidden" : ""}`}>
+            {rows.map((doc) => (
+              <article key={doc.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="font-medium">{doc.name}</p>
+                <p className="mt-1 text-xs text-slate-500">{projectName(data.projects, doc.projectId)} · {labelOf(doc.category)}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <GhostButton onClick={() => void openFile(doc.id)}>{t("archive.viewDownload")}</GhostButton>
+                  <GhostButton onClick={() => {
+                    const next = window.prompt(t("archive.promptName"), doc.name);
+                    if (next && business?.id) void mutateBusiness({ businessId: business.id, action: "updateDocument", id: doc.id, data: { name: next } }).then(reload);
+                  }}>{t("archive.rename")}</GhostButton>
+                  <GhostButton disabled={busy} onClick={() => {
+                    if (!business?.id) return;
+                    void deleteBusinessDocument(business.id, doc.id).then(reload);
+                  }}>{t("common.delete")}</GhostButton>
+                </div>
+              </article>
+            ))}
+          </div>
+          {layout === "table" ? (
+            <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white md:block">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 text-xs text-slate-500">
+                  <tr>
+                    <th className="px-3 py-3 text-start">{t("common.name")}</th>
+                    <th className="px-3 py-3 text-start">{t("common.project")}</th>
+                    <th className="px-3 py-3 text-start">{t("common.client")}</th>
+                    <th className="px-3 py-3 text-start">{t("common.category")}</th>
+                    <th className="px-3 py-3 text-start">{t("common.actions")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((doc) => (
+                    <tr key={doc.id} className="border-t border-slate-100">
+                      <td className="px-3 py-3">{doc.name}</td>
+                      <td className="px-3 py-3">{projectName(data.projects, doc.projectId)}</td>
+                      <td className="px-3 py-3">{doc.clientName || "—"}</td>
+                      <td className="px-3 py-3"><StatusBadge value={doc.category} label={labelOf(doc.category)} /></td>
+                      <td className="px-3 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          <GhostButton onClick={() => void openFile(doc.id)}>{t("archive.viewDownload")}</GhostButton>
+                          <GhostButton onClick={() => {
+                            const next = window.prompt(t("archive.promptName"), doc.name);
+                            if (next && business?.id) void mutateBusiness({ businessId: business.id, action: "updateDocument", id: doc.id, data: { name: next } }).then(reload);
+                          }}>{t("archive.rename")}</GhostButton>
+                          <GhostButton onClick={() => {
+                            const next = window.prompt(t("archive.promptCategory"), doc.category);
+                            if (next && business?.id) void mutateBusiness({ businessId: business.id, action: "updateDocument", id: doc.id, data: { category: next } }).then(reload);
+                          }}>{t("archive.moveCategory")}</GhostButton>
+                          <GhostButton disabled={busy} onClick={() => {
+                            if (!business?.id) return;
+                            void deleteBusinessDocument(business.id, doc.id).then(reload);
+                          }}>{t("common.delete")}</GhostButton>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </>
       )}
 
       {open ? (
