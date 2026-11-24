@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 import { writeActivity } from "@/lib/admin/activity";
 import { dateTimeInZone, zonedDateTime } from "@/lib/admin/meeting-time";
+import { durationMinutesBetween } from "@/lib/admin/work-duration";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
 import { isDateOnly, isTimeOnly } from "@/lib/dates/format";
 import { DEFAULT_TIMEZONE } from "@/lib/env";
@@ -54,9 +55,7 @@ export async function POST(request: Request) {
   }
 
   const closed = Boolean(nextOut);
-  const durationMinutes = closed
-    ? Math.max(0, Math.round((nextOut!.getTime() - nextIn.getTime()) / 60000))
-    : null;
+  const durationMinutes = closed ? durationMinutesBetween(nextIn, nextOut) : null;
 
   await ref.set({
     date,

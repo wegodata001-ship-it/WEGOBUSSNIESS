@@ -9,8 +9,8 @@ import { postAttendance } from "@/lib/admin/api";
 import {
   attendanceSessions,
   attendanceStatusLabel,
+  formatDurationForExport,
   formatDurationWords,
-  formatHoursMinutes,
   minutesInRange,
   sessionMinutes,
 } from "@/lib/admin/attendance";
@@ -74,8 +74,9 @@ export function AttendanceView() {
   const notIn = viewAll
     ? data.employees.filter((item) => item.status === "ACTIVE" && !clockedIds.has(item.id)).length
     : (myEmployeeId && !clockedIds.has(myEmployeeId) ? 1 : 0);
-  const hoursToday = Math.round((todaySessions.reduce((sum, item) => sum + sessionMinutes(item), 0) / 60) * 10) / 10;
+  const minutesToday = todaySessions.reduce((sum, item) => sum + sessionMinutes(item), 0);
   const wordsLocale = locale === "ar" ? "ar" : "he";
+  const formatMinutes = (minutes: number) => formatDurationWords(minutes, wordsLocale);
 
   const selectedEmployee = employeeId || (!viewAll ? myEmployeeId : "");
   const monthMinutes = selectedEmployee ? minutesInRange(data.sessions, selectedEmployee, monthFrom, today) : 0;
@@ -118,12 +119,12 @@ export function AttendanceView() {
           session.date,
           session.startTime,
           session.endTime ?? "—",
-          formatHoursMinutes(minutes),
+          formatDurationForExport(minutes, wordsLocale),
           attendanceStatusLabel(session.status, wordsLocale),
           session.note ?? "",
         ]);
       }
-      lines.push([employeeName(data.employees, id), "", "", "", t("attendance.total"), formatHoursMinutes(total), "", ""]);
+      lines.push([employeeName(data.employees, id), "", "", "", t("attendance.total"), formatDurationForExport(total, wordsLocale), "", ""]);
     }
     const blob = new Blob([`\uFEFF${lines.map((row) => row.map(csvEscape).join(",")).join("\n")}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -180,14 +181,14 @@ export function AttendanceView() {
         <Summary label={t("attendance.presentNow")} value={present} />
         <Summary label={t("attendance.notInToday")} value={notIn} />
         <Summary label={t("attendance.finishedToday")} value={finished} />
-        <Summary label={t("attendance.hoursToday")} value={hoursToday} />
+        <Summary label={t("attendance.hoursToday")} value={formatMinutes(minutesToday)} />
       </div>
 
       {selectedEmployee ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          <Summary label={t("attendance.monthHours")} value={formatHoursMinutes(monthMinutes)} />
+          <Summary label={t("attendance.monthHours")} value={formatMinutes(monthMinutes)} />
           <Summary label={t("attendance.workDays")} value={workDays} />
-          <Summary label={t("attendance.avgHours")} value={workDays ? formatHoursMinutes(Math.round(monthMinutes / workDays)) : "0:00"} />
+          <Summary label={t("attendance.avgHours")} value={workDays ? formatMinutes(Math.round(monthMinutes / workDays)) : formatMinutes(0)} />
         </div>
       ) : null}
 
@@ -243,7 +244,7 @@ export function AttendanceView() {
                 <td className="px-3 py-2">{session.date}</td>
                 <td className="px-3 py-2 tabular-nums">{session.startTime}</td>
                 <td className="px-3 py-2 tabular-nums">{session.endTime ?? "—"}</td>
-                <td className="px-3 py-2 tabular-nums">{formatHoursMinutes(sessionMinutes(session))}</td>
+                <td className="px-3 py-2">{formatMinutes(sessionMinutes(session))}</td>
                 <td className="px-3 py-2">{attendanceStatusLabel(session.status, wordsLocale)}</td>
                 <td className="px-3 py-2">{session.note ?? "—"}</td>
                 {canManage ? (
