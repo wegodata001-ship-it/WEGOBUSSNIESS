@@ -224,6 +224,13 @@ export function TaskFormModal({
   const quickCategories = managedProjectCategories(departmentCategories, { includeId: quickCategory });
   const libraryItems = useMemo(() => mergeTaskLibrary(taskTemplates, libraryTasks), [libraryTasks, taskTemplates]);
 
+  /** Always merge onto the latest draft — never spread a stale render closure. */
+  function patchDraft(patch: Partial<TaskDraft>) {
+    const next = { ...draftRef.current, ...patch };
+    draftRef.current = next;
+    onChange(next);
+  }
+
   useEffect(() => {
     if (draft.id) setBoundTaskId(draft.id);
   }, [draft.id]);
@@ -276,7 +283,7 @@ export function TaskFormModal({
       return;
     }
     setBoundTaskId(taskId);
-    if (result.id && result.id !== draft.id) onChange({ ...draft, id: result.id });
+    if (result.id && result.id !== draftRef.current.id) patchDraft({ id: result.id });
     const pending = files.some((item) => item.file && item.status !== "ready") || links.some((item) => !item.linkId || item.dirty);
     if (!pending) {
       setAssetBusy(false);
@@ -310,12 +317,11 @@ export function TaskFormModal({
   }
 
   function applyLibraryItem(item: TaskLibraryItem) {
-    onChange({
-      ...draft,
+    patchDraft({
       title: item.title,
       description: item.description,
       taskType: item.taskType,
-      departmentId: item.departmentId ?? draft.departmentId,
+      departmentId: item.departmentId ?? draftRef.current.departmentId,
       templateId: item.templateId ?? "",
       saveToLibrary: false,
       freeText: false,
@@ -324,8 +330,7 @@ export function TaskFormModal({
   }
 
   function startFreeText() {
-    onChange({
-      ...draft,
+    patchDraft({
       title: "",
       description: "",
       templateId: "",
@@ -341,11 +346,7 @@ export function TaskFormModal({
   });
 
   function setParticipants(ids: string[]) {
-    // Use latest draft so concurrent field updates cannot wipe the selection.
-    onChange({
-      ...draftRef.current,
-      ...fieldsFromParticipantIds(ids),
-    });
+    patchDraft(fieldsFromParticipantIds(ids));
   }
 
   function openQuick(kind: "project" | "department") {
@@ -380,7 +381,7 @@ export function TaskFormModal({
           },
         });
         await onCatalogRefresh();
-        onChange({ ...draft, projectId: created.id ?? "" });
+        patchDraft({ projectId: created.id ?? "" });
       } else {
         const created = await mutateBusiness({
           businessId,
@@ -388,7 +389,7 @@ export function TaskFormModal({
           data: { name: quickName.trim(), description: quickDescription.trim(), color: quickColor },
         });
         await onCatalogRefresh();
-        onChange({ ...draft, departmentId: created.id ?? "" });
+        patchDraft({ departmentId: created.id ?? "" });
       }
       setQuick(null);
     } catch (error) {
@@ -417,17 +418,31 @@ export function TaskFormModal({
             />
           )}
           <Field label={`${t("docs.taskName")} *`}>
-            <input className={inputClass} value={draft.title} onChange={(event) => onChange({ ...draft, title: event.target.value, templateId: draft.freeText ? "" : draft.templateId })} />
+            <input
+              className={inputClass}
+              data-testid="task-title-input"
+              value={draft.title}
+              onChange={(event) => patchDraft({
+                title: event.target.value,
+                templateId: draftRef.current.freeText ? "" : draftRef.current.templateId,
+              })}
+            />
           </Field>
           <Field label={t("common.date")}>
-            <DatePicker value={draft.startDate} onChange={(startDate) => onChange({ ...draft, startDate, dueDate: draft.dueDate || startDate })} />
+            <DatePicker
+              value={draft.startDate}
+              onChange={(startDate) => patchDraft({
+                startDate,
+                dueDate: draftRef.current.dueDate || startDate,
+              })}
+            />
           </Field>
           <div className="grid gap-3 md:grid-cols-2">
             <Field label={t("work.startTime")}>
-              <input className={inputClass} dir="ltr" value={draft.startTime} onChange={(event) => onChange({ ...draft, startTime: event.target.value })} />
+              <input className={inputClass} dir="ltr" value={draft.startTime} onChange={(event) => patchDraft({ startTime: event.target.value })} />
             </Field>
             <Field label={t("work.endTime")}>
-              <input className={inputClass} dir="ltr" value={draft.endTime} onChange={(event) => onChange({ ...draft, endTime: event.target.value })} />
+              <input className={inputClass} dir="ltr" value={draft.endTime} onChange={(event) => patchDraft({ endTime: event.target.value })} />
             </Field>
           </div>
           <Field label={t("work.participants")}>
@@ -453,7 +468,7 @@ export function TaskFormModal({
                 options={projects.filter((item) => item.isActive || item.id === draft.projectId).map((item) => ({ id: item.id, label: item.name }))}
                 actionLabel={t("work.addProject")}
                 showAction={canCreateProject}
-                onChange={(projectId) => onChange({ ...draft, projectId })}
+                onChange={(projectId) => patchDraft({ projectId })}
                 onAction={() => openQuick("project")}
               />
               {projectsError ? (
@@ -471,19 +486,19 @@ export function TaskFormModal({
                 options={departments.filter((item) => item.isActive || item.id === draft.departmentId).map((item) => ({ id: item.id, label: item.name }))}
                 actionLabel={t("work.addDepartment")}
                 showAction={canCreateDepartment}
-                onChange={(departmentId) => onChange({ ...draft, departmentId })}
+                onChange={(departmentId) => patchDraft({ departmentId })}
                 onAction={() => openQuick("department")}
               />
             </Field>
           </div>
           <Field label={t("work.taskType")}>
-            <TaskTypePicker value={draft.taskType} onChange={(taskType: TaskKind) => onChange({ ...draft, taskType })} />
+            <TaskTypePicker value={draft.taskType} onChange={(taskType: TaskKind) => patchDraft({ taskType })} />
           </Field>
           <Field label={t("work.taskColor")}>
-            <ColorPicker value={draft.color} onChange={(color) => onChange({ ...draft, color })} />
+            <ColorPicker value={draft.color} onChange={(color) => patchDraft({ color })} />
           </Field>
           <Field label={t("common.priority")}>
-            <PriorityPicker value={draft.priority} onChange={(priority) => onChange({ ...draft, priority })} />
+            <PriorityPicker value={draft.priority} onChange={(priority) => patchDraft({ priority })} />
           </Field>
           {canSetPrice ? (
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -494,7 +509,7 @@ export function TaskFormModal({
                     type="radio"
                     name="task-billing-mode"
                     checked={draft.billingMode !== "BILLABLE"}
-                    onChange={() => onChange({ ...draft, billingMode: "INCLUDED", priceBeforeVat: "", priceVatMode: "EXCLUDING_VAT" })}
+                    onChange={() => patchDraft({ billingMode: "INCLUDED", priceBeforeVat: "", priceVatMode: "EXCLUDING_VAT" })}
                   />
                   {t("finance.billingIncluded")}
                 </label>
@@ -503,7 +518,7 @@ export function TaskFormModal({
                     type="radio"
                     name="task-billing-mode"
                     checked={draft.billingMode === "BILLABLE"}
-                    onChange={() => onChange({ ...draft, billingMode: "BILLABLE" })}
+                    onChange={() => patchDraft({ billingMode: "BILLABLE" })}
                   />
                   {t("finance.billingBillable")}
                 </label>
@@ -515,7 +530,7 @@ export function TaskFormModal({
                       className={inputClass}
                       inputMode="decimal"
                       value={draft.priceBeforeVat}
-                      onChange={(event) => onChange({ ...draft, priceBeforeVat: event.target.value })}
+                      onChange={(event) => patchDraft({ priceBeforeVat: event.target.value })}
                       placeholder="₪"
                     />
                   </Field>
@@ -525,7 +540,7 @@ export function TaskFormModal({
                         type="radio"
                         name="task-price-vat-mode"
                         checked={draft.priceVatMode === "INCLUDING_VAT"}
-                        onChange={() => onChange({ ...draft, priceVatMode: "INCLUDING_VAT" })}
+                        onChange={() => patchDraft({ priceVatMode: "INCLUDING_VAT" })}
                       />
                       {t("finance.vatModeIncluding")}
                     </label>
@@ -534,7 +549,7 @@ export function TaskFormModal({
                         type="radio"
                         name="task-price-vat-mode"
                         checked={draft.priceVatMode === "EXCLUDING_VAT"}
-                        onChange={() => onChange({ ...draft, priceVatMode: "EXCLUDING_VAT" })}
+                        onChange={() => patchDraft({ priceVatMode: "EXCLUDING_VAT" })}
                       />
                       {t("finance.vatModeExcluding")}
                     </label>
@@ -558,7 +573,7 @@ export function TaskFormModal({
             </div>
           ) : null}
           <Field label={t("common.notes")}>
-            <textarea className={`${inputClass} h-24 py-2`} value={draft.description} onChange={(event) => onChange({ ...draft, description: event.target.value })} />
+            <textarea className={`${inputClass} h-24 py-2`} value={draft.description} onChange={(event) => patchDraft({ description: event.target.value })} />
           </Field>
           <TaskFormAssets
             businessId={businessId}
@@ -574,7 +589,7 @@ export function TaskFormModal({
               <input
                 type="checkbox"
                 checked={draft.saveToLibrary}
-                onChange={(event) => onChange({ ...draft, saveToLibrary: event.target.checked })}
+                onChange={(event) => patchDraft({ saveToLibrary: event.target.checked })}
               />
               {t("work.saveToLibrary")}
             </label>

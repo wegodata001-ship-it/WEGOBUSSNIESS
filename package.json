@@ -29,6 +29,7 @@
     "test:task-library": "npx tsx src/lib/admin/task-library.test.ts",
     "test:task-delete": "npx tsx src/lib/admin/task-delete.test.ts",
     "test:task-participants": "npx tsx src/lib/admin/task-participants.test.ts",
+    "test:assignee-ui": "playwright test tests/ui/assignee-select.spec.ts",
     "test:task-completion": "npx tsx src/lib/admin/task-completion.test.ts",
     "test:department-categories": "npx tsx src/lib/admin/department-categories.test.ts",
     "test:task-file-rules": "npx tsx src/lib/admin/task-file-rules.test.ts",
@@ -57,6 +58,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.7",
+    "@playwright/test": "^1.51.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",

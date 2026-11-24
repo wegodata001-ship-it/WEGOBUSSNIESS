@@ -81,7 +81,9 @@ export function AdminDashboard() {
       setFormError(taskMutationMessage(result.error, t));
       return { ok: false as const };
     }
-    if (!draft.id && result.id) setDraft({ ...draft, id: result.id });
+    if (!draft.id && result.id) {
+      setDraft((prev) => (prev ? { ...prev, id: result.id } : prev));
+    }
     return { ok: true as const, id: result.id };
   }
 

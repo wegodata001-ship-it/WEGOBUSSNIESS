@@ -130,9 +130,15 @@ export function Modal({
   }, [onClose]);
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 px-0 py-0 md:px-4 md:py-8">
-      <button type="button" className="absolute inset-0 z-0" aria-label={t("common.close")} onClick={onClose} />
+      <button
+        type="button"
+        className="absolute inset-0 z-0"
+        aria-label={t("common.close")}
+        onClick={onClose}
+      />
       <div
         className="relative z-10 min-h-dvh w-full max-w-2xl rounded-none border-0 bg-white p-5 shadow-2xl md:min-h-0 md:rounded-3xl md:border md:border-slate-200 md:p-6"
+        onPointerDown={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
       >
