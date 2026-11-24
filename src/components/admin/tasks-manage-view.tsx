@@ -164,6 +164,9 @@ export function TasksManageView() {
 
   function deleteErrorMessage(code: string) {
     if (code === "FORBIDDEN") return t("tasks.forbidden");
+    if (code === "TASK_HAS_PAYMENTS") return t("tasks.hasPayments");
+    if (code === "TASK_HAS_WORK_HOURS") return t("tasks.hasWorkHours");
+    if (code === "TASK_HAS_DOCUMENTS") return t("tasks.hasDocuments");
     if (code === "TASK_IN_USE") return t("tasks.inUse");
     return t("tasks.network");
   }

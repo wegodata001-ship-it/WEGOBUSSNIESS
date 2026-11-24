@@ -177,7 +177,14 @@ export function AdminDashboard() {
     } catch (error) {
       setLocalTasks(null);
       const code = error instanceof Error ? error.message : "NETWORK";
-      setToast(code === "TASK_IN_USE" ? t("tasks.inUse") : code === "FORBIDDEN" ? t("tasks.forbidden") : t("tasks.network"));
+      setToast(
+        code === "TASK_HAS_PAYMENTS" ? t("tasks.hasPayments")
+          : code === "TASK_HAS_WORK_HOURS" ? t("tasks.hasWorkHours")
+            : code === "TASK_HAS_DOCUMENTS" ? t("tasks.hasDocuments")
+              : code === "TASK_IN_USE" ? t("tasks.inUse")
+                : code === "FORBIDDEN" ? t("tasks.forbidden")
+                  : t("tasks.network"),
+      );
     } finally {
       setBusyId(null);
     }

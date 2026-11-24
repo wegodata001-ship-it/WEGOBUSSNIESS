@@ -4,9 +4,12 @@ import { syncProjectProgressFromTasks } from "@/lib/admin/project-progress-sync"
 import {
   canDeleteTasks,
   canRestoreTasks,
+  deleteBlockerToError,
   isTaskSoftDeleted,
   localFinanceBlockers,
+  primaryDeleteBlocker,
   type TaskDeleteBlocker,
+  type TaskDeleteBlockError,
 } from "@/lib/admin/task-delete-rules";
 import type { ServerActor } from "@/lib/auth/server-actor";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -20,12 +23,15 @@ import {
 } from "@/lib/firebase/paths";
 import type { Task } from "@/types/task";
 
-export type { TaskDeleteBlocker };
+export type { TaskDeleteBlocker, TaskDeleteBlockError };
 export {
   canDeleteTasks,
   canRestoreTasks,
+  deleteBlockerToError,
   isTaskSoftDeleted,
   localFinanceBlockers,
+  primaryDeleteBlocker,
+  taskHasBlockingPayments,
   taskHasProtectedFinance,
 } from "@/lib/admin/task-delete-rules";
 
@@ -35,7 +41,7 @@ export type TaskDeleteError =
   | "NOT_FOUND"
   | "ALREADY_DELETED"
   | "NOT_DELETED"
-  | "TASK_IN_USE";
+  | TaskDeleteBlockError;
 
 export type TaskDeleteResult =
   | { ok: true; id: string }
@@ -43,7 +49,7 @@ export type TaskDeleteResult =
 
 export type TaskBulkDeleteResult =
   | { ok: true; ids: string[]; skipped: Array<{ id: string; error: TaskDeleteError; blockers?: TaskDeleteBlocker[] }> }
-  | { ok: false; error: TaskDeleteError; status: number };
+  | { ok: false; error: TaskDeleteError; status: number; blockers?: TaskDeleteBlocker[] };
 
 export async function collectTaskDeleteBlockers(input: {
   businessId: string;
@@ -94,7 +100,13 @@ export async function softDeleteTask(input: {
 
   const blockers = await collectTaskDeleteBlockers({ businessId: input.businessId, task });
   if (blockers.length) {
-    return { ok: false, error: "TASK_IN_USE", status: 409, blockers };
+    const primary = primaryDeleteBlocker(blockers)!;
+    return {
+      ok: false,
+      error: deleteBlockerToError(primary),
+      status: 409,
+      blockers: [primary],
+    };
   }
 
   const now = new Date();
@@ -151,7 +163,12 @@ export async function softDeleteTasks(input: {
 
   if (!deleted.length && skipped.length) {
     const first = skipped[0]!;
-    return { ok: false, error: first.error, status: first.error === "FORBIDDEN" ? 403 : 409 };
+    return {
+      ok: false,
+      error: first.error,
+      status: first.error === "FORBIDDEN" ? 403 : 409,
+      blockers: first.blockers,
+    };
   }
 
   return { ok: true, ids: deleted, skipped };
