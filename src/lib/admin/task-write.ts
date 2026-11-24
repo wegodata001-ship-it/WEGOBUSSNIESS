@@ -117,11 +117,8 @@ export async function upsertTask(input: {
     assigneeEmployeeIds: data.assigneeEmployeeIds,
     participantIds: data.participantIds,
   });
+  // Do not auto-assign the acting owner/manager; a single selected employee must remain alone.
   const team = canAssignTeam ? incomingTeam : existingTeam;
-  if (!isUpdate && !team.assigneeId && actor.employeeId) {
-    team.assigneeId = actor.employeeId;
-    team.collaboratorIds = team.collaboratorIds.filter((id) => id !== actor.employeeId);
-  }
 
   const participantIds = team.assigneeId ? [team.assigneeId, ...team.collaboratorIds] : team.collaboratorIds;
   for (const employeeId of participantIds) {
@@ -300,32 +297,23 @@ export async function upsertTask(input: {
   ];
 
   if (!isUpdate && canManageTasks(actor)) {
-    await notifyEmployees({
-      businessId,
-      employeeIds: participantIds,
-      skipUserIds: [actor.uid],
-      title: "הוקצתה לך משימה חדשה",
-      body: title,
-      href,
-      type: "task.assigned",
-      entityType: "task",
-      entityId: ref.id,
-      subject: "WEGO BIZ — משימה חדשה הוקצתה לך",
-      rows: taskRows,
-      dedupeKey: `TASK_ASSIGNED:${ref.id}:${participantIds.join(",")}`,
-    });
-    await notifyManagers({
-      businessId,
-      skipUserIds: [actor.uid],
-      title: "משימה חדשה נוצרה",
-      body: title,
-      href,
-      type: "task.created",
-      entityType: "task",
-      entityId: ref.id,
-      rows: taskRows,
-      dedupeKey: `TASK_CREATED:${ref.id}`,
-    });
+    if (participantIds.length) {
+      // Assignment notice goes only to selected employees — not to owner/managers by role.
+      await notifyEmployees({
+        businessId,
+        employeeIds: participantIds,
+        skipUserIds: [actor.uid],
+        title: "הוקצתה לך משימה חדשה",
+        body: title,
+        href,
+        type: "task.assigned",
+        entityType: "task",
+        entityId: ref.id,
+        subject: "WEGO BIZ — משימה חדשה הוקצתה לך",
+        rows: taskRows,
+        dedupeKey: `TASK_ASSIGNED:${ref.id}:${participantIds.join(",")}`,
+      });
+    }
     await writeTaskActivity({
       businessId,
       taskId: ref.id,
