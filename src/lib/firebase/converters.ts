@@ -41,6 +41,7 @@ import { MEETING_STATUSES, MEETING_TYPES } from "@/types/meeting";
 import { dateTimeInZone, toSafeDate, zonedDateTime } from "@/lib/admin/meeting-time";
 import { DEFAULT_TIMEZONE } from "@/lib/env";
 import { DEFAULT_BUSINESS_VAT_RATE, resolveProjectBaseVatMode } from "@/lib/finance/vat";
+// resolveProjectBaseVatMode also resolves task priceVatMode (same enum values).
 import { normalizeProjectProgress } from "@/lib/admin/project-progress";
 import { isDateOnly, isTimeOnly } from "@/lib/dates/format";
 import { EMPLOYEE_STATUSES } from "@/types/employee";
@@ -292,6 +293,7 @@ export function toTask(id: string, data: DocumentData): Task {
     vatRate: asNumber(data.vatRate),
     vatAmount: asNumber(data.vatAmount),
     priceIncludingVat: asNumber(data.priceIncludingVat),
+    priceVatMode: resolveProjectBaseVatMode(data.priceVatMode),
     paidAmount: asNumber(data.paidAmount, 0) ?? 0,
     balanceDue: asNumber(data.balanceDue),
     paymentStatus: data.paymentStatus && TASK_PAYMENT_STATUSES.includes(data.paymentStatus as TaskPaymentStatus)

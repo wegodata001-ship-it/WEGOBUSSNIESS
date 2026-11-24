@@ -11,6 +11,13 @@ import { DatePicker, Field, GhostButton, Modal, PrimaryButton, inputClass } from
 import { mutateBusiness } from "@/lib/admin/api";
 import { managedProjectCategories } from "@/lib/admin/department-categories";
 import { mergeTaskLibrary, type TaskLibraryItem } from "@/lib/admin/task-library";
+import { formatIls, parseMoney } from "@/lib/finance/money";
+import {
+  calculateEnteredPriceWithVat,
+  DEFAULT_BUSINESS_VAT_RATE,
+  resolveProjectBaseVatMode,
+  type ProjectBaseVatMode,
+} from "@/lib/finance/vat";
 import { PROJECT_STATUSES, type Department, type DepartmentCategory, type Project } from "@/types/department";
 import type { Employee } from "@/types/employee";
 import type { Task, TaskWriteStatus } from "@/types/task";
@@ -18,6 +25,14 @@ import type { TaskTemplate } from "@/types/task-template";
 import { labelOf } from "@/lib/admin/labels";
 import type { CalendarColor, TaskKind } from "@/lib/admin/palette";
 import { useI18n } from "@/components/providers/i18n-provider";
+
+function enteredAmountFromTask(task: Task) {
+  const mode = resolveProjectBaseVatMode(task.priceVatMode);
+  if (mode === "INCLUDING_VAT") {
+    return task.priceIncludingVat != null ? String(task.priceIncludingVat) : "";
+  }
+  return task.priceBeforeVat != null ? String(task.priceBeforeVat) : "";
+}
 
 export type TaskDraft = {
   id?: string;
@@ -40,7 +55,9 @@ export type TaskDraft = {
   saveToLibrary: boolean;
   freeText: boolean;
   billingMode: "INCLUDED" | "BILLABLE";
+  /** Entered amount; meaning depends on priceVatMode. */
   priceBeforeVat: string;
+  priceVatMode: ProjectBaseVatMode;
 };
 
 export function emptyTaskDraft(today: string, startTime = "09:00", endTime = "10:00"): TaskDraft {
@@ -65,6 +82,7 @@ export function emptyTaskDraft(today: string, startTime = "09:00", endTime = "10
     freeText: false,
     billingMode: "INCLUDED",
     priceBeforeVat: "",
+    priceVatMode: "EXCLUDING_VAT",
   };
 }
 
@@ -90,7 +108,8 @@ export function draftFromTask(task: Task, today: string): TaskDraft {
     saveToLibrary: false,
     freeText: false,
     billingMode: task.billingMode === "BILLABLE" || task.priceIncludingVat != null ? "BILLABLE" : "INCLUDED",
-    priceBeforeVat: task.priceBeforeVat != null ? String(task.priceBeforeVat) : "",
+    priceBeforeVat: enteredAmountFromTask(task),
+    priceVatMode: resolveProjectBaseVatMode(task.priceVatMode),
   };
 }
 
@@ -117,11 +136,13 @@ export function taskDraftPayload(draft: TaskDraft) {
     templateId: draft.templateId || null,
     saveToLibrary: draft.saveToLibrary,
     billingMode: draft.billingMode,
-    ...(draft.billingMode === "BILLABLE" && draft.priceBeforeVat.trim()
-      ? { priceBeforeVat: Number(draft.priceBeforeVat) }
-      : draft.billingMode === "INCLUDED"
-        ? { priceBeforeVat: null }
-        : {}),
+    ...(draft.billingMode === "BILLABLE"
+      ? {
+        priceVatMode: draft.priceVatMode,
+        vatMode: draft.priceVatMode,
+        ...(draft.priceBeforeVat.trim() ? { priceBeforeVat: Number(draft.priceBeforeVat) } : {}),
+      }
+      : { priceBeforeVat: null, priceVatMode: "EXCLUDING_VAT" }),
   };
 }
 
@@ -145,6 +166,7 @@ export function TaskFormModal({
   canCreateProject,
   canCreateDepartment,
   canSetPrice,
+  vatRate = DEFAULT_BUSINESS_VAT_RATE,
   onCatalogRefresh,
   error,
 }: {
@@ -167,6 +189,7 @@ export function TaskFormModal({
   canCreateProject: boolean;
   canCreateDepartment: boolean;
   canSetPrice?: boolean;
+  vatRate?: number;
   onCatalogRefresh: () => Promise<void>;
   error?: string | null;
 }) {
@@ -459,7 +482,7 @@ export function TaskFormModal({
                     type="radio"
                     name="task-billing-mode"
                     checked={draft.billingMode !== "BILLABLE"}
-                    onChange={() => onChange({ ...draft, billingMode: "INCLUDED", priceBeforeVat: "" })}
+                    onChange={() => onChange({ ...draft, billingMode: "INCLUDED", priceBeforeVat: "", priceVatMode: "EXCLUDING_VAT" })}
                   />
                   {t("finance.billingIncluded")}
                 </label>
@@ -474,15 +497,49 @@ export function TaskFormModal({
                 </label>
               </div>
               {draft.billingMode === "BILLABLE" ? (
-                <Field label={t("finance.taskAmount")}>
-                  <input
-                    className={inputClass}
-                    inputMode="decimal"
-                    value={draft.priceBeforeVat}
-                    onChange={(event) => onChange({ ...draft, priceBeforeVat: event.target.value })}
-                    placeholder="₪"
-                  />
-                </Field>
+                <>
+                  <Field label={t("finance.taskAmount")}>
+                    <input
+                      className={inputClass}
+                      inputMode="decimal"
+                      value={draft.priceBeforeVat}
+                      onChange={(event) => onChange({ ...draft, priceBeforeVat: event.target.value })}
+                      placeholder="₪"
+                    />
+                  </Field>
+                  <div className="mt-2 flex flex-col gap-2 text-sm">
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="task-price-vat-mode"
+                        checked={draft.priceVatMode === "INCLUDING_VAT"}
+                        onChange={() => onChange({ ...draft, priceVatMode: "INCLUDING_VAT" })}
+                      />
+                      {t("finance.vatModeIncluding")}
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="task-price-vat-mode"
+                        checked={draft.priceVatMode === "EXCLUDING_VAT"}
+                        onChange={() => onChange({ ...draft, priceVatMode: "EXCLUDING_VAT" })}
+                      />
+                      {t("finance.vatModeExcluding")}
+                    </label>
+                  </div>
+                  {(() => {
+                    const parsed = parseMoney(draft.priceBeforeVat);
+                    if (parsed === null || parsed < 0) return null;
+                    const preview = calculateEnteredPriceWithVat(parsed, vatRate, draft.priceVatMode);
+                    return (
+                      <div className="mt-3 grid gap-1 text-sm text-slate-700 sm:grid-cols-3">
+                        <p>{t("finance.beforeVat")}: <span className="font-medium">{formatIls(preview.priceBeforeVat)}</span></p>
+                        <p>{t("finance.vatAmount")}: <span className="font-medium">{formatIls(preview.vatAmount)}</span></p>
+                        <p>{t("finance.inclVatShort")}: <span className="font-medium">{formatIls(preview.priceIncludingVat)}</span></p>
+                      </div>
+                    );
+                  })()}
+                </>
               ) : (
                 <p className="mt-2 text-xs text-slate-500">{t("finance.billingIncludedHint")}</p>
               )}

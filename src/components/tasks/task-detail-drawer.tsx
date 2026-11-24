@@ -27,7 +27,11 @@ import {
   uploadTaskAttachments,
   voidBusinessPayment,
 } from "@/lib/business/api";
-import { calculateTaskPrice } from "@/lib/finance/vat";
+import {
+  calculateEnteredPriceWithVat,
+  resolveProjectBaseVatMode,
+  type ProjectBaseVatMode,
+} from "@/lib/finance/vat";
 import { formatIls, parseMoney } from "@/lib/finance/money";
 import { reviveSessionDates } from "@/lib/session/serialize";
 import type { Department, Project } from "@/types/department";
@@ -90,7 +94,14 @@ export function TaskDetailDrawer({
   const [chatError, setChatError] = useState("");
   const [rejectOpen, setRejectOpen] = useState(false);
   const [reason, setReason] = useState("");
-  const [priceDraft, setPriceDraft] = useState(task.priceBeforeVat === null ? "" : String(task.priceBeforeVat));
+  const [priceDraft, setPriceDraft] = useState(() => {
+    const mode = resolveProjectBaseVatMode(task.priceVatMode);
+    if (mode === "INCLUDING_VAT") {
+      return task.priceIncludingVat == null ? "" : String(task.priceIncludingVat);
+    }
+    return task.priceBeforeVat == null ? "" : String(task.priceBeforeVat);
+  });
+  const [priceVatMode, setPriceVatMode] = useState<ProjectBaseVatMode>(() => resolveProjectBaseVatMode(task.priceVatMode));
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [payOpen, setPayOpen] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
@@ -135,8 +146,14 @@ export function TaskDetailDrawer({
   }, [businessId, canViewFinance, task.id]);
 
   useEffect(() => {
-    setPriceDraft(task.priceBeforeVat === null ? "" : String(task.priceBeforeVat));
-  }, [task.priceBeforeVat]);
+    const mode = resolveProjectBaseVatMode(task.priceVatMode);
+    setPriceVatMode(mode);
+    if (mode === "INCLUDING_VAT") {
+      setPriceDraft(task.priceIncludingVat == null ? "" : String(task.priceIncludingVat));
+    } else {
+      setPriceDraft(task.priceBeforeVat == null ? "" : String(task.priceBeforeVat));
+    }
+  }, [task.priceBeforeVat, task.priceIncludingVat, task.priceVatMode]);
 
   useEffect(() => {
     if (openChat) setTab("chat");
@@ -318,22 +335,46 @@ export function TaskDetailDrawer({
                 <section className="rounded-2xl border border-slate-200 p-3">
                   <p className="text-xs font-medium text-slate-500">{t("work.finance")}</p>
                   {canSetPrice ? (
-                    <label className="mt-2 block text-sm">
-                      <span className="mb-1 block text-slate-600">{t("work.priceBeforeVat")}</span>
-                      <input className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm" value={priceDraft} onChange={(event) => setPriceDraft(event.target.value)} />
-                    </label>
+                    <>
+                      <label className="mt-2 block text-sm">
+                        <span className="mb-1 block text-slate-600">{t("finance.taskAmount")}</span>
+                        <input className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm" value={priceDraft} onChange={(event) => setPriceDraft(event.target.value)} />
+                      </label>
+                      <div className="mt-2 flex flex-col gap-2 text-sm">
+                        <label className="inline-flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name={`task-detail-vat-mode-${task.id}`}
+                            checked={priceVatMode === "INCLUDING_VAT"}
+                            onChange={() => setPriceVatMode("INCLUDING_VAT")}
+                          />
+                          {t("finance.vatModeIncluding")}
+                        </label>
+                        <label className="inline-flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name={`task-detail-vat-mode-${task.id}`}
+                            checked={priceVatMode === "EXCLUDING_VAT"}
+                            onChange={() => setPriceVatMode("EXCLUDING_VAT")}
+                          />
+                          {t("finance.vatModeExcluding")}
+                        </label>
+                      </div>
+                    </>
                   ) : (
                     <p className="mt-2 text-sm">{task.priceBeforeVat === null ? t("work.noPrice") : formatIls(task.priceBeforeVat)}</p>
                   )}
                   {(() => {
                     const next = parseMoney(priceDraft);
-                    const preview = next === null ? null : calculateTaskPrice(next, task.vatRate ?? vatRate);
+                    const preview = next === null ? null : calculateEnteredPriceWithVat(next, vatRate, priceVatMode);
                     const shown = task.priceIncludingVat === null && !preview ? null : preview ?? {
+                      priceBeforeVat: task.priceBeforeVat ?? 0,
                       vatAmount: task.vatAmount ?? 0,
                       priceIncludingVat: task.priceIncludingVat ?? 0,
                     };
                     return shown ? (
                       <div className="mt-2 space-y-1 text-sm text-slate-600">
+                        <p className="flex justify-between"><span>{t("finance.beforeVat")}</span><span>{formatIls(shown.priceBeforeVat)}</span></p>
                         <p className="flex justify-between"><span>{t("work.vat")}</span><span>{formatIls(shown.vatAmount)}</span></p>
                         <p className="flex justify-between"><span>{t("work.priceTotal")}</span><span>{formatIls(shown.priceIncludingVat)}</span></p>
                         <p className="flex justify-between"><span>{t("work.paid")}</span><span>{formatIls(task.paidAmount)}</span></p>
@@ -353,7 +394,12 @@ export function TaskDetailDrawer({
                         const next = parseMoney(priceDraft);
                         if (next === null) return;
                         setBusy(true);
-                        void saveTaskPrice({ businessId, taskId: task.id, priceBeforeVat: next }).then(() => {
+                        void saveTaskPrice({
+                          businessId,
+                          taskId: task.id,
+                          priceBeforeVat: next,
+                          vatMode: priceVatMode,
+                        }).then(() => {
                           setBusy(false);
                           onChanged();
                         });

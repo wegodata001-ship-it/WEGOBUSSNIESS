@@ -1061,6 +1061,6 @@ export const ar: Record<MessageKey, string> = {
   "finance.billingIncluded": "بدون تحصيل إضافي / ضمن سعر المشروع",
   "finance.billingBillable": "مهمة مدفوعة",
   "finance.billingIncludedHint": "المهمة العادية لا تزيد الدخل حتى لو اكتملت",
-  "finance.taskAmount": "المبلغ ₪ (قبل الضريبة)",
+  "finance.taskAmount": "المبلغ ₪",
   "status.BIT": "بيت",
 };

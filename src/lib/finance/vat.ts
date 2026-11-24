@@ -33,11 +33,11 @@ export function resolveProjectBaseVatMode(value: unknown): ProjectBaseVatMode {
 }
 
 /**
- * Project base price from a single entered amount + VAT mode.
+ * Price from a single entered amount + VAT mode (project base or billable task).
  * EXCLUDING_VAT: entered is before VAT → add VAT.
  * INCLUDING_VAT: entered already includes VAT → split before/VAT without adding again.
  */
-export function calculateProjectBasePrice(
+export function calculateEnteredPriceWithVat(
   enteredAmount: number,
   vatRate: number,
   mode: ProjectBaseVatMode = "EXCLUDING_VAT",
@@ -58,6 +58,15 @@ export function calculateProjectBasePrice(
   }
   const calc = calculateTaskPrice(entered, rate);
   return { ...calc, vatMode: mode };
+}
+
+/** @deprecated alias — use calculateEnteredPriceWithVat */
+export function calculateProjectBasePrice(
+  enteredAmount: number,
+  vatRate: number,
+  mode: ProjectBaseVatMode = "EXCLUDING_VAT",
+) {
+  return calculateEnteredPriceWithVat(enteredAmount, vatRate, mode);
 }
 
 export function paymentStatusFor(paidAmount: number, priceIncludingVat: number | null) {

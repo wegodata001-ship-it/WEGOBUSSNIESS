@@ -1,7 +1,13 @@
 import { notifyEmployees, notifyManagers, notifyUnpaidOnComplete, notifyUsers, taskHref } from "@/lib/admin/notify";
 import { canSetTaskPrice } from "@/lib/finance/access";
 import { parseMoney } from "@/lib/finance/money";
-import { calculateTaskPrice, DEFAULT_BUSINESS_VAT_RATE, paymentStatusFor, remainingBalance } from "@/lib/finance/vat";
+import { readBusinessVatRate } from "@/lib/admin/payment-write";
+import {
+  calculateEnteredPriceWithVat,
+  paymentStatusFor,
+  remainingBalance,
+  resolveProjectBaseVatMode,
+} from "@/lib/finance/vat";
 import { writeTaskActivity } from "@/lib/admin/task-activity";
 import { canChangeWorkStatus } from "@/lib/admin/task-access";
 import { normalizeTaskTeam, taskParticipantIds } from "@/lib/admin/task-team";
@@ -153,6 +159,62 @@ export async function upsertTask(input: {
     now,
   });
 
+  let billingPatch: Record<string, unknown> = {};
+  if (canSetTaskPrice(actor) && (data.billingMode !== undefined || data.priceBeforeVat !== undefined || data.priceVatMode !== undefined || data.vatMode !== undefined)) {
+    const mode = data.billingMode !== undefined
+      ? (text(data.billingMode) === "BILLABLE" ? "BILLABLE" as const : "INCLUDED" as const)
+      : (text(existing.billingMode) === "BILLABLE" || typeof existing.priceIncludingVat === "number" ? "BILLABLE" as const : "INCLUDED" as const);
+
+    if (mode === "INCLUDED") {
+      billingPatch = {
+        billingMode: "INCLUDED",
+        priceBeforeVat: null,
+        vatRate: null,
+        vatAmount: null,
+        priceIncludingVat: null,
+        priceVatMode: "EXCLUDING_VAT",
+        balanceDue: null,
+        paymentStatus: null,
+        // Keep paidAmount history if any payments existed; balance cleared.
+      };
+    } else {
+      const vatMode = data.priceVatMode !== undefined || data.vatMode !== undefined
+        ? resolveProjectBaseVatMode(data.priceVatMode ?? data.vatMode)
+        : resolveProjectBaseVatMode(existing.priceVatMode);
+      const enteredRaw = data.priceBeforeVat !== undefined
+        ? parseMoney(data.priceBeforeVat)
+        : (() => {
+          // Re-open legacy / stored amount for recalc when only vatMode changes.
+          const storedMode = resolveProjectBaseVatMode(existing.priceVatMode);
+          if (storedMode === "INCLUDING_VAT" && typeof existing.priceIncludingVat === "number") {
+            return existing.priceIncludingVat;
+          }
+          return typeof existing.priceBeforeVat === "number" ? existing.priceBeforeVat : null;
+        })();
+      if (enteredRaw !== null && enteredRaw >= 0) {
+        const vatRate = await readBusinessVatRate(businessId);
+        const calc = calculateEnteredPriceWithVat(enteredRaw, vatRate, vatMode);
+        const paidAmount = typeof existing.paidAmount === "number" ? existing.paidAmount : 0;
+        billingPatch = {
+          billingMode: "BILLABLE",
+          priceBeforeVat: calc.priceBeforeVat,
+          vatRate: calc.vatRate,
+          vatAmount: calc.vatAmount,
+          priceIncludingVat: calc.priceIncludingVat,
+          priceVatMode: calc.vatMode,
+          paidAmount,
+          balanceDue: remainingBalance(calc.priceIncludingVat, paidAmount),
+          paymentStatus: paymentStatusFor(paidAmount, calc.priceIncludingVat),
+        };
+      } else {
+        billingPatch = {
+          billingMode: "BILLABLE",
+          priceVatMode: vatMode,
+        };
+      }
+    }
+  }
+
   const payload = {
     businessId,
     title,
@@ -180,50 +242,7 @@ export async function upsertTask(input: {
       ? (typeof existing.createdByEmployeeId === "string" ? existing.createdByEmployeeId : actor.employeeId)
       : actor.employeeId,
     updatedAt: now,
-    ...(canSetTaskPrice(actor) && data.billingMode !== undefined ? (() => {
-      const mode = text(data.billingMode) === "BILLABLE" ? "BILLABLE" as const : "INCLUDED" as const;
-      if (mode === "INCLUDED") {
-        return {
-          billingMode: "INCLUDED",
-          priceBeforeVat: null,
-          vatRate: null,
-          vatAmount: null,
-          priceIncludingVat: null,
-          balanceDue: null,
-          paymentStatus: null,
-          // Keep paidAmount history if any payments existed; balance cleared.
-        };
-      }
-      const price = data.priceBeforeVat !== undefined
-        ? parseMoney(data.priceBeforeVat)
-        : (typeof existing.priceBeforeVat === "number" ? existing.priceBeforeVat : null);
-      if (price === null || price < 0) {
-        return { billingMode: "BILLABLE" };
-      }
-      const vatRate = typeof existing.vatRate === "number" ? existing.vatRate : DEFAULT_BUSINESS_VAT_RATE;
-      const calc = calculateTaskPrice(price, vatRate);
-      const paidAmount = typeof existing.paidAmount === "number" ? existing.paidAmount : 0;
-      return {
-        billingMode: "BILLABLE",
-        ...calc,
-        paidAmount,
-        balanceDue: remainingBalance(calc.priceIncludingVat, paidAmount),
-        paymentStatus: paymentStatusFor(paidAmount, calc.priceIncludingVat),
-      };
-    })() : canSetTaskPrice(actor) && data.priceBeforeVat !== undefined ? (() => {
-      const price = parseMoney(data.priceBeforeVat);
-      if (price === null || price < 0) return {};
-      const vatRate = typeof existing.vatRate === "number" ? existing.vatRate : DEFAULT_BUSINESS_VAT_RATE;
-      const calc = calculateTaskPrice(price, vatRate);
-      const paidAmount = typeof existing.paidAmount === "number" ? existing.paidAmount : 0;
-      return {
-        billingMode: "BILLABLE",
-        ...calc,
-        paidAmount,
-        balanceDue: remainingBalance(calc.priceIncludingVat, paidAmount),
-        paymentStatus: paymentStatusFor(paidAmount, calc.priceIncludingVat),
-      };
-    })() : {}),
+    ...billingPatch,
   };
 
   const ref = isUpdate
@@ -239,6 +258,7 @@ export async function upsertTask(input: {
       actualHours: null,
       commentCount: 0,
       billingMode: createExtras.billingMode ?? "INCLUDED",
+      priceVatMode: createExtras.priceVatMode ?? "EXCLUDING_VAT",
       paidAmount: typeof createExtras.paidAmount === "number" ? createExtras.paidAmount : 0,
       paymentIds: [],
       createdByUserId: actor.uid,

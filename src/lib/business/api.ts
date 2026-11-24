@@ -361,12 +361,19 @@ export async function saveTaskPrice(input: {
   businessId: string;
   taskId: string;
   priceBeforeVat: number;
+  vatMode?: "EXCLUDING_VAT" | "INCLUDING_VAT";
 }): Promise<BusinessMutationResult> {
   const response = await fetch(`/api/business/tasks/${input.taskId}/price`, {
     method: "PATCH",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ businessId: input.businessId, priceBeforeVat: input.priceBeforeVat }),
+    body: JSON.stringify({
+      businessId: input.businessId,
+      priceBeforeVat: input.priceBeforeVat,
+      amount: input.priceBeforeVat,
+      vatMode: input.vatMode,
+      priceVatMode: input.vatMode,
+    }),
   });
   const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
   if (!response.ok || payload.error) {

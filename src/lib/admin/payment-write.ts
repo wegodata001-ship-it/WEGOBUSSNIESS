@@ -5,7 +5,14 @@ import { canReceiveTaskPayment, canSetTaskPrice, canVoidTaskPayment } from "@/li
 import { allocateByTaskOrder, allocationsTotal } from "@/lib/finance/allocate";
 import { isBillableFinanceTask } from "@/lib/finance/project-ledger";
 import { money, parseMoney } from "@/lib/finance/money";
-import { calculateTaskPrice, DEFAULT_BUSINESS_VAT_RATE, normalizeVatRate, paymentStatusFor, remainingBalance } from "@/lib/finance/vat";
+import {
+  calculateEnteredPriceWithVat,
+  DEFAULT_BUSINESS_VAT_RATE,
+  normalizeVatRate,
+  paymentStatusFor,
+  remainingBalance,
+  resolveProjectBaseVatMode,
+} from "@/lib/finance/vat";
 import type { ServerActor } from "@/lib/auth/server-actor";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toProject, toTask } from "@/lib/firebase/converters";
@@ -32,6 +39,7 @@ export async function setTaskPrice(input: {
   businessId: string;
   taskId: string;
   priceBeforeVat: unknown;
+  vatMode?: unknown;
 }) {
   if (!canSetTaskPrice(input.actor)) {
     return { ok: false as const, error: "FORBIDDEN" as PaymentWriteError, status: 403 };
@@ -47,14 +55,21 @@ export async function setTaskPrice(input: {
     return { ok: false as const, error: "TASK_FIELDS" as PaymentWriteError, status: 400 };
   }
 
-  const vatRate = existing.vatRate ?? await readBusinessVatRate(input.businessId);
-  const calc = calculateTaskPrice(price, vatRate);
+  const vatMode = input.vatMode !== undefined
+    ? resolveProjectBaseVatMode(input.vatMode)
+    : resolveProjectBaseVatMode(existing.priceVatMode);
+  const vatRate = await readBusinessVatRate(input.businessId);
+  const calc = calculateEnteredPriceWithVat(price, vatRate, vatMode);
   const paidAmount = money(existing.paidAmount);
   const balanceDue = remainingBalance(calc.priceIncludingVat, paidAmount);
   const now = new Date();
   await ref.set({
     billingMode: "BILLABLE",
-    ...calc,
+    priceBeforeVat: calc.priceBeforeVat,
+    vatRate: calc.vatRate,
+    vatAmount: calc.vatAmount,
+    priceIncludingVat: calc.priceIncludingVat,
+    priceVatMode: calc.vatMode,
     paidAmount,
     balanceDue,
     paymentStatus: paymentStatusFor(paidAmount, calc.priceIncludingVat),
