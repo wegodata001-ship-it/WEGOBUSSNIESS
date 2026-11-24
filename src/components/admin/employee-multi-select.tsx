@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Plus, Search, X } from "lucide-react";
 import { departmentName } from "@/lib/admin/catalog";
 import { employeeInitials } from "@/lib/admin/task-team";
+import { uniqueParticipantIds } from "@/lib/admin/task-participants";
 import type { Department } from "@/types/department";
 import type { Employee } from "@/types/employee";
 
@@ -16,6 +17,16 @@ export function EmployeeAvatar({ name, size = "sm" }: { name: string; size?: "sm
   );
 }
 
+function sameIds(a: string[], b: string[]) {
+  if (a.length !== b.length) return false;
+  return a.every((id, index) => id === b[index]);
+}
+
+/**
+ * Controlled multi-select that keeps an optimistic local selection so a parent
+ * re-render with a briefly stale value cannot blank the chips mid-interaction.
+ * Values are always employee document ids (never Firebase Auth UIDs).
+ */
 export function EmployeeMultiSelect({
   employees,
   departments,
@@ -36,6 +47,23 @@ export function EmployeeMultiSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
+  const pendingCommitRef = useRef<string[] | null>(null);
+  const valueKey = value.join("|");
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => uniqueParticipantIds(value));
+
+  useEffect(() => {
+    const incoming = uniqueParticipantIds(value);
+    const pending = pendingCommitRef.current;
+    if (pending) {
+      // Ignore stale parent props until they catch up to the last local commit.
+      if (sameIds(incoming, pending)) {
+        pendingCommitRef.current = null;
+        setSelectedIds(incoming);
+      }
+      return;
+    }
+    setSelectedIds(incoming);
+  }, [valueKey, value]);
 
   useEffect(() => {
     function onPointerDown(event: PointerEvent) {
@@ -58,33 +86,48 @@ export function EmployeeMultiSelect({
 
   const byId = useMemo(() => new Map(employees.map((employee) => [employee.id, employee])), [employees]);
   const selected = useMemo(() => {
-    return value.map((id) => {
+    return selectedIds.map((id) => {
       const employee = byId.get(id);
-      return employee ?? {
+      return {
         id,
-        displayName: id,
+        displayName: employee?.displayName || id,
       };
     });
-  }, [byId, value]);
+  }, [byId, selectedIds]);
+
+  function commit(next: string[]) {
+    const unique = uniqueParticipantIds(next);
+    pendingCommitRef.current = unique;
+    setSelectedIds(unique);
+    onChange(unique);
+  }
 
   function toggle(id: string) {
     if (disabled) return;
-    // Always persist employee document id (never display name / auth uid alone).
-    const next = value.includes(id) ? value.filter((item) => item !== id) : [...value, id];
-    onChange(next);
+    const employeeId = id.trim();
+    if (!employeeId) return;
+    commit(
+      selectedIds.includes(employeeId)
+        ? selectedIds.filter((item) => item !== employeeId)
+        : [...selectedIds, employeeId],
+    );
   }
 
   return (
-    <div className="relative" ref={rootRef}>
+    <div className="relative" ref={rootRef} data-testid="employee-multi-select">
       <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2">
         {selected.map((employee) => (
-          <span key={employee.id} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 py-1 pe-1 ps-1 text-xs font-medium text-slate-700">
+          <span
+            key={employee.id}
+            data-testid={`employee-chip-${employee.id}`}
+            className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 py-1 pe-1 ps-1 text-xs font-medium text-slate-700"
+          >
             <EmployeeAvatar name={employee.displayName} />
             {employee.displayName}
             {disabled ? null : (
               <button
                 type="button"
-                onMouseDown={(event) => event.stopPropagation()}
+                data-testid={`employee-remove-${employee.id}`}
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
@@ -101,7 +144,7 @@ export function EmployeeMultiSelect({
         <button
           type="button"
           disabled={disabled}
-          onMouseDown={(event) => event.stopPropagation()}
+          data-testid="employee-multi-select-open"
           onClick={() => setOpen((state) => !state)}
           className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50"
         >
@@ -112,8 +155,11 @@ export function EmployeeMultiSelect({
 
       {open && !disabled ? (
         <div
-          className="absolute z-30 mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+          className="absolute z-[60] mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+          data-testid="employee-multi-select-menu"
           onMouseDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
         >
           <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
             <Search className="h-4 w-4 text-slate-400" />
@@ -123,20 +169,17 @@ export function EmployeeMultiSelect({
               onChange={(event) => setQuery(event.target.value)}
               placeholder={placeholder}
               className="h-9 w-full bg-transparent text-sm outline-none"
+              data-testid="employee-multi-select-search"
             />
           </div>
           <div className="max-h-64 overflow-y-auto p-1">
             {options.length ? options.map((employee) => {
-              const checked = value.includes(employee.id);
+              const checked = selectedIds.includes(employee.id);
               return (
                 <button
                   key={employee.id}
                   type="button"
-                  onMouseDown={(event) => {
-                    // Prevent modal backdrop / outside handlers from clearing selection mid-click.
-                    event.preventDefault();
-                    event.stopPropagation();
-                  }}
+                  data-testid={`employee-option-${employee.id}`}
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();

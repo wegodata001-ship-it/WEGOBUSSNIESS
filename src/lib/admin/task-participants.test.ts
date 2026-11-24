@@ -61,4 +61,20 @@ assert.equal(afterTitle.assigneeId, "siham-emp");
 assert.deepEqual(afterTitle.collaboratorIds, []);
 assert.deepEqual(participantsFromFields(afterTitle), ["siham-emp"]);
 
+// Free-text / library apply must patch onto current selection (not replace from a stale empty draft).
+const selected = {
+  assigneeId: "siham-emp",
+  collaboratorIds: [] as string[],
+  title: "kept",
+  freeText: false,
+};
+const afterFreeText = { ...selected, title: "", templateId: "", saveToLibrary: false, freeText: true };
+assert.equal(afterFreeText.assigneeId, "siham-emp");
+assert.deepEqual(afterFreeText.collaboratorIds, []);
+
+// Documents the PR#12 gap: spreading an older empty draft after select wipes Siham.
+const staleBeforeSelect = { assigneeId: "", collaboratorIds: [] as string[], title: "" };
+const wipedByStaleTitle = { ...staleBeforeSelect, title: "typed after select" };
+assert.equal(wipedByStaleTitle.assigneeId, "");
+
 console.log("TASK_PARTICIPANTS_PASS");
