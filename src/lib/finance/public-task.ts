@@ -13,5 +13,7 @@ export function hideTaskFinance(task: Task): Task {
     balanceDue: null,
     paymentStatus: null,
     paymentIds: [],
+    deletedAt: task.deletedAt ?? null,
+    deletedByUserId: task.deletedByUserId ?? null,
   };
 }

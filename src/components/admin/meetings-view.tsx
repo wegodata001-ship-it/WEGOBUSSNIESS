@@ -568,12 +568,17 @@ export function MeetingsView() {
           }}
           onDelete={() => {
             if (!business?.id) return;
+            if (!(permissions.includes("tasks.delete") || membership?.role === "BUSINESS_OWNER")) {
+              setToast(t("tasks.forbidden"));
+              return;
+            }
+            if (!window.confirm(`${t("tasks.confirmDeleteTitle")}\n${quickTask.title}`)) return;
             void mutateBusiness({ businessId: business.id, action: "deleteTask", id: quickTask.id }).then(() => {
               setQuickTask(null);
               return reload({ silent: true });
             }).catch((error: unknown) => {
               const code = error instanceof Error ? error.message : "NETWORK";
-              setToast(code === "FORBIDDEN" ? t("tasks.forbidden") : t("tasks.network"));
+              setToast(code === "TASK_IN_USE" ? t("tasks.inUse") : code === "FORBIDDEN" ? t("tasks.forbidden") : t("tasks.network"));
             });
           }}
         />

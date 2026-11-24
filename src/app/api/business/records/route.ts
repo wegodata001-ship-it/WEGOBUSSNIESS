@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { canRestoreTasks } from "@/lib/admin/task-delete";
+import { isTaskSoftDeleted } from "@/lib/admin/task-delete-rules";
 import { canSeeTaskDoc } from "@/lib/admin/task-access";
 import { canViewTaskFinance } from "@/lib/finance/access";
 import { hideTaskFinance } from "@/lib/finance/public-task";
@@ -71,9 +73,17 @@ export async function GET(request: Request) {
   const db = getAdminDb();
 
   if (kind === "tasks") {
+    const includeDeleted = url.searchParams.get("includeDeleted") === "1" && canRestoreTasks(actor);
+    const deletedOnly = url.searchParams.get("deletedOnly") === "1" && canRestoreTasks(actor);
     const snap = await db.collection(tasksPath(businessId)).get();
     const tasks = snap.docs.map((docSnap) => toTask(docSnap.id, docSnap.data()));
-    const visible = tasks.filter((task) => canSeeTaskDoc(actor, task));
+    const visible = tasks.filter((task) => {
+      if (!canSeeTaskDoc(actor, task)) return false;
+      const softDeleted = isTaskSoftDeleted(task);
+      if (deletedOnly) return softDeleted;
+      if (softDeleted && !includeDeleted) return false;
+      return true;
+    });
     const canSeeMoney = canViewTaskFinance(actor);
     return NextResponse.json({
       data: canSeeMoney ? visible : visible.map(hideTaskFinance),
@@ -213,7 +223,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ data: projects });
     }
     const taskSnap = await db.collection(tasksPath(businessId)).get();
-    const tasks = taskSnap.docs.map((docSnap) => toTask(docSnap.id, docSnap.data()));
+    const tasks = taskSnap.docs
+      .map((docSnap) => toTask(docSnap.id, docSnap.data()))
+      .filter((task) => !isTaskSoftDeleted(task));
     return NextResponse.json({
       data: filterProjectsForActor(actor, projects, tasks),
     });

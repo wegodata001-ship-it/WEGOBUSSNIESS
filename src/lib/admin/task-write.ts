@@ -2,6 +2,7 @@ import { notifyEmployees, notifyManagers, notifyUnpaidOnComplete, notifyUsers, t
 import { canSetTaskPrice } from "@/lib/finance/access";
 import { parseMoney } from "@/lib/finance/money";
 import { readBusinessVatRate } from "@/lib/admin/payment-write";
+import { isTaskSoftDeleted } from "@/lib/admin/task-delete-rules";
 import {
   calculateEnteredPriceWithVat,
   paymentStatusFor,
@@ -89,6 +90,9 @@ export async function upsertTask(input: {
     return { ok: false, error: "NOT_FOUND", status: 404 };
   }
   const existing = existingSnap?.data() ?? {};
+  if (isUpdate && isTaskSoftDeleted(existing)) {
+    return { ok: false, error: "NOT_FOUND", status: 404 };
+  }
   if (isUpdate && !canEditTaskDoc(actor, existing)) {
     return { ok: false, error: "FORBIDDEN", status: 403 };
   }

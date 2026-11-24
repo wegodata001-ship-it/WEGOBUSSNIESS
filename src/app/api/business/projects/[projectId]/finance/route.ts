@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { setProjectBasePrice } from "@/lib/admin/project-finance-write";
+import { isTaskSoftDeleted } from "@/lib/admin/task-delete-rules";
 import { requireActor } from "@/lib/auth/server-actor";
 import { canSetTaskPrice, canViewTaskFinance } from "@/lib/finance/access";
 import { computeProjectFinance } from "@/lib/finance/project-ledger";
@@ -28,7 +29,9 @@ export async function GET(
   if (!projectSnap.exists) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   const project = toProject(projectSnap.id, projectSnap.data()!);
   const tasksSnap = await db.collection(tasksPath(actor.businessId)).where("projectId", "==", projectId).get();
-  const tasks = tasksSnap.docs.map((docSnap) => toTask(docSnap.id, docSnap.data()));
+  const tasks = tasksSnap.docs
+    .map((docSnap) => toTask(docSnap.id, docSnap.data()))
+    .filter((task) => !isTaskSoftDeleted(task));
   const ledger = computeProjectFinance(project, tasks);
   return NextResponse.json({
     ok: true,

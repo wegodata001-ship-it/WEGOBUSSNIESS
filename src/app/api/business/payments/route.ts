@@ -43,7 +43,12 @@ export async function GET(request: Request) {
       getAdminDb().collection(tasksPath(actor.businessId)).get(),
       getAdminDb().collection(projectsPath(actor.businessId)).get(),
     ]);
-    const liveTaskIds = new Set(tasksSnap.docs.map((docSnap) => docSnap.id));
+    const { isTaskSoftDeleted } = await import("@/lib/admin/task-delete-rules");
+    const liveTaskIds = new Set(
+      tasksSnap.docs
+        .filter((docSnap) => !isTaskSoftDeleted(docSnap.data()))
+        .map((docSnap) => docSnap.id),
+    );
     const liveProjectIds = new Set(projectsSnap.docs.map((docSnap) => docSnap.id));
     const { activePayments } = await import("@/lib/finance/orphan");
     payments = activePayments(payments, liveTaskIds, liveProjectIds);

@@ -315,6 +315,8 @@ export function toTask(id: string, data: DocumentData): Task {
     completedByUserId: asNullableString(data.completedByUserId),
     recurrence: asNullableString(data.recurrence),
     isSent: data.isSent == null ? null : data.isSent === true,
+    deletedAt: toDate(data.deletedAt),
+    deletedByUserId: asNullableString(data.deletedByUserId),
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };

@@ -168,11 +168,19 @@ export function AdminDashboard() {
 
   async function deleteTask(task: Task) {
     if (!business?.id) return;
-    if (!window.confirm(t("common.confirmDelete"))) return;
-    await runAction(task, async () => {
+    if (!window.confirm(`${t("tasks.confirmDeleteTitle")}\n${task.title}`)) return;
+    setBusyId(task.id);
+    try {
       await mutateBusiness({ businessId: business.id, action: "deleteTask", id: task.id });
-    });
-    setLocalTasks((current) => (current ?? data.tasks).filter((item) => item.id !== task.id));
+      setLocalTasks((current) => (current ?? data.tasks).filter((item) => item.id !== task.id));
+      await refresh();
+    } catch (error) {
+      setLocalTasks(null);
+      const code = error instanceof Error ? error.message : "NETWORK";
+      setToast(code === "TASK_IN_USE" ? t("tasks.inUse") : code === "FORBIDDEN" ? t("tasks.forbidden") : t("tasks.network"));
+    } finally {
+      setBusyId(null);
+    }
   }
 
   async function savePanel(task: Task, panel: WorkTaskDraft) {

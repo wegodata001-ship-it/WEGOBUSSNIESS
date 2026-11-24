@@ -123,6 +123,9 @@ export type Task = {
   completedByUserId: string | null;
   recurrence: string | null;
   isSent: boolean | null;
+  /** Soft-delete timestamp. Null/undefined = active task. */
+  deletedAt: Date | null;
+  deletedByUserId: string | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 };
