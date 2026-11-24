@@ -23,6 +23,11 @@ service firebase.storage {
         && firestore.get(memberPath).data.isActive == true;
     }
 
+    // Project system vault files — Admin SDK signed URLs only.
+    match /businesses/{businessId}/projects/{projectId}/system/{allPaths=**} {
+      allow read, write: if false;
+    }
+
     match /businesses/{businessId}/{allPaths=**} {
       allow read: if isSuperAdmin() || isActiveMember(businessId);
       allow write: if false;

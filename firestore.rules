@@ -81,7 +81,11 @@ service cloud.firestore {
       }
 
       match /employees/{employeeId} {
-        allow read: if canAccessBusiness(businessId);
+        // Directory is scoped: owners/managers see all; workers see only their own employee doc.
+        // Full roster for assignee chips is served via Admin SDK /api/business/records.
+        allow read: if isSuperAdmin()
+          || isOwnerOrManager(businessId)
+          || (isActiveMember(businessId) && employeeId == memberEmployeeId(businessId));
         allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
       }
 
@@ -110,6 +114,24 @@ service cloud.firestore {
           );
       }
 
+      function canReadTaskDoc(businessId, taskId) {
+        let taskPath = /databases/$(database)/documents/businesses/$(businessId)/tasks/$(taskId);
+        return isSuperAdmin()
+          || isOwnerOrManager(businessId)
+          || (
+            isActiveMember(businessId)
+            && exists(taskPath)
+            && (
+              get(taskPath).data.assigneeEmployeeId == memberEmployeeId(businessId)
+              || get(taskPath).data.assigneeId == memberEmployeeId(businessId)
+              || (
+                get(taskPath).data.keys().has("collaboratorIds")
+                && memberEmployeeId(businessId) in get(taskPath).data.collaboratorIds
+              )
+            )
+          );
+      }
+
       match /tasks/{taskId} {
         allow read: if isSuperAdmin()
           || isOwnerOrManager(businessId)
@@ -130,28 +152,28 @@ service cloud.firestore {
           );
 
         match /comments/{commentId} {
-          allow read: if canAccessBusiness(businessId);
-          allow create: if canAccessBusiness(businessId);
+          allow read: if canReadTaskDoc(businessId, taskId);
+          allow create: if canReadTaskDoc(businessId, taskId);
           allow update, delete: if false;
         }
 
         match /attachments/{attachmentId} {
-          allow read: if canAccessBusiness(businessId);
+          allow read: if canReadTaskDoc(businessId, taskId);
           allow write: if false;
         }
 
         match /links/{linkId} {
-          allow read: if canAccessBusiness(businessId);
+          allow read: if canReadTaskDoc(businessId, taskId);
           allow write: if false;
         }
 
         match /activity/{activityId} {
-          allow read: if canAccessBusiness(businessId);
+          allow read: if canReadTaskDoc(businessId, taskId);
           allow write: if false;
         }
 
         match /reads/{userId} {
-          allow read: if canAccessBusiness(businessId);
+          allow read: if canReadTaskDoc(businessId, taskId);
           allow write: if false;
         }
       }
@@ -204,7 +226,7 @@ service cloud.firestore {
       }
 
       match /clients/{clientId} {
-        allow read: if canAccessBusiness(businessId);
+        allow read: if isSuperAdmin() || isOwnerOrManager(businessId);
         allow write: if isSuperAdmin() || isOwnerOrManager(businessId);
       }
 
