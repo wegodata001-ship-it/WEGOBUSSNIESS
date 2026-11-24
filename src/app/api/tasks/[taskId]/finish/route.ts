@@ -5,6 +5,7 @@ import { isCompletedTaskStatus } from "@/lib/admin/project-progress";
 import { syncProjectProgressFromTasks } from "@/lib/admin/project-progress-sync";
 import { taskCompletionPatch } from "@/lib/admin/task-completion";
 import { isEmployeeOnTask } from "@/lib/admin/task-team";
+import { durationMinutesBetween } from "@/lib/admin/work-duration";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
 import { remainingBalance } from "@/lib/finance/vat";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -54,7 +55,7 @@ export async function POST(
     const startedAt = openSession.data().startedAt?.toDate?.()
       ? openSession.data().startedAt.toDate()
       : now;
-    const durationMinutes = Math.max(1, Math.round((now.getTime() - startedAt.getTime()) / 60000));
+    const durationMinutes = Math.max(1, durationMinutesBetween(startedAt, now));
     const time = new Intl.DateTimeFormat("en-GB", {
       hour: "2-digit",
       minute: "2-digit",

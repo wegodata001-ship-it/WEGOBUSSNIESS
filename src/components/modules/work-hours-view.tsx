@@ -7,12 +7,14 @@ import { useBusinessContext } from "@/components/providers/business-context";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { ListRow } from "@/components/ui/list-row";
 import { Spinner } from "@/components/ui/spinner";
+import { formatDurationWords } from "@/lib/admin/attendance";
 import { listWorkSessions } from "@/lib/data/work-hours";
 import type { WorkSession } from "@/types/work-hours";
 
 export function WorkHoursView() {
   const { business, membership, can, isSuperAdmin } = useBusinessContext();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const wordsLocale = locale === "ar" ? "ar" : "he";
   const [items, setItems] = useState<WorkSession[]>([]);
   const [loading, setLoading] = useState(true);
   const allowed = can("workHours.viewOwn") || can("workHours.viewAll");
@@ -57,7 +59,9 @@ export function WorkHoursView() {
             meta={session.status}
             badge={
               <span className="text-xs text-slate-500">
-                {session.durationMinutes ? `${session.durationMinutes} ${t("hours.minutes")}` : t("hours.open")}
+                {session.durationMinutes != null
+                  ? formatDurationWords(session.durationMinutes, wordsLocale)
+                  : t("hours.open")}
               </span>
             }
           />

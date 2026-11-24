@@ -189,6 +189,12 @@ export function projectName(projects: Project[], id: string | null | undefined) 
   return projects.find((item) => item.id === id)?.name ?? translate(getI18nLocale(), "common.noProject");
 }
 
+/** Numeric hours (1 decimal) for BI / deltas — not for human duration labels. */
 export function sessionHours(sessions: WorkSession[]) {
-  return Math.round((sessions.reduce((sum, item) => sum + (item.durationMinutes ?? 0), 0) / 60) * 10) / 10;
+  return Math.round((sessionMinutesTotal(sessions) / 60) * 10) / 10;
+}
+
+/** Sum stored duration minutes once (closed sessions). */
+export function sessionMinutesTotal(sessions: WorkSession[]) {
+  return sessions.reduce((sum, item) => sum + (item.durationMinutes ?? 0), 0);
 }

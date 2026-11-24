@@ -9,7 +9,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { SectionCard } from "@/components/ui/section-card";
 import { Spinner } from "@/components/ui/spinner";
-import { employeeName, projectName, sessionHours, useBusinessCatalog } from "@/lib/admin/catalog";
+import { formatDurationForExport, formatDurationWords } from "@/lib/admin/attendance";
+import { employeeName, projectName, sessionMinutesTotal, useBusinessCatalog } from "@/lib/admin/catalog";
 import { shiftDateOnly, todayInTimeZone } from "@/lib/dates/format";
 
 function csvEscape(value: string) {
@@ -17,12 +18,14 @@ function csvEscape(value: string) {
 }
 
 export function HoursView() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { business, membership, can } = useBusinessContext();
   const { data, loading } = useBusinessCatalog(business?.id ?? null);
   const today = todayInTimeZone(business?.timezone);
   const viewAll = can("workHours.viewAll") || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER";
   const myEmployeeId = membership?.employeeId ?? null;
+  const wordsLocale = locale === "ar" ? "ar" : "he";
+  const formatMinutes = (minutes: number) => formatDurationWords(minutes, wordsLocale);
   const [from, setFrom] = useState(shiftDateOnly(today, -30));
   const [to, setTo] = useState(today);
   const [employeeId, setEmployeeId] = useState(viewAll ? "" : myEmployeeId ?? "");
@@ -72,6 +75,7 @@ export function HoursView() {
     const lines = [[t("common.date"), t("common.employee"), t("common.project"), t("docs.taskName"), t("common.start"), t("common.end"), t("hours.duration")]].concat(
       selected.map((session) => {
         const task = data.tasks.find((item) => item.id === session.taskId);
+        const minutes = session.durationMinutes ?? 0;
         return [
           session.date,
           employeeName(data.employees, session.employeeId),
@@ -79,7 +83,7 @@ export function HoursView() {
           task?.title ?? "",
           session.startTime,
           session.endTime ?? "",
-          String(session.durationMinutes ?? 0),
+          formatDurationForExport(minutes, wordsLocale),
         ];
       }),
     );
@@ -107,9 +111,9 @@ export function HoursView() {
         }
       />
       <div className="grid gap-4 sm:grid-cols-3">
-        <KpiCard label={t("hours.todayTotal")} value={sessionHours(scopedSessions.filter((item) => item.date === today))} icon={Clock3} />
-        <KpiCard label={t("attendance.week")} value={sessionHours(scopedSessions.filter((item) => item.date >= weekStart && item.date <= today))} icon={Clock3} />
-        <KpiCard label={t("attendance.month")} value={sessionHours(scopedSessions.filter((item) => item.date.startsWith(month)))} icon={Clock3} />
+        <KpiCard label={t("hours.todayTotal")} value={formatMinutes(sessionMinutesTotal(scopedSessions.filter((item) => item.date === today)))} icon={Clock3} />
+        <KpiCard label={t("attendance.week")} value={formatMinutes(sessionMinutesTotal(scopedSessions.filter((item) => item.date >= weekStart && item.date <= today)))} icon={Clock3} />
+        <KpiCard label={t("attendance.month")} value={formatMinutes(sessionMinutesTotal(scopedSessions.filter((item) => item.date.startsWith(month))))} icon={Clock3} />
       </div>
       <div className={`grid gap-2 rounded-2xl border border-slate-200 bg-white p-3 ${viewAll ? "md:grid-cols-5" : "md:grid-cols-3"}`}>
         <DatePicker value={from} onChange={setFrom} />
@@ -151,8 +155,8 @@ export function HoursView() {
                   return (
                     <tr key={employee.id} className="border-t border-slate-100">
                       <td className="py-2">{employee.displayName}</td>
-                      <td className="py-2">{sessionHours(rows.filter((item) => item.status === "CLOSED"))}</td>
-                      <td className="py-2">{sessionHours(open)}</td>
+                      <td className="py-2">{formatMinutes(sessionMinutesTotal(rows.filter((item) => item.status === "CLOSED")))}</td>
+                      <td className="py-2">{formatMinutes(sessionMinutesTotal(open))}</td>
                       <td className="py-2">{new Set(rows.map((item) => item.taskId).filter(Boolean)).size}</td>
                     </tr>
                   );
@@ -182,7 +186,7 @@ export function HoursView() {
                       <td className="py-2">{task?.title ?? "—"}</td>
                       <td className="py-2">{session.startTime}</td>
                       <td className="py-2">{session.endTime ?? t("hours.open")}</td>
-                      <td className="py-2">{session.durationMinutes ?? "—"}</td>
+                      <td className="py-2">{session.durationMinutes == null ? "—" : formatMinutes(session.durationMinutes)}</td>
                     </tr>
                   );
                 })}

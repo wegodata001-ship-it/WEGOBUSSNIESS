@@ -1,8 +1,23 @@
 import { dateTimeInZone } from "@/lib/admin/meeting-time";
+import {
+  durationMinutesBetween,
+  formatDurationForExport,
+  formatDurationWords,
+  formatHoursMinutes,
+  sumMinutes,
+} from "@/lib/admin/work-duration";
 import { toSafeDate, toTimestamp } from "@/lib/dates/timestamp";
 import { DEFAULT_TIMEZONE } from "@/lib/env";
 import type { Employee } from "@/types/employee";
 import type { WorkSession } from "@/types/work-hours";
+
+export {
+  durationMinutesBetween,
+  formatDurationForExport,
+  formatDurationWords,
+  formatHoursMinutes,
+  sumMinutes,
+};
 
 export function isAttendanceSession(session: WorkSession) {
   return session.kind === "ATTENDANCE" || !session.taskId;
@@ -37,35 +52,24 @@ export function formatLiveDuration(startedAt: unknown, now = Date.now()) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-export function formatHoursMinutes(minutes: number) {
-  const safe = Math.max(0, Math.round(minutes));
-  const hours = Math.floor(safe / 60);
-  const rest = safe % 60;
-  return `${hours}:${String(rest).padStart(2, "0")}`;
-}
-
-export function formatDurationWords(minutes: number, locale: "he" | "ar" = "he") {
-  const safe = Math.max(0, Math.round(minutes));
-  const hours = Math.floor(safe / 60);
-  const rest = safe % 60;
-  if (locale === "ar") {
-    return `${hours} ساعات ${rest} دقائق`;
-  }
-  return `${hours} שעות ${rest} דקות`;
-}
-
 export function sessionMinutes(session: WorkSession, now = Date.now()) {
   if (session.status === "OPEN" && session.startedAt) {
-    const started = toTimestamp(session.startedAt);
-    return started ? Math.max(0, Math.round((now - started) / 60000)) : 0;
+    return durationMinutesBetween(session.startedAt, now);
   }
-  return session.durationMinutes ?? 0;
+  // Closed: keep stored durationMinutes (rounded once at clock-out). Do not re-derive and re-round.
+  if (session.durationMinutes != null) return Math.max(0, session.durationMinutes);
+  if (session.startedAt && session.endedAt) {
+    return durationMinutesBetween(session.startedAt, session.endedAt);
+  }
+  return 0;
 }
 
 export function minutesInRange(sessions: WorkSession[], employeeId: string, from: string, to: string) {
-  return sessions
-    .filter((session) => session.employeeId === employeeId && session.date >= from && session.date <= to && isAttendanceSession(session))
-    .reduce((sum, session) => sum + sessionMinutes(session), 0);
+  return sumMinutes(
+    sessions
+      .filter((session) => session.employeeId === employeeId && session.date >= from && session.date <= to && isAttendanceSession(session))
+      .map((session) => sessionMinutes(session)),
+  );
 }
 
 export function attendanceStatusLabel(status: WorkSession["status"], locale: "he" | "ar" = "he") {

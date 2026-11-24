@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 import { writeActivity } from "@/lib/admin/activity";
 import { dateTimeInZone } from "@/lib/admin/meeting-time";
+import { durationMinutesBetween } from "@/lib/admin/work-duration";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
 import { DEFAULT_TIMEZONE } from "@/lib/env";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -40,9 +41,7 @@ export async function POST(request: Request) {
 
   const started = open.data().startedAt?.toDate?.() as Date | undefined;
   const now = new Date();
-  const durationMinutes = started
-    ? Math.max(0, Math.round((now.getTime() - started.getTime()) / 60000))
-    : 0;
+  const durationMinutes = durationMinutesBetween(started, now);
   const zoned = dateTimeInZone(now, timeZone);
 
   await open.ref.set({

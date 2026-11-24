@@ -6,7 +6,7 @@ import { GhostButton, Modal, PrimaryButton } from "@/components/admin/ui";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { postAttendance } from "@/lib/admin/api";
 import {
-  formatHoursMinutes,
+  formatDurationWords,
   formatLiveDuration,
   openAttendanceFor,
   sessionMinutes,
@@ -26,7 +26,8 @@ export function AttendanceCard({
   onChanged: () => Promise<void> | void;
   compact?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const wordsLocale = locale === "ar" ? "ar" : "he";
   const open = openAttendanceFor(sessions, employeeId);
   const [now, setNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
@@ -119,7 +120,7 @@ export function AttendanceCard({
           <Modal title={t("attendance.confirmTitle")} onClose={() => setConfirm(false)}>
             <p className="text-sm text-slate-600">{t("attendance.confirmIn", { time: open.startTime || "—" })}</p>
             <p className="mt-2 text-sm text-slate-600">
-              {t("attendance.confirmDuration", { time: formatHoursMinutes(sessionMinutes(open, now)) })}
+              {t("attendance.confirmDuration", { time: formatDurationWords(sessionMinutes(open, now), wordsLocale) })}
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <GhostButton onClick={() => setConfirm(false)}>{t("attendance.cancel")}</GhostButton>
@@ -186,7 +187,7 @@ export function AttendanceCard({
         <Modal title={t("attendance.confirmTitle")} onClose={() => setConfirm(false)}>
           <p className="text-sm text-slate-600">{t("attendance.confirmIn", { time: open.startTime || "—" })}</p>
           <p className="mt-2 text-sm text-slate-600">
-            {t("attendance.confirmDuration", { time: formatHoursMinutes(sessionMinutes(open, now)) })}
+            {t("attendance.confirmDuration", { time: formatDurationWords(sessionMinutes(open, now), wordsLocale) })}
           </p>
           <div className="mt-5 flex justify-end gap-2">
             <GhostButton onClick={() => setConfirm(false)}>{t("attendance.cancel")}</GhostButton>
