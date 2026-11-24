@@ -18,32 +18,57 @@ function csvEscape(value: string) {
 
 export function HoursView() {
   const { t } = useI18n();
-  const { business } = useBusinessContext();
+  const { business, membership, can } = useBusinessContext();
   const { data, loading } = useBusinessCatalog(business?.id ?? null);
   const today = todayInTimeZone(business?.timezone);
+  const viewAll = can("workHours.viewAll") || membership?.role === "BUSINESS_OWNER" || membership?.role === "MANAGER";
+  const myEmployeeId = membership?.employeeId ?? null;
   const [from, setFrom] = useState(shiftDateOnly(today, -30));
   const [to, setTo] = useState(today);
-  const [employeeId, setEmployeeId] = useState("");
+  const [employeeId, setEmployeeId] = useState(viewAll ? "" : myEmployeeId ?? "");
   const [departmentId, setDepartmentId] = useState("");
   const [projectId, setProjectId] = useState("");
 
   const weekStart = shiftDateOnly(today, -6);
   const month = today.slice(0, 7);
 
-  const filtered = useMemo(() => data.sessions.filter((session) => {
+  const scopedEmployees = useMemo(() => {
+    if (viewAll) return data.employees;
+    if (!myEmployeeId) return [];
+    return data.employees.filter((item) => item.id === myEmployeeId);
+  }, [data.employees, myEmployeeId, viewAll]);
+
+  const scopedSessions = useMemo(() => {
+    if (viewAll) return data.sessions;
+    if (!myEmployeeId) return [];
+    return data.sessions.filter((session) => session.employeeId === myEmployeeId);
+  }, [data.sessions, myEmployeeId, viewAll]);
+
+  const filtered = useMemo(() => scopedSessions.filter((session) => {
     if (session.date < from || session.date > to) return false;
     if (employeeId && session.employeeId !== employeeId) return false;
+    if (!viewAll && session.employeeId !== myEmployeeId) return false;
     const task = data.tasks.find((item) => item.id === session.taskId);
     if (departmentId && task?.departmentId !== departmentId) return false;
     if (projectId && task?.projectId !== projectId) return false;
     return true;
-  }), [data.sessions, data.tasks, departmentId, employeeId, from, projectId, to]);
+  }), [data.tasks, departmentId, employeeId, from, myEmployeeId, projectId, scopedSessions, to, viewAll]);
 
   if (loading) return <Spinner label={t("hours.loading")} />;
+
+  if (!viewAll && !myEmployeeId) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title={t("nav.hours")} subtitle={t("hours.subtitle")} />
+        <EmptyState icon={Clock3} title={t("attendance.noEmployee")} />
+      </div>
+    );
+  }
 
   const selected = employeeId ? filtered.filter((item) => item.employeeId === employeeId) : filtered;
 
   function exportCsv() {
+    if (!viewAll) return;
     const lines = [[t("common.date"), t("common.employee"), t("common.project"), t("docs.taskName"), t("common.start"), t("common.end"), t("hours.duration")]].concat(
       selected.map((session) => {
         const task = data.tasks.find((item) => item.id === session.taskId);
@@ -73,62 +98,70 @@ export function HoursView() {
         title={t("nav.hours")}
         subtitle={t("hours.subtitle")}
         actions={
-          <>
-            <PrimaryButton onClick={exportCsv}>{t("hours.exportCsv")}</PrimaryButton>
-            <PrimaryButton onClick={() => window.print()}>{t("hours.exportPdf")}</PrimaryButton>
-          </>
+          viewAll ? (
+            <>
+              <PrimaryButton onClick={exportCsv}>{t("hours.exportCsv")}</PrimaryButton>
+              <PrimaryButton onClick={() => window.print()}>{t("hours.exportPdf")}</PrimaryButton>
+            </>
+          ) : null
         }
       />
       <div className="grid gap-4 sm:grid-cols-3">
-        <KpiCard label={t("hours.todayTotal")} value={sessionHours(data.sessions.filter((item) => item.date === today))} icon={Clock3} />
-        <KpiCard label={t("attendance.week")} value={sessionHours(data.sessions.filter((item) => item.date >= weekStart && item.date <= today))} icon={Clock3} />
-        <KpiCard label={t("attendance.month")} value={sessionHours(data.sessions.filter((item) => item.date.startsWith(month)))} icon={Clock3} />
+        <KpiCard label={t("hours.todayTotal")} value={sessionHours(scopedSessions.filter((item) => item.date === today))} icon={Clock3} />
+        <KpiCard label={t("attendance.week")} value={sessionHours(scopedSessions.filter((item) => item.date >= weekStart && item.date <= today))} icon={Clock3} />
+        <KpiCard label={t("attendance.month")} value={sessionHours(scopedSessions.filter((item) => item.date.startsWith(month)))} icon={Clock3} />
       </div>
-      <div className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-3 md:grid-cols-5">
+      <div className={`grid gap-2 rounded-2xl border border-slate-200 bg-white p-3 ${viewAll ? "md:grid-cols-5" : "md:grid-cols-3"}`}>
         <DatePicker value={from} onChange={setFrom} />
         <DatePicker value={to} onChange={setTo} />
-        <select className={inputClass} value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
-          <option value="">{t("meetings.allEmployees")}</option>
-          {data.employees.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}
-        </select>
-        <select className={inputClass} value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
-          <option value="">{t("hours.allDepartments")}</option>
-          {data.departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select>
+        {viewAll ? (
+          <select className={inputClass} value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
+            <option value="">{t("meetings.allEmployees")}</option>
+            {scopedEmployees.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}
+          </select>
+        ) : null}
+        {viewAll ? (
+          <select className={inputClass} value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
+            <option value="">{t("hours.allDepartments")}</option>
+            {data.departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        ) : null}
         <select className={inputClass} value={projectId} onChange={(event) => setProjectId(event.target.value)}>
           <option value="">{t("meetings.allProjects")}</option>
           {data.projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
       </div>
 
-      <SectionCard title={t("hours.summaryByEmployee")}>
-        {data.employees.length ? (
-          <table className="min-w-full text-sm">
-            <thead className="text-xs text-slate-500">
-              <tr>
-                <th className="py-2 text-start">{t("common.employee")}</th>
-                <th className="py-2 text-start">{t("hours.regularHours")}</th>
-                <th className="py-2 text-start">{t("hours.activeHours")}</th>
-                <th className="py-2 text-start">{t("hours.taskCount")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.employees.map((employee) => {
-                const rows = filtered.filter((item) => item.employeeId === employee.id);
-                const open = rows.filter((item) => item.status === "OPEN");
-                return (
-                  <tr key={employee.id} className="border-t border-slate-100">
-                    <td className="py-2">{employee.displayName}</td>
-                    <td className="py-2">{sessionHours(rows.filter((item) => item.status === "CLOSED"))}</td>
-                    <td className="py-2">{sessionHours(open)}</td>
-                    <td className="py-2">{new Set(rows.map((item) => item.taskId).filter(Boolean)).size}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : <EmptyState icon={Clock3} title={t("empty.hours")} />}
-      </SectionCard>
+      {viewAll ? (
+        <SectionCard title={t("hours.summaryByEmployee")}>
+          {scopedEmployees.length ? (
+            <table className="min-w-full text-sm">
+              <thead className="text-xs text-slate-500">
+                <tr>
+                  <th className="py-2 text-start">{t("common.employee")}</th>
+                  <th className="py-2 text-start">{t("hours.regularHours")}</th>
+                  <th className="py-2 text-start">{t("hours.activeHours")}</th>
+                  <th className="py-2 text-start">{t("hours.taskCount")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scopedEmployees.map((employee) => {
+                  const rows = filtered.filter((item) => item.employeeId === employee.id);
+                  const open = rows.filter((item) => item.status === "OPEN");
+                  return (
+                    <tr key={employee.id} className="border-t border-slate-100">
+                      <td className="py-2">{employee.displayName}</td>
+                      <td className="py-2">{sessionHours(rows.filter((item) => item.status === "CLOSED"))}</td>
+                      <td className="py-2">{sessionHours(open)}</td>
+                      <td className="py-2">{new Set(rows.map((item) => item.taskId).filter(Boolean)).size}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : <EmptyState icon={Clock3} title={t("empty.hours")} />}
+        </SectionCard>
+      ) : null}
 
       <SectionCard title={t("hours.details")}>
         {selected.length ? (

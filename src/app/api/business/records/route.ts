@@ -6,6 +6,11 @@ import { canViewTaskFinance } from "@/lib/finance/access";
 import { hideTaskFinance } from "@/lib/finance/public-task";
 import { toTimestamp } from "@/lib/dates/timestamp";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
+import {
+  canViewEmployeeDirectory,
+  filterEmployeesForActor,
+  filterSessionsForActor,
+} from "@/lib/permissions/employee-directory-access";
 import { filterMeetingsForActor } from "@/lib/permissions/meeting-access";
 import { canListBusinessProjects, canViewAllBusinessProjects, filterProjectsForActor } from "@/lib/permissions/project-access";
 import {
@@ -115,12 +120,20 @@ export async function GET(request: Request) {
   }
 
   if (kind === "employees") {
-    if (!actorCan(actor, "employees.view") && !actorCan(actor, "tasks.view") && !actor.isSuperAdmin) {
+    // Never treat tasks.view as a full-directory grant (that leaked every employee name to EMPLOYEE).
+    if (!canViewEmployeeDirectory(actor) && !actorCan(actor, "tasks.view") && !actorCan(actor, "tasks.create") && !actor.isSuperAdmin) {
       return NextResponse.json({ data: [] });
     }
     const snap = await db.collection(employeesPath(businessId)).get();
+    const employees = snap.docs.map((docSnap) => toEmployee(docSnap.id, docSnap.data()));
+    if (canViewEmployeeDirectory(actor)) {
+      return NextResponse.json({ data: employees });
+    }
+    // Scope to self + participants on tasks this actor can already see (assignee chips only).
+    const taskSnap = await db.collection(tasksPath(businessId)).get();
+    const tasks = taskSnap.docs.map((docSnap) => toTask(docSnap.id, docSnap.data()));
     return NextResponse.json({
-      data: snap.docs.map((docSnap) => toEmployee(docSnap.id, docSnap.data())),
+      data: filterEmployeesForActor(actor, employees, tasks),
     });
   }
 
@@ -165,8 +178,9 @@ export async function GET(request: Request) {
     const snap = await db.collection(workSessionsPath(businessId)).get();
     const sessions = snap.docs.map((docSnap) => toWorkSession(docSnap.id, docSnap.data()));
     const viewAll = actorCan(actor, "workHours.viewAll") || actor.isSuperAdmin;
+    // Ignore any client employeeId; scope only from actor.membership. Empty if unlinked.
     return NextResponse.json({
-      data: viewAll ? sessions : sessions.filter((session) => session.employeeId === actor.employeeId),
+      data: filterSessionsForActor(actor, sessions, viewAll),
     });
   }
 

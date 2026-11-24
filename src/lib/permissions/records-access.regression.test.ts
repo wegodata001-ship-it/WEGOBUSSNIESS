@@ -10,6 +10,7 @@ import {
 import { canAccessBusinessMembership } from "@/lib/auth/business-access";
 import { permissionsForRole } from "@/lib/permissions/engine";
 
+
 const employee = {
   uid: "u-emp",
   employeeId: "e1",
@@ -174,5 +175,9 @@ assert.ok(!statusesSrc.includes("ensureDefaultTaskStatuses"));
 assert.ok(statusesSrc.includes("listTaskStatusesReadOnly"));
 assert.ok(recordsSrc.includes("filterMeetingsForActor"));
 assert.ok(recordsSrc.includes("filterProjectsForActor"));
+assert.ok(recordsSrc.includes("filterEmployeesForActor"));
+assert.ok(recordsSrc.includes("filterSessionsForActor"));
+assert.ok(recordsSrc.includes("canViewEmployeeDirectory"));
+assert.ok(!recordsSrc.includes('!actorCan(actor, "employees.view") && !actorCan(actor, "tasks.view")'));
 
 console.log("RECORDS_ACCESS_REGRESSION_PASS");

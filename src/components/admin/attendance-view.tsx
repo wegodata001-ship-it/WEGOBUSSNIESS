@@ -63,11 +63,18 @@ export function AttendanceView() {
   if (!business?.id) return null;
   const businessId = business.id;
 
-  const present = attendanceSessions(data.sessions).filter((item) => item.date === today && item.status === "OPEN").length;
-  const finished = attendanceSessions(data.sessions).filter((item) => item.date === today && item.status === "CLOSED").length;
-  const clockedIds = new Set(attendanceSessions(data.sessions).filter((item) => item.date === today).map((item) => item.employeeId));
-  const notIn = data.employees.filter((item) => item.status === "ACTIVE" && !clockedIds.has(item.id)).length;
-  const hoursToday = Math.round((attendanceSessions(data.sessions).filter((item) => item.date === today).reduce((sum, item) => sum + sessionMinutes(item), 0) / 60) * 10) / 10;
+  const todaySessions = attendanceSessions(data.sessions).filter((item) => {
+    if (item.date !== today) return false;
+    if (!viewAll && item.employeeId !== myEmployeeId) return false;
+    return true;
+  });
+  const present = todaySessions.filter((item) => item.status === "OPEN").length;
+  const finished = todaySessions.filter((item) => item.status === "CLOSED").length;
+  const clockedIds = new Set(todaySessions.map((item) => item.employeeId));
+  const notIn = viewAll
+    ? data.employees.filter((item) => item.status === "ACTIVE" && !clockedIds.has(item.id)).length
+    : (myEmployeeId && !clockedIds.has(myEmployeeId) ? 1 : 0);
+  const hoursToday = Math.round((todaySessions.reduce((sum, item) => sum + sessionMinutes(item), 0) / 60) * 10) / 10;
   const wordsLocale = locale === "ar" ? "ar" : "he";
 
   const selectedEmployee = employeeId || (!viewAll ? myEmployeeId : "");

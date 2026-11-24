@@ -4,6 +4,7 @@ import { notifyUnpaidOnComplete } from "@/lib/admin/notify";
 import { isCompletedTaskStatus } from "@/lib/admin/project-progress";
 import { syncProjectProgressFromTasks } from "@/lib/admin/project-progress-sync";
 import { taskCompletionPatch } from "@/lib/admin/task-completion";
+import { isEmployeeOnTask } from "@/lib/admin/task-team";
 import { actorCan, requireActor } from "@/lib/auth/server-actor";
 import { remainingBalance } from "@/lib/finance/vat";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -25,6 +26,9 @@ export async function POST(
   if (!actorCan(actor, "tasks.complete")) {
     return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   }
+  if (!actor.isOwnerOrManager && !actor.employeeId) {
+    return NextResponse.json({ error: "EMPLOYEE_REQUIRED" }, { status: 403 });
+  }
 
   const { taskId } = await context.params;
   const db = getAdminDb();
@@ -35,11 +39,7 @@ export async function POST(
   }
 
   const task = taskSnap.data()!;
-  const collaborators = Array.isArray(task.collaboratorIds) ? task.collaboratorIds : [];
-  const onTask = task.assigneeId === actor.employeeId
-    || task.assigneeEmployeeId === actor.employeeId
-    || collaborators.includes(actor.employeeId);
-  if (!actor.isOwnerOrManager && !onTask) {
+  if (!actor.isOwnerOrManager && !isEmployeeOnTask(task, actor.employeeId)) {
     return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   }
 
