@@ -2,9 +2,11 @@ import { writeActivity } from "@/lib/admin/activity";
 import { canSetTaskPrice } from "@/lib/finance/access";
 import { money, parseMoney } from "@/lib/finance/money";
 import {
-  calculateTaskPrice,
+  calculateProjectBasePrice,
   paymentStatusFor,
   remainingBalance,
+  resolveProjectBaseVatMode,
+  type ProjectBaseVatMode,
 } from "@/lib/finance/vat";
 import type { ServerActor } from "@/lib/auth/server-actor";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -16,7 +18,9 @@ export async function setProjectBasePrice(input: {
   actor: ServerActor;
   businessId: string;
   projectId: string;
+  /** Entered amount — meaning depends on vatMode. */
   priceBeforeVat: unknown;
+  vatMode?: unknown;
 }) {
   if (!canSetTaskPrice(input.actor)) {
     return { ok: false as const, error: "FORBIDDEN" as PaymentWriteError, status: 403 };
@@ -32,8 +36,12 @@ export async function setProjectBasePrice(input: {
     return { ok: false as const, error: "TASK_FIELDS" as PaymentWriteError, status: 400 };
   }
 
-  const vatRate = existing.baseVatRate ?? await readBusinessVatRate(input.businessId);
-  const calc = calculateTaskPrice(price, vatRate);
+  const vatMode: ProjectBaseVatMode = input.vatMode !== undefined
+    ? resolveProjectBaseVatMode(input.vatMode)
+    : existing.basePriceVatMode;
+  // Always use current business VAT settings (never freeze a hardcoded rate in code).
+  const vatRate = await readBusinessVatRate(input.businessId);
+  const calc = calculateProjectBasePrice(price, vatRate, vatMode);
   const paidAmount = money(existing.basePaidAmount ?? 0);
   const now = new Date();
   await ref.set({
@@ -41,6 +49,7 @@ export async function setProjectBasePrice(input: {
     baseVatRate: calc.vatRate,
     baseVatAmount: calc.vatAmount,
     basePriceIncludingVat: calc.priceIncludingVat,
+    basePriceVatMode: calc.vatMode,
     basePaidAmount: paidAmount,
     baseBalanceDue: remainingBalance(calc.priceIncludingVat, paidAmount),
     basePaymentStatus: paymentStatusFor(paidAmount, calc.priceIncludingVat),

@@ -1,6 +1,9 @@
 import type { TaskPaymentStatus } from "@/types/payment";
 import type { ProjectSystemDetails } from "@/types/project-system";
 
+export const PROJECT_BASE_VAT_MODES = ["EXCLUDING_VAT", "INCLUDING_VAT"] as const;
+export type ProjectBaseVatMode = (typeof PROJECT_BASE_VAT_MODES)[number];
+
 export const PROJECT_STATUSES = ["ACTIVE", "ON_HOLD", "COMPLETED"] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
@@ -55,6 +58,8 @@ export type Project = {
   baseVatRate: number | null;
   baseVatAmount: number | null;
   basePriceIncludingVat: number | null;
+  /** How the entered base amount should be interpreted. Default/legacy: EXCLUDING_VAT. */
+  basePriceVatMode: ProjectBaseVatMode;
   basePaidAmount: number;
   baseBalanceDue: number | null;
   basePaymentStatus: TaskPaymentStatus | null;

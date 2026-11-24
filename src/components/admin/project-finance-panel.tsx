@@ -6,12 +6,21 @@ import { useI18n } from "@/components/providers/i18n-provider";
 import { fetchProjectPayments, receiveBusinessPayment, saveProjectBasePrice, voidBusinessPayment } from "@/lib/business/api";
 import { computeProjectFinance } from "@/lib/finance/project-ledger";
 import { formatIls } from "@/lib/finance/money";
+import { type ProjectBaseVatMode, resolveProjectBaseVatMode } from "@/lib/finance/vat";
 import { todayInTimeZone } from "@/lib/dates/format";
 import { labelOf } from "@/lib/admin/labels";
 import type { Project } from "@/types/department";
 import type { PaymentRecord } from "@/types/payment";
 import type { Task } from "@/types/task";
 import { PAYMENT_METHODS } from "@/types/payment";
+
+function baseDraftFromProject(project: Project) {
+  const mode = resolveProjectBaseVatMode(project.basePriceVatMode);
+  if (mode === "INCLUDING_VAT") {
+    return project.basePriceIncludingVat != null ? String(project.basePriceIncludingVat) : "";
+  }
+  return project.basePriceBeforeVat != null ? String(project.basePriceBeforeVat) : "";
+}
 
 type Props = {
   businessId: string;
@@ -43,9 +52,8 @@ export function ProjectFinancePanel({
     [tasks],
   );
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
-  const [baseDraft, setBaseDraft] = useState(
-    project.basePriceBeforeVat != null ? String(project.basePriceBeforeVat) : "",
-  );
+  const [baseDraft, setBaseDraft] = useState(() => baseDraftFromProject(project));
+  const [vatMode, setVatMode] = useState<ProjectBaseVatMode>(() => resolveProjectBaseVatMode(project.basePriceVatMode));
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<string>("BANK_TRANSFER");
   const [date, setDate] = useState(todayInTimeZone(timezone));
@@ -60,8 +68,16 @@ export function ProjectFinancePanel({
   }, [businessId, project.id]);
 
   useEffect(() => {
-    setBaseDraft(project.basePriceBeforeVat != null ? String(project.basePriceBeforeVat) : "");
-  }, [project.basePriceBeforeVat, project.id]);
+    setBaseDraft(baseDraftFromProject(project));
+    setVatMode(resolveProjectBaseVatMode(project.basePriceVatMode));
+    // Sync only when persisted finance fields change (avoid wiping while typing).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    project.id,
+    project.basePriceBeforeVat,
+    project.basePriceIncludingVat,
+    project.basePriceVatMode,
+  ]);
 
   useEffect(() => {
     if (canView) void loadPayments();
@@ -80,6 +96,7 @@ export function ProjectFinancePanel({
       businessId,
       projectId: project.id,
       priceBeforeVat: Number(baseDraft || 0),
+      vatMode,
     });
     setBusy(false);
     if (!result.ok) {
@@ -148,6 +165,11 @@ export function ProjectFinancePanel({
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <p className="text-xs text-slate-500">{t("finance.basePrice")}</p>
           <p className="mt-1 text-lg font-semibold">{formatIls(ledger.basePrice, "0.00 ₪")}</p>
+          {project.basePriceIncludingVat != null ? (
+            <p className="mt-1 text-xs text-slate-500">
+              {t("finance.beforeVat")}: {formatIls(project.basePriceBeforeVat)} · {t("finance.vatAmount")}: {formatIls(project.baseVatAmount)} · {t("finance.inclVatShort")}: {formatIls(project.basePriceIncludingVat)}
+            </p>
+          ) : null}
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <p className="text-xs text-slate-500">{t("finance.extras")}</p>
@@ -189,7 +211,34 @@ export function ProjectFinancePanel({
               <PrimaryButton disabled={busy} onClick={() => void saveBase()}>{t("finance.saveBase")}</PrimaryButton>
             </div>
           </Field>
+          <div className="mt-3 flex flex-col gap-2 text-sm">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="project-base-vat-mode"
+                checked={vatMode === "INCLUDING_VAT"}
+                onChange={() => setVatMode("INCLUDING_VAT")}
+              />
+              {t("finance.vatModeIncluding")}
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="project-base-vat-mode"
+                checked={vatMode === "EXCLUDING_VAT"}
+                onChange={() => setVatMode("EXCLUDING_VAT")}
+              />
+              {t("finance.vatModeExcluding")}
+            </label>
+          </div>
           <p className="mt-2 text-xs text-slate-500">{t("finance.baseHint")}</p>
+          {project.basePriceIncludingVat != null ? (
+            <div className="mt-3 grid gap-1 text-sm text-slate-700 sm:grid-cols-3">
+              <p>{t("finance.beforeVat")}: <span className="font-medium">{formatIls(project.basePriceBeforeVat)}</span></p>
+              <p>{t("finance.vatAmount")}: <span className="font-medium">{formatIls(project.baseVatAmount)}</span></p>
+              <p>{t("finance.inclVatShort")}: <span className="font-medium">{formatIls(project.basePriceIncludingVat)}</span></p>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
