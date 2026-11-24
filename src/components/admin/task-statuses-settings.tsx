@@ -39,7 +39,28 @@ export function TaskStatusesSettings({
           {t("settings.newStatus")}
         </PrimaryButton>
       </div>
-      <div className="overflow-x-auto">
+      <div className="grid gap-3 md:hidden">
+        {statuses.map((item) => (
+          <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="flex items-start justify-between gap-2">
+              <StatusBadge value={item.type} label={statusDefinitionName(item, locale)} />
+              <span className="text-xs text-slate-500">{item.isActive ? t("settings.statusActive") : t("settings.statusInactive")}</span>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">{labelOf(item.type)}</p>
+            <div className="mt-3">
+              <GhostButton onClick={() => setDraft({
+                id: item.id,
+                name: item.name,
+                nameAr: item.nameAr,
+                color: item.color,
+                type: item.type,
+                isActive: item.isActive,
+              })}>{t("common.edit")}</GhostButton>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
         <table className="min-w-full text-sm">
           <thead className="text-xs text-slate-500">
             <tr>

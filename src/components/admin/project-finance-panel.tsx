@@ -200,9 +200,9 @@ export function ProjectFinancePanel({
       {canSetPrice ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <Field label={t("finance.editBasePrice")}>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <input
-                className={`${inputClass} max-w-[12rem]`}
+                className={`${inputClass} w-full sm:max-w-[12rem]`}
                 inputMode="decimal"
                 value={baseDraft}
                 onChange={(e) => setBaseDraft(e.target.value)}
@@ -212,7 +212,7 @@ export function ProjectFinancePanel({
             </div>
           </Field>
           <div className="mt-3 flex flex-col gap-2 text-sm">
-            <label className="inline-flex items-center gap-2">
+            <label className="inline-flex min-h-11 items-center gap-2 rounded-xl px-1">
               <input
                 type="radio"
                 name="project-base-vat-mode"
@@ -221,7 +221,7 @@ export function ProjectFinancePanel({
               />
               {t("finance.vatModeIncluding")}
             </label>
-            <label className="inline-flex items-center gap-2">
+            <label className="inline-flex min-h-11 items-center gap-2 rounded-xl px-1">
               <input
                 type="radio"
                 name="project-base-vat-mode"

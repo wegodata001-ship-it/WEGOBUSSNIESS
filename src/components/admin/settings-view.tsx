@@ -344,17 +344,19 @@ export function SettingsControlView() {
   return (
     <div className="space-y-5">
       <PageHeader title={t("nav.settings")} subtitle={t("settings.subtitle")} />
-      <div className="flex flex-wrap gap-2">
-        {tabs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setTab(item.id)}
-            className={`min-h-11 rounded-xl px-3 py-2 text-sm ${tab === item.id ? "bg-[var(--brand-primary)] text-white" : "bg-white text-slate-600"}`}
-          >
-            {t(item.key)}
-          </button>
-        ))}
+      <div className="-mx-1 overflow-x-auto overscroll-x-contain px-1 pb-1">
+        <div className="flex w-max min-w-full gap-2">
+          {tabs.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTab(item.id)}
+              className={`shrink-0 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm touch-manipulation ${tab === item.id ? "bg-[var(--brand-primary)] text-white" : "bg-white text-slate-600"}`}
+            >
+              {t(item.key)}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === "team" && canTeam ? (

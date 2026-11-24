@@ -713,51 +713,94 @@ function ProjectTable({
   employees: Employee[];
   today: string;
 }) {
-  if (!projects.length) return <p className="px-4 py-8 text-sm text-slate-500">{tt("work.noProjects")}</p>;
+  const active = projects.filter((project) => project.isActive !== false);
+  if (!active.length) return <p className="px-4 py-8 text-sm text-slate-500">{tt("work.noProjects")}</p>;
+
+  function stats(project: Project) {
+    const list = tasks.filter((task) => task.projectId === project.id);
+    return {
+      list,
+      done: list.filter((task) => isDoneTaskStatus(task.status)).length,
+      late: list.filter((task) => isOverdue(task, today)).length,
+      progress: computeProjectProgress(list),
+    };
+  }
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[56rem] text-sm">
-        <thead className="bg-[#F8FAFC] text-xs text-slate-500">
-          <tr>
-            {[tt("common.project"), tt("work.colClient"), tt("work.colAssignee"), tt("work.tabTasks"), tt("work.completedCount"), tt("status.OVERDUE"), tt("work.colProgress"), tt("work.colDeadline"), tt("work.colStatus")].map((label) => (
-              <th key={label} className="px-3 py-2.5 text-start font-medium first:ps-4 last:pe-4">{label}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {projects.filter((project) => project.isActive !== false).map((project) => {
-            const list = tasks.filter((task) => task.projectId === project.id);
-            const done = list.filter((task) => isDoneTaskStatus(task.status)).length;
-            const late = list.filter((task) => isOverdue(task, today)).length;
-            const progress = computeProjectProgress(list);
-            return (
-              <tr key={project.id} className="hover:bg-slate-50/80">
-                <td className="px-3 py-2.5 first:ps-4">
-                  <Link href={`/projects/${project.id}`} className="font-medium text-[#0F172A] hover:text-[#2563EB]">{project.name}</Link>
-                </td>
-                <td className="px-3 py-2.5 text-slate-600">{project.clientName || "—"}</td>
-                <td className="px-3 py-2.5 text-slate-600">{employeeName(employees, project.managerEmployeeId)}</td>
-                <td className="px-3 py-2.5 tabular-nums">{list.length}</td>
-                <td className="px-3 py-2.5 tabular-nums">{done}</td>
-                <td className={`px-3 py-2.5 tabular-nums ${late ? "text-red-600" : "text-slate-600"}`}>{late}</td>
-                <td className="px-3 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
-                      <div className="h-full rounded-full bg-[#2563EB]" style={{ width: `${progress}%` }} />
+    <>
+      <div className="grid gap-3 p-3 md:hidden">
+        {active.map((project) => {
+          const { list, done, late, progress } = stats(project);
+          return (
+            <Link
+              key={project.id}
+              href={`/projects/${project.id}`}
+              className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-[#0F172A]">{project.name}</p>
+                  <p className="mt-0.5 truncate text-xs text-slate-500">{project.clientName || "—"} · {employeeName(employees, project.managerEmployeeId)}</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{labelOf(project.status)}</span>
+              </div>
+              <div className="mt-3 flex items-center gap-2">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-[#2563EB]" style={{ width: `${progress}%` }} />
+                </div>
+                <span className="text-xs tabular-nums text-slate-500">{progress}%</span>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs text-slate-600">
+                <div className="rounded-xl bg-slate-50 px-2 py-2"><p className="tabular-nums font-semibold text-slate-900">{list.length}</p><p>{tt("work.tabTasks")}</p></div>
+                <div className="rounded-xl bg-slate-50 px-2 py-2"><p className="tabular-nums font-semibold text-slate-900">{done}</p><p>{tt("work.completedCount")}</p></div>
+                <div className="rounded-xl bg-slate-50 px-2 py-2"><p className={`tabular-nums font-semibold ${late ? "text-red-600" : "text-slate-900"}`}>{late}</p><p>{tt("status.OVERDUE")}</p></div>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">{tt("work.colDeadline")}: {deadlineLabel(project.dueDate, today)}</p>
+            </Link>
+          );
+        })}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[56rem] text-sm">
+          <thead className="bg-[#F8FAFC] text-xs text-slate-500">
+            <tr>
+              {[tt("common.project"), tt("work.colClient"), tt("work.colAssignee"), tt("work.tabTasks"), tt("work.completedCount"), tt("status.OVERDUE"), tt("work.colProgress"), tt("work.colDeadline"), tt("work.colStatus")].map((label) => (
+                <th key={label} className="px-3 py-2.5 text-start font-medium first:ps-4 last:pe-4">{label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {active.map((project) => {
+              const { list, done, late, progress } = stats(project);
+              return (
+                <tr key={project.id} className="hover:bg-slate-50/80">
+                  <td className="px-3 py-2.5 first:ps-4">
+                    <Link href={`/projects/${project.id}`} className="font-medium text-[#0F172A] hover:text-[#2563EB]">{project.name}</Link>
+                  </td>
+                  <td className="px-3 py-2.5 text-slate-600">{project.clientName || "—"}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{employeeName(employees, project.managerEmployeeId)}</td>
+                  <td className="px-3 py-2.5 tabular-nums">{list.length}</td>
+                  <td className="px-3 py-2.5 tabular-nums">{done}</td>
+                  <td className={`px-3 py-2.5 tabular-nums ${late ? "text-red-600" : "text-slate-600"}`}>{late}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-full rounded-full bg-[#2563EB]" style={{ width: `${progress}%` }} />
+                      </div>
+                      <span className="text-xs tabular-nums text-slate-500">{progress}%</span>
                     </div>
-                    <span className="text-xs tabular-nums text-slate-500">{progress}%</span>
-                  </div>
-                </td>
-                <td className="px-3 py-2.5 text-slate-600">{deadlineLabel(project.dueDate, today)}</td>
-                <td className="px-3 py-2.5 last:pe-4">
-                  <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{labelOf(project.status)}</span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                  </td>
+                  <td className="px-3 py-2.5 text-slate-600">{deadlineLabel(project.dueDate, today)}</td>
+                  <td className="px-3 py-2.5 last:pe-4">
+                    <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{labelOf(project.status)}</span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -772,37 +815,64 @@ function TeamTable({
 }) {
   if (!team.length) return <p className="px-4 py-8 text-sm text-slate-500">{tt("work.noEmployee")}</p>;
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[48rem] text-sm">
-        <thead className="bg-[#F8FAFC] text-xs text-slate-500">
-          <tr>
-            {[tt("work.employee"), tt("common.department"), tt("work.workStatus"), tt("work.currentTask"), tt("work.clockInCol"), tt("work.hoursToday")].map((label) => (
-              <th key={label} className="px-3 py-2.5 text-start font-medium first:ps-4 last:pe-4">{label}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {team.map((row) => {
-            const employee = employees.find((item) => item.id === row.id);
-            const department = departments.find((item) => item.id === employee?.departmentId);
-            const styles = categoryStyles(department?.color);
-            return (
-              <tr key={row.id}>
-                <td className="px-3 py-2.5 first:ps-4 font-medium text-[#0F172A]">{row.name}</td>
-                <td className="px-3 py-2.5">
-                  <span className="inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ background: styles.badge, color: styles.badgeText }}>
+    <>
+      <div className="grid gap-3 p-3 md:hidden">
+        {team.map((row) => {
+          const employee = employees.find((item) => item.id === row.id);
+          const department = departments.find((item) => item.id === employee?.departmentId);
+          const styles = categoryStyles(department?.color);
+          return (
+            <div key={row.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-[#0F172A]">{row.name}</p>
+                  <span className="mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ background: styles.badge, color: styles.badgeText }}>
                     {row.department}
                   </span>
-                </td>
-                <td className="px-3 py-2.5 text-slate-600">{teamMark(row.status)}</td>
-                <td className="px-3 py-2.5 text-slate-600">{row.currentTask || "—"}</td>
-                <td className="px-3 py-2.5 tabular-nums text-slate-600">{row.clockInTime || "—"}</td>
-                <td className="px-3 py-2.5 last:pe-4 tabular-nums text-slate-600">{row.timeToday}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                </div>
+                <span className="shrink-0 text-sm text-slate-600">{teamMark(row.status)}</span>
+              </div>
+              <p className="mt-3 text-sm text-slate-700"><span className="text-slate-500">{tt("work.currentTask")}: </span>{row.currentTask || "—"}</p>
+              <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
+                <span>{tt("work.clockInCol")}: <span className="tabular-nums text-slate-700">{row.clockInTime || "—"}</span></span>
+                <span>{tt("work.hoursToday")}: <span className="tabular-nums text-slate-700">{row.timeToday}</span></span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[48rem] text-sm">
+          <thead className="bg-[#F8FAFC] text-xs text-slate-500">
+            <tr>
+              {[tt("work.employee"), tt("common.department"), tt("work.workStatus"), tt("work.currentTask"), tt("work.clockInCol"), tt("work.hoursToday")].map((label) => (
+                <th key={label} className="px-3 py-2.5 text-start font-medium first:ps-4 last:pe-4">{label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {team.map((row) => {
+              const employee = employees.find((item) => item.id === row.id);
+              const department = departments.find((item) => item.id === employee?.departmentId);
+              const styles = categoryStyles(department?.color);
+              return (
+                <tr key={row.id}>
+                  <td className="px-3 py-2.5 first:ps-4 font-medium text-[#0F172A]">{row.name}</td>
+                  <td className="px-3 py-2.5">
+                    <span className="inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ background: styles.badge, color: styles.badgeText }}>
+                      {row.department}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-slate-600">{teamMark(row.status)}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{row.currentTask || "—"}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-slate-600">{row.clockInTime || "—"}</td>
+                  <td className="px-3 py-2.5 last:pe-4 tabular-nums text-slate-600">{row.timeToday}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

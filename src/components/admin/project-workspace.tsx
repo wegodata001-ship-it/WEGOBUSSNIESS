@@ -118,12 +118,19 @@ export function ProjectWorkspace() {
         {project.startDate ? <span className="text-slate-500">{t("common.start")} {formatProjectDate(project.startDate, locale)}</span> : null}
         <span className="text-slate-500">{t("projects.manager", { name: employeeName(data.employees, project.managerEmployeeId) })}</span>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {TABS.filter((item) => item.id !== "finance" || canViewFinance).map((item) => (
-          <button key={item.id} type="button" onClick={() => setTab(item.id)} className={`rounded-xl px-3 py-2 text-sm ${tab === item.id ? "bg-[var(--brand-primary)] text-white" : "bg-white text-slate-600"}`}>
-            {t(item.key)}
-          </button>
-        ))}
+      <div className="-mx-1 overflow-x-auto overscroll-x-contain px-1 pb-1" data-testid="project-tabs">
+        <div className="flex w-max min-w-full gap-2">
+          {TABS.filter((item) => item.id !== "finance" || canViewFinance).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTab(item.id)}
+              className={`shrink-0 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm touch-manipulation ${tab === item.id ? "bg-[var(--brand-primary)] text-white" : "bg-white text-slate-600"}`}
+            >
+              {t(item.key)}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === "overview" ? (

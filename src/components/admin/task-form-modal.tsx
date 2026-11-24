@@ -402,7 +402,22 @@ export function TaskFormModal({
 
   return (
     <>
-      <Modal title={draft.id ? t("work.editTask") : t("work.newTaskFull")} onClose={onClose}>
+      <Modal
+        title={draft.id ? t("work.editTask") : t("work.newTaskFull")}
+        onClose={onClose}
+        footer={
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <GhostButton onClick={onClose}>{t("common.cancel")}</GhostButton>
+            {assetError && (boundTaskId || draft.id) ? (
+              <PrimaryButton disabled={busy || assetBusy} onClick={() => void retryAssets()}>{t("work.retryFailed")}</PrimaryButton>
+            ) : (
+              <PrimaryButton disabled={busy || assetBusy || !draft.title.trim()} onClick={() => void handleSave()}>
+                {busy || assetBusy ? t("work.saving") : t("work.saveTask")}
+              </PrimaryButton>
+            )}
+          </div>
+        }
+      >
         <div className="grid gap-4">
           {!replacing ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -598,16 +613,6 @@ export function TaskFormModal({
         {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
         {assetError ? <p className="mt-2 text-sm text-rose-600">{assetError}</p> : null}
         {uploadProgress ? <p className="mt-2 text-sm text-slate-500">{uploadProgress}</p> : null}
-        <div className="mt-5 flex justify-end gap-2">
-          <GhostButton onClick={onClose}>{t("common.cancel")}</GhostButton>
-          {assetError && (boundTaskId || draft.id) ? (
-            <PrimaryButton disabled={busy || assetBusy} onClick={() => void retryAssets()}>{t("work.retryFailed")}</PrimaryButton>
-          ) : (
-            <PrimaryButton disabled={busy || assetBusy || !draft.title.trim()} onClick={() => void handleSave()}>
-              {busy || assetBusy ? t("work.saving") : t("work.saveTask")}
-            </PrimaryButton>
-          )}
-        </div>
       </Modal>
 
       {quick ? (

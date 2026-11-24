@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Heebo, Noto_Sans_Arabic } from "next/font/google";
 import { AppProviders } from "@/components/providers/app-providers";
 import { APP_NAME } from "@/lib/env";
@@ -20,6 +20,13 @@ const arabic = Noto_Sans_Arabic({
 export const metadata: Metadata = {
   title: APP_NAME,
   description: "Multi-business operations platform",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#F6F8FB",
 };
 
 export default function RootLayout({

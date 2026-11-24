@@ -146,7 +146,7 @@ export function EmployeeMultiSelect({
           disabled={disabled}
           data-testid="employee-multi-select-open"
           onClick={() => setOpen((state) => !state)}
-          className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+          className="inline-flex min-h-10 items-center gap-1 rounded-full px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50 touch-manipulation"
         >
           <Plus className="h-3 w-3" />
           {selected.length ? "הוסף עובד" : placeholder}
@@ -155,7 +155,7 @@ export function EmployeeMultiSelect({
 
       {open && !disabled ? (
         <div
-          className="absolute z-[60] mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+          className="absolute z-[60] mt-2 max-h-[min(18rem,45dvh)] w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
           data-testid="employee-multi-select-menu"
           onMouseDown={(event) => event.stopPropagation()}
           onPointerDown={(event) => event.stopPropagation()}
@@ -168,11 +168,11 @@ export function EmployeeMultiSelect({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={placeholder}
-              className="h-9 w-full bg-transparent text-sm outline-none"
+              className="h-10 w-full bg-transparent text-sm outline-none"
               data-testid="employee-multi-select-search"
             />
           </div>
-          <div className="max-h-64 overflow-y-auto p-1">
+          <div className="max-h-[min(14rem,38dvh)] overflow-y-auto overscroll-contain p-1">
             {options.length ? options.map((employee) => {
               const checked = selectedIds.includes(employee.id);
               return (
@@ -186,7 +186,7 @@ export function EmployeeMultiSelect({
                     toggle(employee.id);
                     setQuery("");
                   }}
-                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-start hover:bg-slate-50"
+                  className="flex min-h-12 w-full items-center gap-3 rounded-xl px-2 py-2.5 text-start hover:bg-slate-50 touch-manipulation"
                 >
                   <span className={`flex h-5 w-5 items-center justify-center rounded border ${checked ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white" : "border-slate-300"}`}>
                     {checked ? <Check className="h-3 w-3" /> : null}

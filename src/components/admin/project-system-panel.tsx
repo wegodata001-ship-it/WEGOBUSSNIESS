@@ -440,13 +440,34 @@ export function ProjectSystemPanel({
           <textarea className={`${inputClass} h-24 py-2`} disabled={!canManage} value={form.technicalNotes} onChange={(e) => patch("technicalNotes", e.target.value)} />
         </Field>
         <Field label={t("projects.system.url")}>
-          <input className={inputClass} disabled={!canManage} value={form.systemUrl ?? ""} onChange={(e) => patch("systemUrl", e.target.value || null)} placeholder="https://" />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input className={inputClass} disabled={!canManage} value={form.systemUrl ?? ""} onChange={(e) => patch("systemUrl", e.target.value || null)} placeholder="https://" />
+            {form.systemUrl ? (
+              <a href={form.systemUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 px-3 text-sm text-[var(--brand-primary)]">
+                {t("common.open")}
+              </a>
+            ) : null}
+          </div>
         </Field>
         <Field label={t("projects.system.adminUrl")}>
-          <input className={inputClass} disabled={!canManage} value={form.adminUrl ?? ""} onChange={(e) => patch("adminUrl", e.target.value || null)} placeholder="https://" />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input className={inputClass} disabled={!canManage} value={form.adminUrl ?? ""} onChange={(e) => patch("adminUrl", e.target.value || null)} placeholder="https://" />
+            {form.adminUrl ? (
+              <a href={form.adminUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 px-3 text-sm text-[var(--brand-primary)]">
+                {t("common.open")}
+              </a>
+            ) : null}
+          </div>
         </Field>
         <Field label={t("projects.system.username")}>
-          <input className={inputClass} disabled={!canManage} value={form.username} onChange={(e) => patch("username", e.target.value)} autoComplete="off" />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input className={inputClass} disabled={!canManage} value={form.username} onChange={(e) => patch("username", e.target.value)} autoComplete="off" />
+            {form.username ? (
+              <GhostButton onClick={() => void navigator.clipboard.writeText(form.username).catch(() => undefined)}>
+                <Copy className="h-4 w-4" />
+              </GhostButton>
+            ) : null}
+          </div>
         </Field>
         <Field label={t("projects.system.password")}>
           {!canManageCredentials ? (
@@ -517,7 +538,14 @@ export function ProjectSystemPanel({
           )}
         </Field>
         <Field label={t("projects.system.github")}>
-          <input className={inputClass} disabled={!canManage} value={form.githubUrl ?? ""} onChange={(e) => patch("githubUrl", e.target.value || null)} placeholder="https://github.com/..." />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input className={inputClass} disabled={!canManage} value={form.githubUrl ?? ""} onChange={(e) => patch("githubUrl", e.target.value || null)} placeholder="https://github.com/..." />
+            {form.githubUrl ? (
+              <a href={form.githubUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 px-3 text-sm text-[var(--brand-primary)]">
+                {t("common.open")}
+              </a>
+            ) : null}
+          </div>
         </Field>
         <Field label={t("projects.system.domain")}>
           <input className={inputClass} disabled={!canManage} value={form.domain} onChange={(e) => patch("domain", e.target.value)} />
@@ -550,7 +578,7 @@ export function ProjectSystemPanel({
       {dirty && !busy ? <p className="text-xs text-slate-500">{t("projects.system.unsaved")}</p> : null}
 
       {canManage ? (
-        <div className="flex justify-end">
+        <div className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-20 -mx-1 flex justify-end rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none">
           <PrimaryButton disabled={busy || !dirty} onClick={() => void save()}>
             {busy ? t("work.saving") : t("common.save")}
           </PrimaryButton>

@@ -482,7 +482,7 @@ export function MeetingsView() {
         <button
           type="button"
           onClick={() => canCreate ? openCreate() : canCreateTask ? openTaskCreate() : undefined}
-          className="fixed bottom-5 end-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--brand-primary)] text-white shadow-lg lg:hidden"
+          className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] end-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--brand-primary)] text-white shadow-lg touch-manipulation lg:hidden"
           aria-label={t("create.task")}
         >
           <Plus className="h-6 w-6" />

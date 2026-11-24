@@ -22,13 +22,27 @@ html {
 html,
 body {
   min-height: 100%;
+  min-height: 100dvh;
   overflow-x: clip;
+  max-width: 100%;
 }
 
 body {
   background: var(--app-bg);
   color: #0f172a;
   font-family: var(--font-heebo), var(--font-arabic), Arial, ui-sans-serif, system-ui, sans-serif;
+  overscroll-behavior-x: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prefer comfortable touch targets on coarse pointers without changing desktop density. */
+@media (pointer: coarse) {
+  button,
+  [type="button"],
+  [type="submit"],
+  a {
+    touch-action: manipulation;
+  }
 }
 
 html[lang="ar"],
