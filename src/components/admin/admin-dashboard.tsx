@@ -67,21 +67,22 @@ export function AdminDashboard() {
     await reload({ silent: true });
   }
 
-  async function saveTask() {
-    if (!business?.id || !draft?.title.trim()) return { ok: false as const };
+  async function saveTask(next: TaskDraft) {
+    if (!business?.id || !next.title.trim()) return { ok: false as const };
     setBusy(true);
     setFormError(null);
+    setDraft(next);
     const result = await saveBusinessTask({
       businessId: business.id,
-      id: draft.id,
-      data: taskDraftPayload(draft),
+      id: next.id,
+      data: taskDraftPayload(next),
     });
     setBusy(false);
     if (!result.ok) {
       setFormError(taskMutationMessage(result.error, t));
       return { ok: false as const };
     }
-    if (!draft.id && result.id) {
+    if (!next.id && result.id) {
       setDraft((prev) => (prev ? { ...prev, id: result.id } : prev));
     }
     return { ok: true as const, id: result.id };
@@ -301,7 +302,7 @@ export function AdminDashboard() {
           draft={draft}
           onChange={setDraft}
           onClose={() => { setDraft(null); setFormError(null); }}
-          onSave={() => saveTask()}
+          onSave={(next) => saveTask(next)}
           onSaved={() => {
             setDraft(null);
             setToast(t("tasks.saved"));
