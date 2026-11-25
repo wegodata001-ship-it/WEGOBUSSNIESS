@@ -104,8 +104,9 @@ export function AssigneeHarnessClient() {
             draft={draft}
             onChange={setDraft}
             onClose={() => setOpen(false)}
-            onSave={async () => {
-              const current = draftRef.current;
+            onSave={async (current) => {
+              setDraft(current);
+              draftRef.current = current;
               const payload = taskDraftPayload(current);
               setSavedPayload(payload);
               const id = current.id || "task-harness-1";

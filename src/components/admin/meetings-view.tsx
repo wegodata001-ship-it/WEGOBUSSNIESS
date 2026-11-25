@@ -214,21 +214,22 @@ export function MeetingsView() {
     await reload({ silent: true });
   }
 
-  async function saveTaskDraft() {
-    if (!business?.id || !taskDraft?.title.trim()) return { ok: false as const };
+  async function saveTaskDraft(next: TaskDraft) {
+    if (!business?.id || !next.title.trim()) return { ok: false as const };
     setBusy(true);
     setTaskFormError(null);
+    setTaskDraft(next);
     const result = await saveBusinessTask({
       businessId: business.id,
-      id: taskDraft.id,
-      data: taskDraftPayload(taskDraft),
+      id: next.id,
+      data: taskDraftPayload(next),
     });
     setBusy(false);
     if (!result.ok) {
       setTaskFormError(taskMutationMessage(result.error, t));
       return { ok: false as const };
     }
-    if (!taskDraft.id && result.id) setTaskDraft({ ...taskDraft, id: result.id });
+    if (!next.id && result.id) setTaskDraft((prev) => (prev ? { ...prev, id: result.id } : prev));
     return { ok: true as const, id: result.id };
   }
 
@@ -514,7 +515,7 @@ export function MeetingsView() {
           draft={taskDraft}
           onChange={setTaskDraft}
           onClose={() => { setTaskDraft(null); setTaskFormError(null); }}
-          onSave={() => saveTaskDraft()}
+          onSave={(next) => saveTaskDraft(next)}
           onSaved={() => {
             setTaskDraft(null);
             setToast(t("tasks.saved"));

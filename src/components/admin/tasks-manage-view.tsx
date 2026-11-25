@@ -217,21 +217,22 @@ export function TasksManageView() {
 
   if (loading) return <Spinner label={t("common.loading")} />;
 
-  async function save() {
-    if (!business?.id || !draft?.title.trim()) return { ok: false as const };
+  async function save(next: TaskDraft) {
+    if (!business?.id || !next.title.trim()) return { ok: false as const };
     setBusy(true);
     setFormError(null);
+    setDraft(next);
     const result = await saveBusinessTask({
       businessId: business.id,
-      id: draft.id,
-      data: taskDraftPayload(draft),
+      id: next.id,
+      data: taskDraftPayload(next),
     });
     setBusy(false);
     if (!result.ok) {
       setFormError(taskMutationMessage(result.error, t));
       return { ok: false as const };
     }
-    if (!draft.id && result.id) {
+    if (!next.id && result.id) {
       setDraft((prev) => (prev ? { ...prev, id: result.id } : prev));
     }
     return { ok: true as const, id: result.id };
@@ -749,7 +750,7 @@ export function TasksManageView() {
           draft={draft}
           onChange={setDraft}
           onClose={() => { setDraft(null); setFormError(null); }}
-          onSave={() => save()}
+          onSave={(next) => save(next)}
           onSaved={() => {
             setDraft(null);
             setToast(canManage ? t("tasks.saved") : t("work.sentForApproval"));

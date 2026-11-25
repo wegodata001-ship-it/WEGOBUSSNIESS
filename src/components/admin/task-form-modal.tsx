@@ -24,7 +24,13 @@ import type { Task, TaskWriteStatus } from "@/types/task";
 import type { TaskTemplate } from "@/types/task-template";
 import { labelOf } from "@/lib/admin/labels";
 import type { CalendarColor, TaskKind } from "@/lib/admin/palette";
-import { fieldsFromParticipantIds, participantWriteFields, participantsFromFields } from "@/lib/admin/task-participants";
+import {
+  fieldsFromParticipantIds,
+  participantWriteFields,
+  participantsFromFields,
+  shouldAcceptTaskDraftProps,
+  taskDraftSyncKey,
+} from "@/lib/admin/task-participants";
 import { useI18n } from "@/components/providers/i18n-provider";
 
 function enteredAmountFromTask(task: Task) {
@@ -180,7 +186,8 @@ export function TaskFormModal({
   draft: TaskDraft;
   onChange: (next: TaskDraft) => void;
   onClose: () => void;
-  onSave: () => Promise<{ ok: boolean; id?: string } | void> | { ok: boolean; id?: string } | void;
+  /** Receives the latest draft from draftRef so save never reads a stale parent closure. */
+  onSave: (draft: TaskDraft) => Promise<{ ok: boolean; id?: string } | void> | { ok: boolean; id?: string } | void;
   onSaved?: () => void;
   busy: boolean;
   businessId: string;
@@ -220,7 +227,12 @@ export function TaskFormModal({
   const [uploadProgress, setUploadProgress] = useState("");
   const openedTaskId = useRef(draft.id ?? "");
   const draftRef = useRef(draft);
-  draftRef.current = draft;
+  const pendingDraftKeyRef = useRef<string | null>(null);
+  const sync = shouldAcceptTaskDraftProps(pendingDraftKeyRef.current, draft);
+  pendingDraftKeyRef.current = sync.pendingKey;
+  if (sync.accept) {
+    draftRef.current = draft;
+  }
   const quickCategories = managedProjectCategories(departmentCategories, { includeId: quickCategory });
   const libraryItems = useMemo(() => mergeTaskLibrary(taskTemplates, libraryTasks), [libraryTasks, taskTemplates]);
 
@@ -228,6 +240,7 @@ export function TaskFormModal({
   function patchDraft(patch: Partial<TaskDraft>) {
     const next = { ...draftRef.current, ...patch };
     draftRef.current = next;
+    pendingDraftKeyRef.current = taskDraftSyncKey(next);
     onChange(next);
   }
 
@@ -267,16 +280,17 @@ export function TaskFormModal({
   }
 
   async function handleSave() {
-    if (!draft.title.trim() || busy || assetBusy) return;
+    const latest = draftRef.current;
+    if (!latest.title.trim() || busy || assetBusy) return;
     setAssetBusy(true);
     setAssetError("");
-    const result = await onSave();
+    const result = await onSave(latest);
     if (!result || !result.ok) {
       setAssetBusy(false);
       setUploadProgress("");
       return;
     }
-    const taskId = result.id || boundTaskId || draft.id;
+    const taskId = result.id || boundTaskId || latest.id;
     if (!taskId) {
       setAssetBusy(false);
       onSaved?.();
@@ -469,11 +483,9 @@ export function TaskFormModal({
               placeholder={t("work.searchEmployee")}
               onChange={setParticipants}
             />
-            {!participants.length ? (
-              <p className="mt-1 text-xs text-amber-700">{t("work.assignHint")}</p>
-            ) : (
+            {participants.length ? (
               <p className="mt-1 text-xs text-slate-500">{t("work.assignPrimary", { name: employees.find((item) => item.id === participants[0])?.displayName || participants[0] })}</p>
-            )}
+            ) : null}
           </Field>
           <div className="grid gap-3 md:grid-cols-2">
             <Field label={t("common.project")}>
